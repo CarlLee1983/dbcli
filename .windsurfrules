@@ -154,8 +154,11 @@ method. `dba.tune-production` and `crud.scaffold` belong to the Role or Method S
 composes dbcli — this Tool Skill only covers operating dbcli safely.
 
 - `schemaVersion` is the capability contract version, **not** the npm package version.
-- Statuses are `available`, `unavailable` (reason `engine`, `permission` or
-  `context-unavailable`) and `unknown`. A misspelled id fails closed and is never guessed.
+- Statuses are `available`, `unavailable` (reason `engine`, `agent-mode`, `permission`,
+  `context-unavailable` or `context-unresolvable`) and `unknown`. A misspelled id fails
+  closed and is never guessed.
+- Under `DBCLI_AGENT_MODE=1`, capabilities that change configuration are `unavailable`
+  with reason `agent-mode` whatever the permission level says.
 - Exit codes: `0` all available, `1` any unavailable or unknown, `2` bad input.
 - **`available` is not approval.** Blacklist, write gate, confirmation and audit still run
   at execution time, and `admin` in a config file is a permission level, not a DBA sign-off.

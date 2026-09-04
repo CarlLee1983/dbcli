@@ -44,7 +44,17 @@ derives the rest. `risk` folds the existing six-value `SideEffectTier` into the
 four-value Task Pack risk vocabulary (`readonly`, `dry-run`, `write`,
 `unknown`); `sideEffect` carries the unfolded tier alongside, because
 collapsing `local-write` and `db-write` into `write` hides the distinction a
-caller most needs.
+caller most needs. `limitedEngines` does the same job for engine support: the
+matrix distinguishes `limited` from `supported`, and folding both into
+`engines` would throw that away — `data.delete` works on Redis, but not the way
+it works on PostgreSQL.
+
+`minimumPermission` is derived too, wherever a derivation exists.
+`minimumPermissionFor` in `permission-guard.ts` is the table the *runtime*
+refusal consults; a capability that maps to a SQL statement type declares the
+type and takes the level from there. Transcribing four levels into the registry
+would have been a second permission ladder, and the argument against a second
+engine table applies unchanged.
 
 ### Scope of v1, and why it stops there
 
@@ -93,11 +103,52 @@ or `null`.
 | `available` | `null` | Engine and permission would not refuse. |
 | `unavailable` | `engine` | The configured engine does not support it. |
 | `unavailable` | `permission` | Below the capability's minimum level. |
-| `unavailable` | `context-unavailable` | No readable local config. |
+| `unavailable` | `agent-mode` | `DBCLI_AGENT_MODE=1` and the capability changes configuration. |
+| `unavailable` | `context-unavailable` | No local config here. |
+| `unavailable` | `context-unresolvable` | A config exists and would not resolve into an engine and a permission. |
 | `unknown` | `unknown-capability` | No such id. Never guessed at. |
 
-Engine is checked before permission, so the reason names the blocker that
-raising a level would not fix.
+Blockers are checked least-fixable first — engine, then agent mode, then
+permission — so the reason names the one actually in the way. Engine cannot be
+changed for this connection at all; agent mode cannot be lifted from inside the
+process subject to it; permission is a config edit.
+
+### Agent mode is a context field, not an execution-time concern
+
+`DBCLI_AGENT_MODE=1` makes `assertConfigMutationApproved()` refuse every
+configuration, permission and credential change unconditionally. That is
+knowable without connecting, so it belongs beside engine and permission.
+
+The "available is not approval" disclaimer does not stretch to cover it, and
+the distinction is *when the refusal is decided*: blacklist rules and human
+consent are decided at execution time, which the contract cannot speak for;
+agent mode is decided here. `connection.init`, `connection.select` and
+`blacklist.manage` carry `mutatesConfiguration: true` — the capabilities where
+changing configuration *is* the capability — and a contract test derives that
+set from the command layer's real calls rather than trusting the declaration.
+
+**The known overstatement:** `dbcli schema` persists its result into
+`config.json` behind the same guard, so under agent mode `schema.read` reports
+`available` while a real invocation's persistence step fails. Marking the three
+`schema` capabilities would make them `unavailable` and tell an agent it cannot
+read schema at all — a much larger error in the opposite direction. The real fix
+is that a schema *cache* write is not a change of connection identity and should
+not sit behind the identity guard: DBCLI-PLAT-012.
+
+### "No config" and "config I cannot resolve" are different facts
+
+Conflating them was a defect, not a simplification. A config whose
+`{"$env": "..."}` password names an unset variable is present and readable; the
+one config reader resolves credentials — which this command never needs — before
+it will answer. Reporting "no configuration was found" there states something
+false about the user's machine. `context-unresolvable` is therefore its own
+reason, and the error's message is not surfaced because it carries filesystem
+paths.
+
+Five situations previously collapsed into one false warning: an unresolvable
+env-ref, a v1 config given `--use`, a production connection needing an explicit
+selector, an agent-mode integrity failure, and genuinely corrupt JSON. Only the
+last is "unreadable"; none is "absent". All still fail closed.
 
 **Duplicate ids are de-duplicated in first-seen order** and reported in
 `warnings`. Refusing would punish two Skills concatenating requirement lists;
@@ -160,3 +211,4 @@ DBCLI-PLAT-008 owns it.
 | DBCLI-PLAT-009 | Skill author integration kit. |
 | DBCLI-PLAT-010 | External consumer contract tests: a CRUD Skill, a CQRS Skill and a DBA Operator Skill as out-of-repo consumers. Their behaviour is never implemented inside dbcli. |
 | DBCLI-PLAT-011 | Extend `ENGINE_CAPABILITIES` to the sixteen commands v1 could not describe. |
+| DBCLI-PLAT-012 | Move schema-cache persistence out from behind the agent-mode *identity* guard, so `schema` stops being a configuration writer. |

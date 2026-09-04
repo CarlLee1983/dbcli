@@ -139,18 +139,31 @@ Answering "what can this tool do". It is not a permission grant: a capability
 appearing in the catalog says the binary is able to do it, not that anyone may.
 
 **Capability availability**:
-Whether the *locally configured* engine and permission would refuse a
-capability — `available`, `unavailable`, or `unknown`. It is a statement about
+Whether the *locally configured* engine, agent mode and permission would refuse
+a capability — `available`, `unavailable`, or `unknown`. It is a statement about
 this machine's configuration, evaluated without connecting to a database. It is
 distinct from approval: blacklist, write gate, confirmation and audit all still
 run at execution time, and human consent is not modelled at all. `admin` in a
 config file is a permission level, not a DBA sign-off.
 
 **Context unavailable**:
-There is no readable local configuration, so availability could not be
-established. It is neither `available` nor `unknown`: the requirement was
-understood, the environment was not. The default configuration is never
-reported as though it were configured.
+There is no local configuration here, so availability could not be established.
+It is neither `available` nor `unknown`: the requirement was understood, the
+environment was not. The default configuration is never reported as though it
+were configured.
+
+**Context unresolvable**:
+A configuration exists and could not be turned into an engine and a permission
+— an `{"$env": "..."}` reference naming an unset variable, for instance. It is
+a different fact from *context unavailable*, and reporting it as one would
+state something false about the machine. Both fail closed.
+
+**Environment gate**:
+A refusal decided before execution and knowable without connecting — agent
+mode is the only one today. It is distinct from an execution-time gate
+(blacklist, write gate, confirmation, audit), which capability availability
+deliberately does not speak for. The dividing line is *when* the refusal is
+decided: what is decidable here is the contract's responsibility to report.
 
 ## Skill layering
 

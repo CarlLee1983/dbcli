@@ -1691,8 +1691,10 @@ dbcli capabilities --format markdown     # table, for docs
 ```
 
 Each entry carries `id`, `description`, `command`, `risk`, `sideEffect`,
-`engines`, `engineIndependent`, `minimumPermission`, `requiresConnection`,
-`supportsJson` and `supportsEvidence`. Output is sorted by `id`, so two runs of
+`engines`, `limitedEngines`, `engineIndependent`, `minimumPermission`,
+`requiresConnection`, `mutatesConfiguration`, `supportsJson` and
+`supportsEvidence`. `limitedEngines` is the subset of `engines` the support
+matrix marks *limited* rather than fully supported. Output is sorted by `id`, so two runs of
 the same build are byte-identical.
 
 `schemaVersion` is the **capability contract** version, not the npm package
@@ -1730,7 +1732,9 @@ Each result is `available`, `unavailable` or `unknown`:
 | `available` | `null` | The configured engine and permission would not refuse it. |
 | `unavailable` | `engine` | The configured engine does not support it. |
 | `unavailable` | `permission` | The configured permission level is below its minimum. |
-| `unavailable` | `context-unavailable` | No readable local config, so there is nothing to evaluate against. |
+| `unavailable` | `agent-mode` | `DBCLI_AGENT_MODE=1` is set and the capability changes configuration, permission or credentials — refused unconditionally. |
+| `unavailable` | `context-unavailable` | No local config here, so there is nothing to evaluate against. |
+| `unavailable` | `context-unresolvable` | A config exists but could not be resolved into an engine and a permission — an `{"$env": "..."}` reference pointing at an unset variable, for instance. Distinct from "no config", because saying there is none would be false. |
 | `unknown` | `unknown-capability` | No such capability id. Never guessed at — a typo is refused, not resolved to a neighbour. |
 
 A duplicate id in `--require` is de-duplicated in first-seen order and reported
@@ -1739,10 +1743,18 @@ in `warnings`; `required` and `results` each hold it once.
 **Exit codes:** `0` every requirement available · `1` any unavailable or
 unknown · `2` invalid input or an unreadable format.
 
-**`available` is not approval.** It says the gate would not refuse on engine and
-permission grounds. Blacklist, write gate, confirmation and audit all still run
+Blockers are reported least-fixable first — engine, then agent mode, then
+permission — so `reason` names the one actually in the way.
+
+**`available` is not approval.** It says the gate would not refuse on engine,
+agent-mode and permission grounds. Blacklist, write gate, confirmation and audit all still run
 at execution time, and no human has agreed to anything. `admin` in a config file
 is a permission level, not a DBA sign-off.
+
+One known overstatement: `dbcli schema` persists its result into `config.json`,
+and that write is refused under `DBCLI_AGENT_MODE=1`. `schema.read` still
+reports `available` there, because the read itself works and marking it
+unavailable would suggest schema cannot be read at all.
 
 **Permission:** query-only+ (no connection is made)
 

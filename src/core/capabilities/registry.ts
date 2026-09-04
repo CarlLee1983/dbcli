@@ -16,6 +16,7 @@ import {
 } from '@/adapters/capabilities'
 import { DATABASE_SYSTEMS, type DatabaseSystem } from '@/adapters/types'
 import type { Permission } from '@/types'
+import { minimumPermissionFor, type StatementType } from '@/core/permission-guard'
 import { CAPABILITY_CONTRACT_SCHEMA_VERSION, type Capability, type CapabilityRisk } from './types'
 
 /**
@@ -33,8 +34,22 @@ interface CapabilityDeclaration {
   readonly key: CommandCapabilityKey
   readonly command: string
   readonly description: string
-  readonly minimumPermission: Permission
+  /**
+   * The SQL statement type this capability's primary path issues, when there is
+   * one. Given it, `minimumPermission` is derived from `TIER_GRANTS` — the same
+   * table the runtime refusal uses — rather than transcribed here, so the two
+   * cannot drift. `permission` is for the capabilities no statement type
+   * describes; those are covered by unit tests instead.
+   */
+  readonly statementType?: StatementType
+  readonly permission?: Permission
   readonly requiresConnection: boolean
+  /**
+   * Whether the capability changes connection identity, permission or
+   * credentials. Asserted against the real import graph by
+   * `tests/contract/capability-contract.test.ts`, not trusted from here.
+   */
+  readonly mutatesConfiguration?: boolean
 }
 
 /**
@@ -51,16 +66,18 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'init',
     command: 'init',
     description: 'Create or update a local connection configuration interactively.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
+    mutatesConfiguration: true,
   },
   {
     id: 'connection.select',
     key: 'use',
     command: 'use',
     description: 'Switch the default named connection in a v2 configuration.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
+    mutatesConfiguration: true,
   },
   {
     id: 'connection.status',
@@ -68,7 +85,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     command: 'status',
     description:
       'Report the configured engine, permission and blacklist counts without credentials.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -76,7 +93,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'doctor',
     command: 'doctor',
     description: 'Run engine-specific connectivity and configuration diagnostics.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -84,7 +101,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'list',
     command: 'list',
     description: 'List the tables, collections or indices visible to the connection.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -92,7 +109,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'schema',
     command: 'schema',
     description: 'Read visible schema metadata for one object or the whole database.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -100,7 +117,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'schemaSingle',
     command: 'schema',
     description: 'Read the column or field structure of a single named object.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -108,7 +125,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'schemaFullScan',
     command: 'schema',
     description: 'Scan every visible object and refresh the local schema cache.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -116,7 +133,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'diff',
     command: 'diff',
     description: 'Compare schema snapshots and report structural differences.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -124,7 +141,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'migrate',
     command: 'migrate',
     description: 'Apply guarded DDL changes such as columns, indexes and constraints.',
-    minimumPermission: 'admin',
+    statementType: 'ALTER',
     requiresConnection: true,
   },
   {
@@ -132,7 +149,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'query',
     command: 'query',
     description: 'Run a read query through the permission, blacklist and audit gates.',
-    minimumPermission: 'query-only',
+    statementType: 'SELECT',
     requiresConnection: true,
   },
   {
@@ -140,7 +157,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'lint',
     command: 'lint',
     description: 'Statically analyse SQL without connecting to the database.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -148,7 +165,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'queryOutput',
     command: 'query',
     description: 'Render query results as a table, JSON or CSV.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -156,7 +173,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'queryLimitGuard',
     command: 'query',
     description: 'Bound result size automatically and report the limit that was applied.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -164,7 +181,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'shell',
     command: 'shell',
     description: 'Open an interactive gated query shell.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -172,7 +189,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'q',
     command: 'q',
     description: 'Execute a saved read-only query snippet with parameters.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -180,7 +197,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'queries',
     command: 'queries',
     description: 'Create, edit, search and validate saved query snippets.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -188,7 +205,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'insert',
     command: 'insert',
     description: 'Insert rows or documents through the write gate.',
-    minimumPermission: 'read-write',
+    statementType: 'INSERT',
     requiresConnection: true,
   },
   {
@@ -196,7 +213,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'update',
     command: 'update',
     description: 'Update rows or documents through the write gate.',
-    minimumPermission: 'read-write',
+    statementType: 'UPDATE',
     requiresConnection: true,
   },
   {
@@ -204,7 +221,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'delete',
     command: 'delete',
     description: 'Delete rows or documents through the write gate.',
-    minimumPermission: 'data-admin',
+    statementType: 'DELETE',
     requiresConnection: true,
   },
   {
@@ -212,7 +229,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'export',
     command: 'export',
     description: 'Export query or object contents to a file, subject to the blacklist.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -220,7 +237,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'check',
     command: 'check',
     description: 'Check data health: nulls, orphans, duplicates and empty strings.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -228,15 +245,16 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'blacklist',
     command: 'blacklist',
     description: 'Inspect and edit the table, column and key rules that hide sensitive data.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
+    mutatesConfiguration: true,
   },
   {
     id: 'context.inspect',
     key: 'inspect',
     command: 'inspect',
     description: 'Produce a bounded agent context snapshot of the configured database.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -244,7 +262,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'report',
     command: 'report',
     description: 'Produce a diagnostic report about the configured database.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -252,7 +270,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'guide',
     command: 'guide',
     description: 'Suggest the next deterministic command for a stated goal.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: true,
   },
   {
@@ -260,7 +278,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'recover',
     command: 'recover',
     description: 'Read the saved recovery envelope and plan or apply safe remediation steps.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -268,7 +286,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'auditTail',
     command: 'audit tail',
     description: 'Read recent audit entries from the local log.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -276,7 +294,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'auditShow',
     command: 'audit show',
     description: 'Look up one audit entry by id prefix or recovery reference.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -284,7 +302,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'auditHealth',
     command: 'audit health',
     description: 'Report audit log health and rotation state.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -292,7 +310,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'auditClear',
     command: 'audit clear',
     description: 'Remove the local audit log files for a connection.',
-    minimumPermission: 'admin',
+    permission: 'admin',
     requiresConnection: false,
   },
   {
@@ -300,7 +318,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'skill',
     command: 'skill',
     description: 'Write the dbcli skill and task-pack assets into a platform directory.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -308,7 +326,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'completion',
     command: 'completion',
     description: 'Emit a shell completion script for the current command tree.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
   {
@@ -316,7 +334,7 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     key: 'upgrade',
     command: 'upgrade',
     description: 'Check whether a newer dbcli release is available.',
-    minimumPermission: 'query-only',
+    permission: 'query-only',
     requiresConnection: false,
   },
 ]
@@ -348,6 +366,7 @@ export function riskForSideEffect(tier: SideEffectTier): CapabilityRisk {
 
 function enginesFor(key: CommandCapabilityKey): {
   engines: readonly DatabaseSystem[]
+  limitedEngines: readonly DatabaseSystem[]
   engineIndependent: boolean
 } {
   const statuses = DATABASE_SYSTEMS.map((system) => ({
@@ -359,12 +378,15 @@ function enginesFor(key: CommandCapabilityKey): {
   // at all, so every configured engine can run it. Listing none would read as
   // "supported nowhere", which is the opposite of what the matrix is saying.
   if (statuses.every((entry) => entry.status === 'not-applicable')) {
-    return { engines: [...DATABASE_SYSTEMS], engineIndependent: true }
+    return { engines: [...DATABASE_SYSTEMS], limitedEngines: [], engineIndependent: true }
   }
 
   return {
     engines: statuses
       .filter((entry) => entry.status === 'supported' || entry.status === 'limited')
+      .map((entry) => entry.system),
+    limitedEngines: statuses
+      .filter((entry) => entry.status === 'limited')
       .map((entry) => entry.system),
     engineIndependent: false,
   }
@@ -416,7 +438,7 @@ export interface CommandSurfaceFacts {
 /**
  * Which command paths expose a JSON output option, and which emit an evidence
  * receipt. Static, and asserted against the live Commander tree and the real
- * import graph by `tests/contract/capability-command-parity.test.ts`.
+ * import graph by `tests/contract/capability-contract.test.ts`.
  */
 export const COMMAND_SURFACE: CommandSurfaceFacts = Object.freeze({
   jsonCommands: Object.freeze(
@@ -452,8 +474,22 @@ export const COMMAND_SURFACE: CommandSurfaceFacts = Object.freeze({
   evidenceCommands: Object.freeze(new Set<string>()) as ReadonlySet<string>,
 })
 
+/**
+ * The permission below which the capability is refused.
+ *
+ * Derived from `minimumPermissionFor` — the same `TIER_GRANTS` table the runtime
+ * refusal consults — whenever the capability maps to a SQL statement type.
+ * Transcribing those four levels here would be a second permission ladder, and
+ * a second ladder diverges the first time a tier is added.
+ */
+function minimumPermissionOf(declaration: CapabilityDeclaration): Permission {
+  if (declaration.statementType) return minimumPermissionFor(declaration.statementType)
+  if (declaration.permission) return declaration.permission
+  throw new Error(`capability ${declaration.id} declares neither statementType nor permission`)
+}
+
 function build(declaration: CapabilityDeclaration, surface: CommandSurfaceFacts): Capability {
-  const { engines, engineIndependent } = enginesFor(declaration.key)
+  const { engines, limitedEngines, engineIndependent } = enginesFor(declaration.key)
   const sideEffect = sideEffectFor(declaration.key, engines)
 
   return Object.freeze({
@@ -463,9 +499,11 @@ function build(declaration: CapabilityDeclaration, surface: CommandSurfaceFacts)
     risk: riskForSideEffect(sideEffect),
     sideEffect,
     engines: Object.freeze([...engines]),
+    limitedEngines: Object.freeze([...limitedEngines]),
     engineIndependent,
-    minimumPermission: declaration.minimumPermission,
+    minimumPermission: minimumPermissionOf(declaration),
     requiresConnection: declaration.requiresConnection,
+    mutatesConfiguration: declaration.mutatesConfiguration ?? false,
     supportsJson: surface.jsonCommands.has(declaration.command),
     supportsEvidence: surface.evidenceCommands.has(declaration.command),
   })

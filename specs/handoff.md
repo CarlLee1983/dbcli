@@ -16,11 +16,23 @@ Agent Integration Contract v1 的第一個垂直切片。`dbcli capabilities` �
 「這裡有沒有」，兩者都不建立資料庫連線。設計記錄在
 `docs/specs/2026-09-04-agent-integration-contract-v1.md`，決定在 ADR-0022。
 
-這個 Story 最值得留下的一句：**contract 說謊的兩次都是測試抓到的，不是人看出來的。**
-一次是缺設定時 `capabilities check` 拿 `DEFAULT_CONFIG` 的 localhost PostgreSQL
-當成真的環境回報；一次是手寫的 `supportsJson` 有四個指令是錯的。兩者都不會讓
-任何既有測試變紅，只會讓一份對外契約長期說錯話——所以這個切片的價值不在新指令，
-在那兩支對著實際 Commander tree 與實際 import graph 雙向比對的 contract test。
+這個 Story 最值得留下的一句：**contract 說謊了五次，沒有一次是讀碼看出來的。**
+缺設定時拿 `DEFAULT_CONFIG` 的 localhost PostgreSQL 當真實環境回報；手寫的
+`supportsJson` 四個指令是錯的；v2 預設連線的 `connectionName` 回 null；agent mode
+下對 `connection.select` 回 `available`；一個裸 catch 把五種狀況壓成同一句假話。
+前三個是測試與探測抓到的，後兩個是 code review 抓到的。
+
+其中 agent mode 那個最值得記住。原本的辯護是 ADR 寫的「available 不是核准」，
+但那條免責聲明蓋不住它——差別在**拒絕是何時決定的**：blacklist 與人類同意在執行
+當下決定，契約無從代言；`DBCLI_AGENT_MODE=1` 在這裡就決定了，而且不連線就完全可知。
+對著這份契約的主要客群（agent）宣稱一件下一個指令就會推翻的事，是這份契約唯一
+會被真正依賴的假承諾。
+
+留下一個已知的過度宣稱，寫進 ADR 與 acceptance：`dbcli schema` 會把讀到的 schema
+持久化進 `config.json`，那個寫入也在 agent mode 的閘門後面，所以 `schema.read`
+在 agent mode 下回 `available` 但實際跑會在持久化那步失敗。標成 unavailable 會讓
+agent 以為完全讀不到 schema，反方向的錯更大。真正的修法是 schema *快取*的寫入
+本來就不該擋在「連線身分」的閘門後面：DBCLI-PLAT-012。
 
 已知邊界，不是疏漏：`ENGINE_CAPABILITIES` 只涵蓋 34 個 command key，dbcli 有 50 個
 top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等 16 個
@@ -166,6 +178,7 @@ baseline:
   dirty_worktree: false
   story_owned_paths:
     - specs/stories/DBCLI-PLAT-001-capability-contract/
+    - tests/unit/adapters/database-systems-roster.test.ts
     - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
     - docs/specs/2026-09-04-agent-integration-contract-v1.md
     - docs/plans/2026-09-04-agent-integration-contract-v1.md
@@ -194,7 +207,7 @@ verification:
   last_command: bun test + 13 static gates + build + build:determinism
   result: pass
   detail: >-
-    6488 pass / 27 skip / 0 fail across 556 files. The 27 skips are the
+    6509 pass / 27 skip / 0 fail across 557 files, after the code-review fixes. The 27 skips are the
     Elasticsearch, live-DB and MySQL integration suites, which have no local
     services; no DBCLI-PLAT-001 assertion depends on one. release:check was NOT
     run to completion — it fails at step 1/9 on a `bun audit` network timeout,

@@ -93,6 +93,7 @@ test('capability contract 在 public 表面上是可往返驗證的', () => {
     engine: 'postgresql',
     permission: 'query-only',
     connectionName: null,
+    agentMode: false,
   })
   expect(report.ok).toBe(true)
   expect(core.parseCapabilityCheckReport(JSON.parse(JSON.stringify(report)))).toBeDefined()

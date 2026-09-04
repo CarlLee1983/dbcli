@@ -1,11 +1,11 @@
 /**
  * Capability requirement checking.
  *
- * Pure: it is handed a context (or `null`) and a requirement list, and returns
- * a report. It never reads a file, an environment variable or a socket — the
- * command layer resolves the context from the local config and passes it in.
- * That separation is what makes "capability check never connects to a database"
- * a property of the module rather than a promise in the docs.
+ * Pure: it is handed a context (or a reason there is none) and a requirement
+ * list, and returns a report. It never reads a file, an environment variable or
+ * a socket — the command layer resolves the context from the local config and
+ * passes it in. That separation is what makes "capability check never connects
+ * to a database" a property of the module rather than a promise in the docs.
  */
 
 import { permissionAtLeast } from '@/core/permission/rank'
@@ -15,6 +15,7 @@ import {
   type CapabilityCheckContext,
   type CapabilityCheckReport,
   type CapabilityCheckResultEntry,
+  type CapabilityContextFailure,
 } from './types'
 
 export class CapabilityRequirementError extends Error {
@@ -46,13 +47,12 @@ export interface ParsedRequirements {
 export function parseRequirements(raw: string): ParsedRequirements {
   const parts = raw.split(',').map((part) => part.trim())
 
+  // `String.split` never yields an empty array, so an all-whitespace input
+  // arrives here as a single empty element. One branch covers both.
   if (parts.some((part) => part === '')) {
     throw new CapabilityRequirementError(
       '--require contains an empty capability id; give a comma-separated list such as "schema.read,query.read"'
     )
-  }
-  if (parts.length === 0) {
-    throw new CapabilityRequirementError('--require needs at least one capability id')
   }
 
   const ids: string[] = []
@@ -71,7 +71,21 @@ export function parseRequirements(raw: string): ParsedRequirements {
   }
 }
 
-function evaluate(id: string, context: CapabilityCheckContext | null): CapabilityCheckResultEntry {
+/**
+ * Evaluate one requirement.
+ *
+ * Blockers are checked least-fixable first, so `reason` names the one that
+ * actually stands in the way. Engine cannot be changed at all for this
+ * connection; agent mode cannot be lifted from inside the process that is
+ * subject to it; permission is a config edit. Reporting `permission` to someone
+ * whose engine does not support the operation would send them to fix the wrong
+ * thing.
+ */
+function evaluate(
+  id: string,
+  context: CapabilityCheckContext | null,
+  failure: CapabilityContextFailure
+): CapabilityCheckResultEntry {
   const capability = findCapability(id)
 
   // Fail closed, and never guess. A misspelling that resolved to a neighbouring
@@ -81,10 +95,20 @@ function evaluate(id: string, context: CapabilityCheckContext | null): Capabilit
 
   // Known capability, nothing to evaluate it against. It is not `unknown` —
   // the requirement was understood — and it is emphatically not `available`.
-  if (!context) return { id, status: 'unavailable', reason: 'context-unavailable' }
+  if (!context) {
+    return {
+      id,
+      status: 'unavailable',
+      reason: failure === 'absent' ? 'context-unavailable' : 'context-unresolvable',
+    }
+  }
 
   if (!capability.engineIndependent && !capability.engines.includes(context.engine)) {
     return { id, status: 'unavailable', reason: 'engine' }
+  }
+
+  if (context.agentMode && capability.mutatesConfiguration) {
+    return { id, status: 'unavailable', reason: 'agent-mode' }
   }
 
   if (!permissionAtLeast(context.permission, capability.minimumPermission)) {
@@ -97,13 +121,21 @@ function evaluate(id: string, context: CapabilityCheckContext | null): Capabilit
 export function checkCapabilities(
   required: readonly string[],
   context: CapabilityCheckContext | null,
-  warnings: readonly string[] = []
+  warnings: readonly string[] = [],
+  contextFailure: CapabilityContextFailure = 'absent'
 ): CapabilityCheckReport {
-  const results = required.map((id) => evaluate(id, context))
+  const results = required.map((id) => evaluate(id, context, contextFailure))
   const allWarnings = [...warnings]
+
   if (!context) {
     allWarnings.push(
-      'No local dbcli configuration was readable, so engine and permission could not be evaluated.'
+      contextFailure === 'absent'
+        ? 'No dbcli configuration was found here, so engine and permission could not be evaluated.'
+        : 'A dbcli configuration exists here but could not be resolved into an engine and a permission, so nothing was evaluated against it.'
+    )
+  } else if (context.agentMode) {
+    allWarnings.push(
+      'Agent mode is active (DBCLI_AGENT_MODE=1): configuration, permission and credential changes are refused regardless of permission level.'
     )
   }
 

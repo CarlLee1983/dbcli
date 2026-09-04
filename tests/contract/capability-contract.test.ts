@@ -194,6 +194,103 @@ describe('capability discovery stays offline', () => {
   })
 })
 
+/**
+ * The config-writing entry points, every one of which sits behind
+ * `assertConfigMutationApproved()`.
+ *
+ * Detected as calls in the command layer rather than as graph reachability:
+ * `src/core/config.ts` holds both `read` and `write`, so *reaching* the guard
+ * says only that a command reads configuration — `audit clear` reaches it and
+ * mutates nothing.
+ */
+const CONFIG_MUTATORS = [
+  'configModule.write',
+  'writeV2Config',
+  'setConnectionPassword',
+  'writeProjectBinding',
+  'patchConnectionSchema',
+]
+
+/**
+ * Commands that write configuration incidentally rather than as their purpose.
+ *
+ * `schema` persists the discovered schema into `config.json` after reading it
+ * (`src/commands/schema.ts:479,532,642,746`). That write is behind the same
+ * agent-mode guard, so under `DBCLI_AGENT_MODE=1` the persistence step is
+ * refused — but the read itself is the capability, and marking `schema.read`
+ * `unavailable` would overstate the refusal far worse than staying silent
+ * understates it. The trade-off is disclosed in the spec, and DBCLI-PLAT-012
+ * covers moving cache persistence out from behind the identity guard.
+ *
+ * Listing them here rather than skipping them silently means adding a
+ * capability on such a command forces the decision back into view.
+ */
+const INCIDENTAL_CONFIG_WRITERS = new Set(['schema'])
+
+async function commandWritesConfig(commandPath: string): Promise<boolean> {
+  const entry = join(SRC, `commands/${commandPath.split(' ')[0]}.ts`)
+  if (!(await Bun.file(entry).exists())) return false
+
+  const graph = [...(await importGraph(entry))].filter((file) => file.includes('/src/commands/'))
+  for (const file of graph) {
+    const source = await readFile(file, 'utf8')
+    if (CONFIG_MUTATORS.some((call) => source.includes(`${call}(`))) return true
+  }
+  return false
+}
+
+describe('capability configuration-mutation parity', () => {
+  test('a capability claiming to mutate configuration really does write it', async () => {
+    // The direction that matters. A fabricated `true` would make
+    // `capabilities check` refuse something that would in fact have worked.
+    for (const capability of CAPABILITIES) {
+      if (!capability.mutatesConfiguration) continue
+      const writes = await commandWritesConfig(capability.command)
+      expect({ id: capability.id, writes }).toEqual({ id: capability.id, writes: true })
+    }
+  })
+
+  test('a capability on a command that writes no configuration never claims it does', async () => {
+    for (const capability of CAPABILITIES) {
+      if (INCIDENTAL_CONFIG_WRITERS.has(capability.command)) continue
+      if (await commandWritesConfig(capability.command)) continue
+      expect({ id: capability.id, mutates: capability.mutatesConfiguration }).toEqual({
+        id: capability.id,
+        mutates: false,
+      })
+    }
+  })
+
+  test('the incidental-writer list names only commands that really write', async () => {
+    // Stops the escape hatch above from silently covering a command that no
+    // longer writes at all, which would turn it into an unchecked exemption.
+    for (const command of INCIDENTAL_CONFIG_WRITERS) {
+      expect({ command, writes: await commandWritesConfig(command) }).toEqual({
+        command,
+        writes: true,
+      })
+    }
+  })
+
+  test('every listed mutator really is behind the agent-mode guard', async () => {
+    // Stops the mutator list going stale: an entry that stopped enforcing the
+    // boundary would make the tests above assert the wrong thing while staying
+    // green.
+    for (const relative of [
+      'core/config.ts',
+      'core/config-v2.ts',
+      'core/connection-credential.ts',
+      'core/config-binding.ts',
+    ]) {
+      const source = await readFile(join(SRC, relative), 'utf8')
+      expect({ relative, guarded: source.includes('assertConfigMutationApproved') }).toEqual({
+        relative,
+        guarded: true,
+      })
+    }
+  })
+})
+
 // ── 3. evidence claims track the real evidence subsystem ─────────────────
 
 describe('capability evidence parity', () => {

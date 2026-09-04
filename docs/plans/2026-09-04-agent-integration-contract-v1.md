@@ -32,12 +32,18 @@ This plan covers the first vertical slice only. Everything after it is backlog.
 7. `dbcli capabilities` emits text, JSON and markdown, deterministically, touching nothing on disk — covered by: `tests/integration/capabilities-command.test.ts`
 8. `dbcli capabilities check` honours `--config` and the root `--use`, returns exit codes `0`/`1`/`2`, and echoes no credential or endpoint — covered by: `tests/integration/capabilities-command.test.ts`
 9. The contract is reachable and round-trip validatable from `@carllee1983/dbcli/core` — covered by: `tests/unit/core-public.test.ts`
-10. `requiresConnection: true` is not independently proven; only the `false` direction is checked, since a false offline claim is the one that misleads — unverified: no test asserts that a connection-requiring command actually opens one
+10. Agent mode makes configuration-changing capabilities unavailable, and leaves the rest alone — covered by: `tests/unit/core/capabilities/check.test.ts`, `tests/integration/capabilities-command.test.ts`
+11. `mutatesConfiguration` is never claimed by a capability whose command writes no configuration — covered by: `tests/contract/capability-contract.test.ts`
+12. A config that exists but will not resolve is reported as such, and leaks no filesystem path — covered by: `tests/integration/capabilities-command.test.ts`
+13. `minimumPermission` comes from the runtime permission ladder rather than a transcription — covered by: `tests/unit/core/capabilities/registry.test.ts`
+14. `DATABASE_SYSTEMS` matches the keys of `ENGINE_CAPABILITIES` — covered by: `tests/unit/adapters/database-systems-roster.test.ts`
+15. `requiresConnection: true` is not independently proven; only the `false` direction is checked, since a false offline claim is the one that misleads — unverified: no test asserts that a connection-requiring command actually opens one
+16. Under `DBCLI_AGENT_MODE=1`, `schema.read` reports `available` although the command's schema-cache persistence step is refused — known deviation: marking the `schema` capabilities would tell an agent schema cannot be read at all, a larger error in the opposite direction; DBCLI-PLAT-012 removes the cause
 
-## Two things this slice got wrong first, and what caught them
+## Five things this slice got wrong first, and what caught them
 
-Recorded because both were the *contract lying*, which is the failure mode this
-work exists to prevent, and in both cases a test found it rather than a reader.
+Recorded because every one was the *contract lying*, which is the failure mode
+this work exists to prevent, and not one was found by reading the code.
 
 1. **`capabilities check` reported `engine: postgresql, permission: query-only`
    in a directory with no config at all.** `configModule.read` returns
@@ -49,6 +55,23 @@ work exists to prevent, and in both cases a test found it rather than a reader.
    `migrate` and `blacklist` were claimed to offer JSON when only their
    subcommands do; `use` was claimed not to when it does. The bidirectional
    parity test against the live Commander tree found all four.
+3. **`connectionName` was `null` for a v2 default connection**, because it read
+   `--use` rather than what the reader resolved. Found by probing an env-ref
+   MongoDB config for credential leakage; nothing leaked, but the verdict was
+   unattributable.
+4. **`available` was reported under `DBCLI_AGENT_MODE=1` for capabilities that
+   agent mode refuses outright** — `connection.select`, `connection.init`,
+   `blacklist.manage`. Found in code review. This was the worst of the five: the
+   contract's primary consumer is the agent the flag describes, and this was the
+   one promise it would have acted on and found false. Agent mode is now a
+   context field with its own reason, and a contract test derives the marked set
+   from the command layer's real config-writing calls.
+5. **A bare `catch` collapsed five situations into one false warning.** An
+   unset `{"$env":...}` password, a v1 config given `--use`, a production
+   connection needing an explicit selector, an agent-mode integrity failure and
+   corrupt JSON all reported "no configuration was readable". Only the last is
+   even close to true. Also found in review. `context-unresolvable` is now a
+   separate reason, and a non-`ConfigError` is rethrown instead of swallowed.
 
 ## Not done, deliberately
 

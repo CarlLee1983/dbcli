@@ -13,6 +13,7 @@ export {
   type CapabilityCatalog,
   type CapabilityRisk,
   type CapabilityCheckContext,
+  type CapabilityContextFailure,
   type CapabilityCheckReport,
   type CapabilityCheckResultEntry,
   type CapabilityCheckStatus,

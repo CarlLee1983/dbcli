@@ -32,6 +32,16 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   設定回 `unavailable` + `context-unavailable` 而不是拿 `DEFAULT_CONFIG` 的
   localhost PostgreSQL 充數。Exit code `0` / `1` / `2`。
 
+  `DBCLI_AGENT_MODE=1` 是 context 的一部分，不是免責聲明能蓋過去的東西。它無條件
+  拒絕所有設定、權限與憑證變更，而且不連線就完全可知——差別在**拒絕是何時決定的**：
+  blacklist 與人類同意在執行當下決定，契約無從代言；agent mode 在這裡就決定了。
+  `connection.select`、`connection.init`、`blacklist.manage` 因此在 agent mode 下
+  回 `unavailable` + `agent-mode`，不管權限寫的是不是 admin。
+
+  「沒有設定」與「有設定但解不開」是兩件事。`{"$env":...}` 密碼指向未設定變數的
+  設定檔是存在且可讀的，回報「找不到設定」是對使用者機器說假話——`context-unresolvable`
+  因此獨立成一個原因，且不外洩錯誤訊息裡的檔案路徑。
+
   v1 涵蓋 engine capability matrix 管轄的 34 個 command key；另外 16 個指令
   （`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等）不在其中，
   因為替它們寫 engine 支援度等於憑讀碼捏造未經稽核的宣稱。它們回 `unknown`，

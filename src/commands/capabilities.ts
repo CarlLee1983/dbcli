@@ -21,7 +21,9 @@ import {
   type Capability,
   type CapabilityCheckContext,
   type CapabilityCheckReport,
+  type CapabilityContextFailure,
 } from '@/core/capabilities'
+import { ConfigError } from '@/utils/errors'
 import { configModule } from '@/core/config'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { resolveConfigPath } from '@/utils/config-path'
@@ -40,6 +42,14 @@ function isDatabaseSystem(value: unknown): value is DatabaseSystem {
   return typeof value === 'string' && (DATABASE_SYSTEMS as readonly string[]).includes(value)
 }
 
+/** The report's one echoed user string; bounded so the echo cannot be unbounded. */
+const MAX_CONNECTION_LABEL = 200
+
+function truncateLabel(name: string | undefined): string | null {
+  if (!name) return null
+  return name.length <= MAX_CONNECTION_LABEL ? name : `${name.slice(0, MAX_CONNECTION_LABEL)}…`
+}
+
 /**
  * Read engine and permission from the local config, or `null` when there is
  * none to read.
@@ -56,39 +66,56 @@ async function configExists(configPath: string): Promise<boolean> {
   return Bun.file(configPath).exists()
 }
 
-async function resolveContext(command: Command): Promise<CapabilityCheckContext | null> {
+interface ResolvedContext {
+  readonly context: CapabilityCheckContext | null
+  readonly failure: CapabilityContextFailure
+}
+
+async function resolveContext(command: Command): Promise<ResolvedContext> {
+  const configPath = resolveConfigPath(command)
+
+  // `configModule.read` answers a missing config with DEFAULT_CONFIG — a
+  // localhost PostgreSQL at query-only — so that `init` has something to start
+  // from. Reporting engine and permission from those defaults would have this
+  // command state, in JSON, that a database nobody configured supports the
+  // requested capability. Existence is therefore established first, against the
+  // same storage path the reader itself resolves.
+  if (!(await configExists(configPath))) return { context: null, failure: 'absent' }
+
   try {
-    const configPath = resolveConfigPath(command)
-
-    // `configModule.read` answers a missing config with DEFAULT_CONFIG — a
-    // localhost PostgreSQL at query-only — so that `init` has something to
-    // start from. Reporting engine and permission from those defaults would
-    // have this command state, in JSON, that a database nobody configured
-    // supports the requested capability. Existence is therefore established
-    // first, against the same storage path the reader itself resolves.
-    if (!(await configExists(configPath))) return null
-
     const config = await configModule.read(configPath, undefined, {
       loadLayeredSchema: false,
     })
     const system = config.connection?.system
-    if (!isDatabaseSystem(system)) return null
+    if (!isDatabaseSystem(system)) return { context: null, failure: 'unresolvable' }
 
     return {
-      engine: system,
-      permission: config.permission,
-      // The connection the reader actually resolved, not the one `--use` asked
-      // for. On a v2 config with no selector those differ: the default named
-      // connection is in effect and `--use` is unset, and reporting `null`
-      // there would leave the verdict unattributable to the connection that
-      // produced it.
-      connectionName: config.effectiveConnectionName ?? null,
+      context: {
+        engine: system,
+        permission: config.permission,
+        // The connection the reader actually resolved, not the one `--use`
+        // asked for. On a v2 config with no selector those differ: the default
+        // named connection is in effect and `--use` is unset, and reporting
+        // `null` there would leave the verdict unattributable to the connection
+        // that produced it.
+        connectionName: truncateLabel(config.effectiveConnectionName),
+        agentMode: process.env.DBCLI_AGENT_MODE === '1',
+      },
+      failure: 'absent',
     }
-  } catch {
-    // A missing, unreadable or invalid config is context-unavailable, not an
-    // error: the caller asked what dbcli could do here, and "nothing is
-    // configured here" is the honest answer. It never reads as available.
-    return null
+  } catch (error) {
+    // A config that exists but will not resolve is `unresolvable`, never
+    // `absent`. The two were conflated at first, and the result was this
+    // command telling a caller "no configuration was readable" when the config
+    // was present and fine and only an `{"$env": "..."}` password pointed at an
+    // unset variable — a credential this command does not even need. Saying
+    // there is no config when there is one is the contract stating a falsehood,
+    // which is exactly what it exists to prevent.
+    //
+    // The error's own message is deliberately not surfaced: it carries
+    // filesystem paths, and a discovery command emits no paths.
+    if (error instanceof ConfigError) return { context: null, failure: 'unresolvable' }
+    throw error
   }
 }
 
@@ -144,10 +171,11 @@ function renderCheckText(report: CapabilityCheckReport): string {
   if (report.context) {
     lines.push(
       `Context: engine ${report.context.engine}, permission ${report.context.permission}` +
-        (report.context.connectionName ? `, connection ${report.context.connectionName}` : '')
+        (report.context.connectionName ? `, connection ${report.context.connectionName}` : '') +
+        (report.context.agentMode ? ', agent mode' : '')
     )
   } else {
-    lines.push('Context: unavailable (no readable dbcli configuration)')
+    lines.push('Context: unavailable (see warnings below)')
   }
   lines.push('')
   for (const result of report.results) {
@@ -204,11 +232,16 @@ capabilitiesCommand
       parsed = parseRequirements(options.require)
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`)
+      // `process.exit` is typed `never`, which is the only reason `parsed` reads
+      // as defined below. A stub or wrapper that does not terminate would throw
+      // a TypeError after the error was already printed; the explicit return
+      // costs nothing and removes the dependency on that typing.
       process.exit(EXIT_INVALID_INPUT)
+      return
     }
 
-    const context = await resolveContext(command)
-    const report = checkCapabilities(parsed.ids, context, parsed.warnings)
+    const { context, failure } = await resolveContext(command)
+    const report = checkCapabilities(parsed.ids, context, parsed.warnings, failure)
 
     if (options.format === 'json') {
       console.log(JSON.stringify(report, null, 2))

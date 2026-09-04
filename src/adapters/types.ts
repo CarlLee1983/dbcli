@@ -18,8 +18,8 @@ export type DatabaseSystem =
  * the roster — the capability catalog, engine-support tables — previously
  * rebuilt its own list. The `satisfies` clause below is what makes this one
  * authoritative: adding a member to the union without adding it here is a type
- * error, and `tests/unit/adapters/capabilities.test.ts` asserts it matches the
- * keys of `ENGINE_CAPABILITIES`.
+ * error, and `tests/unit/adapters/database-systems-roster.test.ts` asserts it
+ * matches the keys of `ENGINE_CAPABILITIES`.
  */
 export const DATABASE_SYSTEMS = Object.freeze([
   'postgresql',

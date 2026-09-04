@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { writeV2Config } from '@/core/config-v2'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 const workDirs: string[] = []
@@ -43,6 +44,17 @@ function run(
     child.stderr.on('data', (buffer) => (stderr += buffer.toString()))
     child.on('close', (code) => res({ stdout, stderr, code: code ?? 0 }))
   })
+}
+
+/**
+ * Every path under `dir`, recursively.
+ *
+ * A non-recursive `readdir` would let a write into `.dbcli/` pass a test named
+ * "mutates nothing on disk" — precisely the write this command must not make.
+ */
+async function treeOf(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true })
+  return entries.map((entry) => join(entry.parentPath, entry.name)).sort()
 }
 
 async function emptyDir(): Promise<string> {
@@ -126,7 +138,7 @@ describe('dbcli capabilities', () => {
   test('listing touches nothing on disk', async () => {
     const dir = await emptyDir()
     await run(['capabilities', '--format', 'json'], dir)
-    expect(await readdir(dir)).toEqual([])
+    expect(await treeOf(dir)).toEqual([])
   })
 
   test('the catalog exposes no credential, host or endpoint', async () => {
@@ -413,6 +425,163 @@ describe('dbcli capabilities check', () => {
     const report = JSON.parse(stdout)
     expect(report.context.engine).toBe('mysql')
     expect(report.context.connectionName).toBeNull()
+  })
+
+  test('an unresolvable env-ref says the config exists, not that it is missing', async () => {
+    // The config is present and fine; only its `{"$env":...}` password points at
+    // an unset variable — a credential this command never needs. Reporting "no
+    // configuration was found" here was the contract stating a falsehood.
+    const dir = await emptyDir()
+    const configPath = join(dir, 'envref.json')
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        connection: {
+          system: 'postgresql',
+          host: '203.0.113.1',
+          port: 5432,
+          user: 'u',
+          password: { $env: 'DBCLI_TEST_NEVER_SET_PASSWORD' },
+          database: 'd',
+        },
+        permission: 'read-write',
+        metadata: { createdAt: '2026-09-04T00:00:00.000Z', version: '1.0' },
+      })
+    )
+
+    const { stdout, code } = await run(
+      [
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+        '--format',
+        'json',
+      ],
+      dir
+    )
+
+    expect(code).toBe(1)
+    const report = JSON.parse(stdout)
+    expect(report.results[0].reason).toBe('context-unresolvable')
+    expect(report.warnings.join(' ')).toContain('could not be resolved')
+    expect(report.warnings.join(' ')).not.toContain('No dbcli configuration was found')
+  })
+
+  test('an unresolvable config leaks no filesystem path', async () => {
+    const dir = await emptyDir()
+    const configPath = join(dir, 'broken.json')
+    await writeFile(configPath, '{ this is not json')
+
+    const { stdout } = await run(
+      [
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+        '--format',
+        'json',
+      ],
+      dir
+    )
+    expect(stdout).not.toContain(dir)
+    expect(stdout).not.toContain('broken.json')
+    expect(JSON.parse(stdout).results[0].reason).toBe('context-unresolvable')
+  })
+
+  test('agent mode refuses a configuration-changing capability regardless of permission', async () => {
+    // DBCLI_AGENT_MODE=1 blocks every config write unconditionally, so
+    // reporting `available` for `connection.select` at admin would be a promise
+    // the very next command breaks.
+    //
+    // The config is written through `writeV2Config` rather than `writeFile` so
+    // it carries a real integrity record: agent mode both requires one and
+    // refuses legacy single-file configs, so a hand-written v1 fixture never
+    // reaches the code under test.
+    const dir = await emptyDir()
+    const configDir = join(dir, 'store')
+    await mkdir(configDir, { recursive: true })
+    await writeV2Config(configDir, {
+      version: 2,
+      default: 'primary',
+      connections: {
+        primary: {
+          system: 'postgresql',
+          host: '203.0.113.1',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+          permission: 'admin',
+        },
+      },
+      schema: {},
+      schemas: {},
+      metadata: { version: '1.0', createdAt: '2026-09-04T00:00:00.000Z' },
+      blacklist: { tables: [], columns: {} },
+      audit: {
+        enabled: true,
+        strict: false,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
+    } as never)
+
+    const child = spawn(
+      'bun',
+      [
+        'run',
+        CLI,
+        '--config',
+        configDir,
+        'capabilities',
+        'check',
+        '--require',
+        'connection.select,schema.read',
+        '--format',
+        'json',
+      ],
+      { cwd: dir, env: { ...sanitizeEnv(), DBCLI_AGENT_MODE: '1' } }
+    )
+    let stdout = ''
+    child.stdout.on('data', (buffer) => (stdout += buffer.toString()))
+    const code: number = await new Promise((res) => child.on('close', (c) => res(c ?? 0)))
+
+    expect(code).toBe(1)
+    const report = JSON.parse(stdout)
+    expect(report.context.agentMode).toBe(true)
+    const byId = Object.fromEntries(
+      report.results.map((r: { id: string; status: string; reason: string | null }) => [
+        r.id,
+        [r.status, r.reason],
+      ])
+    )
+    expect(byId['connection.select']).toEqual(['unavailable', 'agent-mode'])
+    expect(byId['schema.read']).toEqual(['available', null])
+    expect(report.warnings.join(' ')).toContain('DBCLI_AGENT_MODE=1')
+  })
+
+  test('agent mode is reported as false when the flag is unset', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'admin')
+    const { stdout } = await run(
+      [
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'connection.select',
+        '--format',
+        'json',
+      ],
+      dir
+    )
+    const report = JSON.parse(stdout)
+    expect(report.context.agentMode).toBe(false)
+    expect(report.results[0].status).toBe('available')
   })
 
   test('checking mutates nothing on disk', async () => {

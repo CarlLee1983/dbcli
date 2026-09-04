@@ -352,10 +352,16 @@ Four things the output deliberately does not mean:
 *   **A Task Pack plan is not a result.** `status: "planned"` remains distinct from a
     verification outcome.
 
-Statuses are `available`, `unavailable` (reason `engine`, `permission`, or
-`context-unavailable`) and `unknown`. An unrecognised id fails closed and is never resolved
-to a similar-looking one. Exit codes: `0` all available, `1` any unavailable or unknown,
-`2` invalid input.
+Statuses are `available`, `unavailable` and `unknown`. The `unavailable` reasons are
+`engine`, `agent-mode`, `permission`, `context-unavailable` and `context-unresolvable`,
+reported least-fixable first so the reason names the blocker actually in the way. Under
+`DBCLI_AGENT_MODE=1`, capabilities that change configuration are refused whatever the
+permission level says. `context-unresolvable` is deliberately distinct from
+`context-unavailable`: a config whose `{"$env": "..."}` password names an unset variable is
+present and readable, and claiming there is no config would be false.
+
+An unrecognised id fails closed and is never resolved to a similar-looking one. Exit codes:
+`0` all available, `1` any unavailable or unknown, `2` invalid input.
 
 #### `inspect` output for agents
 

@@ -67,6 +67,36 @@ The full suite runs without external database services; the Elasticsearch,
 live-DB and MySQL integration suites skip. Every assertion above holds without
 them: no case in this Story needs a reachable database, which is the point.
 
+## Addendum — code review follow-ups
+
+* [x] Agent mode is part of the evaluated context, and configuration-changing
+      capabilities are `unavailable` with reason `agent-mode` regardless of
+      permission — `tests/unit/core/capabilities/check.test.ts`,
+      `tests/integration/capabilities-command.test.ts`
+* [x] `mutatesConfiguration` is never claimed by a capability whose command
+      writes no configuration — `tests/contract/capability-contract.test.ts`
+* [x] A present-but-unresolvable config reports `context-unresolvable`, never
+      "no configuration was found", and leaks no filesystem path —
+      `tests/integration/capabilities-command.test.ts`
+* [x] `minimumPermission` derives from `minimumPermissionFor` rather than a
+      transcribed ladder — `tests/unit/core/capabilities/registry.test.ts`
+* [x] `limitedEngines` is the matrix `limited` subset, and is non-empty
+      somewhere — same file
+* [x] `DATABASE_SYSTEMS` matches the keys of `ENGINE_CAPABILITIES` —
+      `tests/unit/adapters/database-systems-roster.test.ts`
+* [x] "Mutates nothing on disk" is asserted recursively —
+      `tests/integration/capabilities-command.test.ts`
+
+### Known deviation
+
+Under `DBCLI_AGENT_MODE=1`, `schema.read` / `schema.read-object` /
+`schema.scan` report `available` although `dbcli schema` persists into
+`config.json` and that write is refused. Marking them would make an agent
+conclude schema cannot be read at all — a larger error in the opposite
+direction. It deviates from R2's spirit rather than its letter (the capability
+command does write config, incidentally). DBCLI-PLAT-012 moves cache
+persistence out from behind the identity guard, which removes the cause.
+
 ## Addendum — connection attribution
 
 * [x] A v2 default connection is named in `context.connectionName` even with no

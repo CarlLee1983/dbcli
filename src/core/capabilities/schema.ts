@@ -46,9 +46,11 @@ export const CapabilitySchema = z
     risk: RiskSchema,
     sideEffect: SideEffectSchema,
     engines: z.array(EngineSchema),
+    limitedEngines: z.array(EngineSchema),
     engineIndependent: z.boolean(),
     minimumPermission: PermissionSchema,
     requiresConnection: z.boolean(),
+    mutatesConfiguration: z.boolean(),
     supportsJson: z.boolean(),
     supportsEvidence: z.boolean(),
   })
@@ -65,7 +67,12 @@ const CheckContextSchema = z
   .object({
     engine: EngineSchema,
     permission: PermissionSchema,
-    connectionName: z.string().nullable(),
+    // Bounded because it is the one field carrying a user-supplied string
+    // straight back out. The value is a connection label the user chose, so it
+    // is not untrusted in the usual sense, but an unbounded echo is still an
+    // echo.
+    connectionName: z.string().max(200).nullable(),
+    agentMode: z.boolean(),
   })
   .strict()
 
@@ -74,7 +81,14 @@ const CheckResultSchema = z
     id: z.string().min(1),
     status: z.enum(['available', 'unavailable', 'unknown']),
     reason: z
-      .enum(['unknown-capability', 'context-unavailable', 'engine', 'permission'])
+      .enum([
+        'unknown-capability',
+        'context-unavailable',
+        'context-unresolvable',
+        'engine',
+        'agent-mode',
+        'permission',
+      ])
       .nullable(),
   })
   .strict()

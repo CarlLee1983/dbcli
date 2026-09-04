@@ -18,6 +18,7 @@ import {
 import { CapabilitySchema, CapabilityCatalogSchema } from '@/core/capabilities/schema'
 import { COMMAND_CAPABILITY_KEYS, ENGINE_CAPABILITIES } from '@/adapters/capabilities'
 import { DATABASE_SYSTEMS } from '@/adapters/types'
+import { minimumPermissionFor } from '@/core/permission-guard'
 
 describe('capability catalog', () => {
   test('is sorted by id and therefore deterministic across builds', () => {
@@ -113,12 +114,48 @@ describe('capability catalog', () => {
     }
   })
 
-  test('permissions match the SQL permission ladder where one applies', () => {
-    expect(findCapability('query.read')!.minimumPermission).toBe('query-only')
-    expect(findCapability('data.insert')!.minimumPermission).toBe('read-write')
-    expect(findCapability('data.update')!.minimumPermission).toBe('read-write')
-    expect(findCapability('data.delete')!.minimumPermission).toBe('data-admin')
-    expect(findCapability('schema.migrate')!.minimumPermission).toBe('admin')
+  test('permissions come from the runtime permission ladder, not a copy of it', () => {
+    // Compared against `minimumPermissionFor` rather than against a literal:
+    // asserting `data.delete` is `data-admin` only restates the declaration and
+    // stays green when TIER_GRANTS changes underneath it.
+    expect(findCapability('query.read')!.minimumPermission).toBe(minimumPermissionFor('SELECT'))
+    expect(findCapability('data.insert')!.minimumPermission).toBe(minimumPermissionFor('INSERT'))
+    expect(findCapability('data.update')!.minimumPermission).toBe(minimumPermissionFor('UPDATE'))
+    expect(findCapability('data.delete')!.minimumPermission).toBe(minimumPermissionFor('DELETE'))
+    expect(findCapability('schema.migrate')!.minimumPermission).toBe(minimumPermissionFor('ALTER'))
+  })
+
+  test('limitedEngines is the matrix `limited` subset of engines', () => {
+    for (const declaration of CAPABILITY_DECLARATIONS) {
+      const capability = findCapability(declaration.id)!
+      if (capability.engineIndependent) {
+        expect(capability.limitedEngines).toEqual([])
+        continue
+      }
+
+      const expected = DATABASE_SYSTEMS.filter(
+        (system) => ENGINE_CAPABILITIES[system][declaration.key].status === 'limited'
+      )
+      expect({ id: capability.id, limited: [...capability.limitedEngines] }).toEqual({
+        id: capability.id,
+        limited: [...expected],
+      })
+      for (const engine of capability.limitedEngines) {
+        expect(capability.engines).toContain(engine)
+      }
+    }
+  })
+
+  test('at least one capability really is limited somewhere, so the field is load-bearing', () => {
+    // Guards the assertion above from passing vacuously.
+    expect(CAPABILITIES.some((capability) => capability.limitedEngines.length > 0)).toBe(true)
+  })
+
+  test('mutatesConfiguration marks the capabilities agent mode refuses', () => {
+    const marked = CAPABILITIES.filter((capability) => capability.mutatesConfiguration).map(
+      (capability) => capability.id
+    )
+    expect(marked).toEqual(['blacklist.manage', 'connection.init', 'connection.select'])
   })
 
   test('ids name tool abilities, never job titles or methods', () => {
@@ -136,7 +173,9 @@ describe('capability catalog', () => {
       'engineIndependent',
       'engines',
       'id',
+      'limitedEngines',
       'minimumPermission',
+      'mutatesConfiguration',
       'requiresConnection',
       'risk',
       'sideEffect',

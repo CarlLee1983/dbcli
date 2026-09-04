@@ -312,9 +312,14 @@ dbcli capabilities check --require schema.read,query.read --format json
 *   **`schemaVersion` 不是套件版本。** 要 pin 的是 contract 版本，不是 `7.x`。
 *   **Task Pack 的 plan 不是結果。** `status: "planned"` 與驗證結果始終是兩回事。
 
-狀態有 `available`、`unavailable`（原因為 `engine`、`permission` 或 `context-unavailable`）
-與 `unknown`。無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：
-`0` 全部可用、`1` 有任一不可用或未知、`2` 輸入無效。
+狀態有 `available`、`unavailable` 與 `unknown`。`unavailable` 的原因有 `engine`、
+`agent-mode`、`permission`、`context-unavailable` 與 `context-unresolvable`，依「最難修的
+排前面」回報，讓 reason 指到真正擋路的那一個。在 `DBCLI_AGENT_MODE=1` 之下，會變更設定的
+能力一律被拒，不管權限等級寫什麼。`context-unresolvable` 與 `context-unavailable` 刻意分開：
+`{"$env": "..."}` 密碼指向未設定變數的設定檔是存在且可讀的，宣稱「沒有設定」是假話。
+
+無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：`0` 全部可用、
+`1` 有任一不可用或未知、`2` 輸入無效。
 
 #### `inspect` 給 agent 的輸出
 

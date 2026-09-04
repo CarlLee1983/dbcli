@@ -88,6 +88,7 @@ export type {
   CapabilityCatalog,
   CapabilityRisk,
   CapabilityCheckContext,
+  CapabilityContextFailure,
   CapabilityCheckReport,
   CapabilityCheckResultEntry,
   CapabilityCheckStatus,

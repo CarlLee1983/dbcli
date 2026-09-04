@@ -36,10 +36,24 @@ export interface Capability {
   readonly sideEffect: SideEffectTier
   /** Engines on which the capability is supported or limited, sorted. */
   readonly engines: readonly DatabaseSystem[]
+  /**
+   * The subset of `engines` the matrix marks `limited` rather than `supported`.
+   *
+   * Carried separately because folding it into `engines` would discard
+   * information the matrix already holds: `data.delete` works on Redis, but not
+   * the way it works on PostgreSQL, and a caller choosing an engine deserves to
+   * know which before it commits.
+   */
+  readonly limitedEngines: readonly DatabaseSystem[]
   /** True when the capability works irrespective of the configured engine. */
   readonly engineIndependent: boolean
   readonly minimumPermission: Permission
   readonly requiresConnection: boolean
+  /**
+   * True when the capability changes connection identity, permission or
+   * credentials — the class of change `DBCLI_AGENT_MODE=1` refuses outright.
+   */
+  readonly mutatesConfiguration: boolean
   readonly supportsJson: boolean
   readonly supportsEvidence: boolean
 }
@@ -60,11 +74,28 @@ export type CapabilityCheckStatus = 'available' | 'unavailable' | 'unknown'
  * no local config there is nothing to evaluate against, and reporting that as
  * an engine mismatch would invent a fact. It is still not `available` — absence
  * of context never reads as permission to act.
+ *
+ * `context-unresolvable` is a *different* fact from `context-unavailable`, and
+ * conflating them was a real defect: a config whose `{"$env": "..."}` password
+ * reference points at an unset variable is present and perfectly readable, and
+ * reporting "no configuration was readable" there states something false. This
+ * command needs no credential, but the one config reader resolves them before
+ * it will answer, so the honest report is "a config exists and could not be
+ * turned into an evaluable context" — never "there is no config".
+ *
+ * `agent-mode` is an environment gate, not an execution-time one. Under
+ * `DBCLI_AGENT_MODE=1` every configuration, permission and credential change is
+ * refused unconditionally, and that is fully knowable without connecting. The
+ * "available is not approval" disclaimer does not cover it: blacklist and human
+ * consent are decided at execution time, whereas this is decided here, and the
+ * contract's primary consumer is exactly the agent the flag describes.
  */
 export type CapabilityUnavailableReason =
   | 'unknown-capability'
   | 'context-unavailable'
+  | 'context-unresolvable'
   | 'engine'
+  | 'agent-mode'
   | 'permission'
 
 export interface CapabilityCheckContext {
@@ -72,7 +103,18 @@ export interface CapabilityCheckContext {
   readonly permission: Permission
   /** Named v2 connection in effect, or null for a v1/single-connection config. */
   readonly connectionName: string | null
+  /** `DBCLI_AGENT_MODE=1`: configuration changes are refused unconditionally. */
+  readonly agentMode: boolean
 }
+
+/**
+ * Why there is no context, when there is none.
+ *
+ * `absent` means nothing is configured here. `unresolvable` means something is,
+ * and it could not be turned into an engine and a permission. Only the first
+ * justifies telling a caller there is no configuration.
+ */
+export type CapabilityContextFailure = 'absent' | 'unresolvable'
 
 export interface CapabilityCheckResultEntry {
   readonly id: string

@@ -32,6 +32,7 @@ command path, and its minimum permission — and *derives* the rest:
 | Catalog field | Derived from |
 | --- | --- |
 | `engines` | matrix entries whose status is `supported` or `limited` |
+| `limitedEngines` | matrix entries whose status is `limited`, kept apart so the distinction survives |
 | `engineIndependent` | every engine's status is `not-applicable` |
 | `risk` | the matrix `tier`, folded into the Task Pack risk vocabulary |
 | `sideEffect` | the matrix `tier`, verbatim |
@@ -85,6 +86,15 @@ than a habit.
   configured permission and engine would not refuse the operation. Blacklist,
   write gate, confirmation and audit all still run at execution time, and a
   human's consent is not modelled here at all.
+- **But an environment gate is not covered by that disclaimer.** The line is
+  *when* the refusal is decided. Blacklist and human consent are decided at
+  execution time, so the contract cannot speak for them. `DBCLI_AGENT_MODE=1`
+  is decided *here*: it refuses every configuration, permission and credential
+  change unconditionally, and is fully knowable without connecting. Reporting
+  `available` for `connection.select` under it was the one promise this
+  contract made that its primary consumer — an agent — would act on and find
+  false. Agent mode therefore sits in the context alongside engine and
+  permission, with its own `agent-mode` reason.
 - **`admin` is a config value, not a DBA sign-off.** The permission ladder
   describes what SQL the tool will pass through; it does not describe who agreed
   to it.
@@ -96,6 +106,13 @@ than a habit.
   engine and no permission to evaluate, so the capability is known but its
   availability is not established. Reporting that as `unknown` would blur a
   question about the *requirement* with a question about the *environment*.
+- **"No config" and "config I cannot resolve" are different facts.** A config
+  whose `{"$env": "..."}` password names an unset variable is present and
+  perfectly readable; the one config reader simply resolves credentials — which
+  this command does not need — before it will answer. Reporting that as "no
+  configuration was found" is the contract stating a falsehood about the
+  user's machine, so `context-unresolvable` is a separate reason from
+  `context-unavailable`. Both fail closed; only one of them is ever true.
 
 ## Consequences
 
@@ -110,6 +127,22 @@ than a habit.
   credential or data row. A test asserts the serialized output against a
   credential-shaped fixture.
 
+### The one place the contract knowingly overstates availability
+
+`dbcli schema` persists the schema it reads into `config.json`, and that write
+sits behind the same agent-mode guard. Under `DBCLI_AGENT_MODE=1` the read
+succeeds and the persistence step is refused, so `schema.read` reports
+`available` while a real invocation partially fails.
+
+Marking the three `schema` capabilities `mutatesConfiguration` would make them
+`unavailable` under agent mode, which overstates the refusal far more than this
+understates it — an agent would conclude it cannot read schema at all. The
+honest fix is elsewhere: a schema *cache* write is not a change to connection
+identity, permission or credentials, and arguably should never have been behind
+the identity guard. That is DBCLI-PLAT-012.
+`INCIDENTAL_CONFIG_WRITERS` in `tests/contract/capability-contract.test.ts`
+names the exemption so it cannot become a silent gap.
+
 **Falsified if:** a capability in `src/core/capabilities/registry.ts` declares an
 `engines` or `risk` value literally instead of deriving it from
 `ENGINE_CAPABILITIES` in `src/adapters/capabilities.ts`, or a
@@ -117,4 +150,7 @@ than a habit.
 `src/core/capabilities/` acquires an import of `@/adapters/index` or a database
 adapter module, or `src/commands/capabilities.ts` reads config through anything
 other than `src/core/config.ts`, or `postgres` appears as an engine name in
-`src/core/capabilities/`.
+`src/core/capabilities/`, or `minimumPermission` is written literally for a
+capability that maps to a SQL statement type instead of coming from
+`minimumPermissionFor`, or a capability declares `mutatesConfiguration: true`
+whose command calls none of the config writers.

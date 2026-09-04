@@ -126,8 +126,11 @@ dbcli capabilities check --require data.delete --format json      # machine-read
 Tool Skill 只負責安全地操作 dbcli。
 
 - `schemaVersion` 是 capability contract 的版本，**不是** npm 套件版本。
-- 狀態有 `available`、`unavailable`（原因為 `engine`、`permission` 或
-  `context-unavailable`）與 `unknown`。拼錯的 id 一律 fail closed，絕不猜測。
+- 狀態有 `available`、`unavailable`（原因為 `engine`、`agent-mode`、`permission`、
+  `context-unavailable` 或 `context-unresolvable`）與 `unknown`。拼錯的 id 一律 fail
+  closed，絕不猜測。
+- 在 `DBCLI_AGENT_MODE=1` 之下，會變更設定的能力一律 `unavailable`、原因 `agent-mode`，
+  不管權限等級寫什麼。
 - Exit code：`0` 全部可用、`1` 有任一不可用或未知、`2` 輸入無效。
 - **`available` 不等於已核准。** Blacklist、write gate、確認與 audit 在執行時仍然會跑，
   設定檔裡的 `admin` 是權限等級，不是 DBA 的簽核。

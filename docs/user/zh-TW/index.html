@@ -278,7 +278,8 @@ dbcli capabilities check --require schema.read,query.read --format json</code></
                 <li><strong><code>schemaVersion</code> 不是套件版本。</strong> 要 pin 的是 contract 版本，不是 <code>7.x</code>。</li>
                 <li><strong>Task Pack 的 plan 不是結果。</strong> <code>status: "planned"</code> 與驗證結果始終是兩回事。</li>
             </ul>
-            <p>狀態有 <code>available</code>、<code>unavailable</code>（原因為 <code>engine</code>、<code>permission</code> 或 <code>context-unavailable</code>）與 <code>unknown</code>。無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：<code>0</code> 全部可用、<code>1</code> 有任一不可用或未知、<code>2</code> 輸入無效。</p>
+            <p>狀態有 <code>available</code>、<code>unavailable</code> 與 <code>unknown</code>。<code>unavailable</code> 的原因有 <code>engine</code>、<code>agent-mode</code>、<code>permission</code>、<code>context-unavailable</code> 與 <code>context-unresolvable</code>，依「最難修的排前面」回報，讓 reason 指到真正擋路的那一個。在 <code>DBCLI_AGENT_MODE=1</code> 之下，會變更設定的能力一律被拒，不管權限等級寫什麼。<code>context-unresolvable</code> 與 <code>context-unavailable</code> 刻意分開：<code>{"$env": "..."}</code> 密碼指向未設定變數的設定檔是存在且可讀的，宣稱「沒有設定」是假話。</p>
+            <p>無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：<code>0</code> 全部可用、<code>1</code> 有任一不可用或未知、<code>2</code> 輸入無效。</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> 給 agent 的輸出</h4>
             <p><code>dbcli inspect</code> 回傳兩個平行陣列，讓 agent 在第一次呼叫就能定位：</p>

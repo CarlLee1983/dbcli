@@ -479,5 +479,9 @@ export function enforcePermission(
  * Defined in `@/core/permission/rank` so callers needing only the ladder do not
  * pull this module's i18n and SQL-analysis graph in with it; re-exported here
  * because this is where every existing caller imports it from.
+ *
+ * `PERMISSION_RANK` itself is deliberately not re-exported: it was module-private
+ * before the extraction and nothing outside the ladder reads it, so forwarding it
+ * would widen this module's surface as a side effect of moving a function.
  */
-export { PERMISSION_RANK, permissionAtLeast } from '@/core/permission/rank'
+export { permissionAtLeast } from '@/core/permission/rank'

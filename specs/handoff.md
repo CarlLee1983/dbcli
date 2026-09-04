@@ -9,6 +9,39 @@
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
 `manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
 
+## 進行中：DBCLI-PLAT-001
+
+Agent Integration Contract v1 的第一個垂直切片。`dbcli capabilities` 與
+`dbcli capabilities check` 讓外部 Skill 在動工前問得到「這個工具能做什麼」、
+「這裡有沒有」，兩者都不建立資料庫連線。設計記錄在
+`docs/specs/2026-09-04-agent-integration-contract-v1.md`，決定在 ADR-0022。
+
+這個 Story 最值得留下的一句：**contract 說謊了五次，沒有一次是讀碼看出來的。**
+缺設定時拿 `DEFAULT_CONFIG` 的 localhost PostgreSQL 當真實環境回報；手寫的
+`supportsJson` 四個指令是錯的；v2 預設連線的 `connectionName` 回 null；agent mode
+下對 `connection.select` 回 `available`；一個裸 catch 把五種狀況壓成同一句假話。
+前三個是測試與探測抓到的，後兩個是 code review 抓到的。
+
+其中 agent mode 那個最值得記住。原本的辯護是 ADR 寫的「available 不是核准」，
+但那條免責聲明蓋不住它——差別在**拒絕是何時決定的**：blacklist 與人類同意在執行
+當下決定，契約無從代言；`DBCLI_AGENT_MODE=1` 在這裡就決定了，而且不連線就完全可知。
+對著這份契約的主要客群（agent）宣稱一件下一個指令就會推翻的事，是這份契約唯一
+會被真正依賴的假承諾。
+
+留下一個已知的過度宣稱，寫進 ADR 與 acceptance：`dbcli schema` 會把讀到的 schema
+持久化進 `config.json`，那個寫入也在 agent mode 的閘門後面，所以 `schema.read`
+在 agent mode 下回 `available` 但實際跑會在持久化那步失敗。標成 unavailable 會讓
+agent 以為完全讀不到 schema，反方向的錯更大。真正的修法是 schema *快取*的寫入
+本來就不該擋在「連線身分」的閘門後面：DBCLI-PLAT-012。
+
+已知邊界，不是疏漏：`ENGINE_CAPABILITIES` 只涵蓋 34 個 command key，dbcli 有 50 個
+top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等 16 個
+不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
+稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
+
+後續 backlog（DBCLI-PLAT-004 到 011）只寫進 spec，沒有實作。Task Pack 仍是
+`plan-only`，`safety.requires` 沒有動。
+
 ## 交付紀錄
 
 DBCLI-001 到 DBCLI-012 都在 `feat/forgeflow-stories-002-006` 上完成，該分支
@@ -119,7 +152,7 @@ revision 是否存在，所以不宣稱；能查的是這個 repository 對它�
 
 ```yaml
 workflow:
-  current_story: none
+  current_story: DBCLI-PLAT-001
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -135,28 +168,48 @@ workflow:
     - DBCLI-011
     - DBCLI-012
     - DBCLI-013
-  status: done
+  status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-013-forgeflow-adoption-hardening
-  # The DBCLI-013 delivery commit on
-  # feat/dbcli-013-forgeflow-adoption-hardening, not yet merged to main.
-  # `7f534be5` is its parent and the last state on main.
-  commit: 907b0f69
+  branch: feat/dbcli-plat-001-capability-contract
+  # The last state on main when DBCLI-PLAT-001 started.
+  commit: d1237f93
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-013-forgeflow-adoption-hardening/
-    - scripts/check-forgeflow-adoption.ts
-    - scripts/lib/forgeflow-adoption.ts
-    - tests/contract/forgeflow-adoption.test.ts
-    - specs/handoff.md
-    - package.json
+    - specs/stories/DBCLI-PLAT-001-capability-contract/
+    - tests/unit/adapters/database-systems-roster.test.ts
+    - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
+    - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - docs/plans/2026-09-04-agent-integration-contract-v1.md
+    - src/core/capabilities/
+    - src/core/permission/rank.ts
+    - src/commands/capabilities.ts
+    - tests/unit/core/capabilities/
+    - tests/contract/capability-contract.test.ts
+    - tests/integration/capabilities-command.test.ts
+    - src/adapters/types.ts
+    - src/core/permission-guard.ts
+    - src/core/public.ts
+    - src/program.ts
+    - src/program-lazy.ts
+    - tests/unit/core-public.test.ts
+    - assets/SKILL.md
+    - assets/SKILL.zh-TW.md
+    - assets/reference.md
+    - docs/user/
+    - CONTEXT.md
     - CHANGELOG.md
+    - specs/handoff.md
   known_unrelated_paths: []
 
 verification:
-  last_command: SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true make verify
+  last_command: bun test + 13 static gates + build + build:determinism
   result: pass
-  detail: 6403 tests across 552 files, 0 fail, integration included (docker services up)
+  detail: >-
+    6509 pass / 27 skip / 0 fail across 557 files, after the code-review fixes. The 27 skips are the
+    Elasticsearch, live-DB and MySQL integration suites, which have no local
+    services; no DBCLI-PLAT-001 assertion depends on one. release:check was NOT
+    run to completion — it fails at step 1/9 on a `bun audit` network timeout,
+    before any repository check executes.
 ```

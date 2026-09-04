@@ -43,6 +43,7 @@ import { backfillCommand } from './commands/backfill'
 import { evidenceCommand } from './commands/evidence'
 import { contractCommand } from './commands/contracts'
 import { impactCommand } from './commands/impact'
+import { capabilitiesCommand } from './commands/capabilities'
 import {
   registerQueryCommand,
   registerPlanCommand,
@@ -137,6 +138,7 @@ export function buildProgram(): Command {
   program.addCommand(evidenceCommand)
   program.addCommand(contractCommand)
   program.addCommand(impactCommand)
+  program.addCommand(capabilitiesCommand)
 
   return program
 }

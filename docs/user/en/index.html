@@ -259,10 +259,27 @@ dbcli password prod --password "$NEW" --skip-test --format json</code></pre>
                     <tr><td><code>schema</code></td><td>Inspect structure and refresh local metadata cache.</td></tr>
                     <tr><td><code>inspect</code></td><td>Full context snapshot (objects, perms, suggested actions).</td></tr>
                     <tr><td><code>status</code></td><td>Config and connectivity health summary.</td></tr>
+                    <tr><td><code>capabilities</code></td><td>Static capability catalog — what dbcli can do. No database connection.</td></tr>
+                    <tr><td><code>capabilities check</code></td><td>Check required capability ids against the local config. Never connects.</td></tr>
                 </tbody>
             </table>
             <p><code>dbcli blacklist list --format json</code> emits one machine-readable document with <code>tables</code>, <code>columns</code>, and <code>warnings</code>; malformed MongoDB blacklist paths are returned in the structured <code>warnings</code> array instead of being mixed into stdout as human diagnostics.</p>
             <p>For PostgreSQL, <code>schema</code> uses exact <code>public</code> catalog identity throughout: full catalog/schema/table joins prevent reused constraint names from contaminating another table, composite foreign-key columns remain in declaration order, composite primary-key order comes from the exact table OID and index ordinality, and estimates are scoped to the exact <code>public</code> relation. Row counts qualify and quote both <code>"public"</code> and the exact table name, escaping embedded quotes so mixed-case and punctuation-bearing identifiers remain distinct and safe. Referenced schema/table spelling is preserved from the catalog.</p>
+
+            <h4 class="mt-8 font-bold text-text-main">Capability discovery for Skills</h4>
+            <p><code>dbcli capabilities</code> answers &ldquo;what can this tool do?&rdquo; in a versioned, parseable shape, so an external Skill can decide before it starts working. <code>dbcli capabilities check --require &lt;ids&gt;</code> then answers &ldquo;are those available <em>here</em>?&rdquo; against the local configuration. Neither opens a database connection.</p>
+            <pre><code>dbcli capabilities --format json
+dbcli capabilities check --require schema.read,query.read --format json</code></pre>
+            <p>A <strong>capability</strong> is one atomic dbcli ability — <code>schema.read</code>, <code>data.delete</code>. It is never a job or a method: <code>dba.tune-production</code> and <code>crud.scaffold</code> belong to the Role Skill or Method Skill that composes dbcli. The layering is <code>Story + AGENTS.md + Role Skill + Method Skill + Tool Skill + dbcli</code>, and dbcli only ever answers for the last two.</p>
+            <p>Four things the output deliberately does not mean:</p>
+            <ul>
+                <li><strong>Discovery is not a grant.</strong> A listed capability says the binary can do it, not that you may.</li>
+                <li><strong><code>available</code> is not approval.</strong> It says engine and permission would not refuse. Blacklist, write gate, confirmation and audit all still run, and no human has agreed to anything. <code>admin</code> in a config file is a permission level, not a DBA sign-off.</li>
+                <li><strong><code>schemaVersion</code> is not the package version.</strong> Pin the contract version, not <code>7.x</code>.</li>
+                <li><strong>A Task Pack plan is not a result.</strong> <code>status: "planned"</code> remains distinct from a verification outcome.</li>
+            </ul>
+            <p>Statuses are <code>available</code>, <code>unavailable</code> and <code>unknown</code>. The <code>unavailable</code> reasons are <code>engine</code>, <code>agent-mode</code>, <code>permission</code>, <code>context-unavailable</code> and <code>context-unresolvable</code>, reported least-fixable first so the reason names the blocker actually in the way. Under <code>DBCLI_AGENT_MODE=1</code>, capabilities that change configuration are refused whatever the permission level says. <code>context-unresolvable</code> is deliberately distinct from <code>context-unavailable</code>: a config whose <code>{"$env": "..."}</code> password names an unset variable is present and readable, and claiming there is no config would be false.</p>
+            <p>An unrecognised id fails closed and is never resolved to a similar-looking one. Exit codes: <code>0</code> all available, <code>1</code> any unavailable or unknown, <code>2</code> invalid input.</p>
 
             <h4 class="mt-8 font-bold text-text-main"><code>inspect</code> output for agents</h4>
             <p><code>dbcli inspect</code> returns two parallel arrays so an agent can orient on the very first call:</p>

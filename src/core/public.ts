@@ -66,6 +66,35 @@ export {
 } from '@/core/config-binding'
 export type { DbcliConfigV2 } from '@/utils/validation'
 
+// ── Capability contract (agent-facing discovery) ─────────
+// Pure data and pure functions: no adapter, no filesystem, no environment.
+// It lives here rather than in `agent-core` because the catalog names engines
+// and `check-agent-core-purity.ts` forbids that word there — see ADR-0022.
+export {
+  CAPABILITY_CONTRACT_SCHEMA_VERSION,
+  CAPABILITIES,
+  buildCapabilityCatalog,
+  findCapability,
+  listCapabilityIds,
+  checkCapabilities,
+  parseRequirements,
+  parseCapabilityCatalog,
+  parseCapabilityCheckReport,
+  CapabilityRequirementError,
+  CapabilityContractError,
+} from '@/core/capabilities'
+export type {
+  Capability,
+  CapabilityCatalog,
+  CapabilityRisk,
+  CapabilityCheckContext,
+  CapabilityContextFailure,
+  CapabilityCheckReport,
+  CapabilityCheckResultEntry,
+  CapabilityCheckStatus,
+  CapabilityUnavailableReason,
+} from '@/core/capabilities'
+
 // ── Safety ───────────────────────────────────────────────
 export { BlacklistManager } from '@/core/blacklist-manager'
 export { BlacklistValidator, BlacklistError } from '@/core/blacklist-validator'

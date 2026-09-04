@@ -279,12 +279,47 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 | `schema [table]` | 顯示特定物件的結構，或掃描整個資料庫並快取元資料。 |
 | `inspect` | 為 AI 代理提供唯讀的上下文快照（物件、權限、指令建議）。 |
 | `status` | 顯示目前配置的安全摘要（不含機密資訊）。 |
+| `capabilities` | 列出靜態 capability catalog（dbcli 能做什麼），不連線資料庫。 |
+| `capabilities check` | 依本機設定的 engine 與 permission 檢查所需的 capability id。不建立連線。 |
 
 `dbcli blacklist list --format json` 會在 stdout 輸出一個 machine-readable 文件，包含
 `tables`、`columns` 與 `warnings`；不合法的 MongoDB blacklist path 會放進結構化的
 `warnings` 陣列，不會把人類可讀診斷混入 stdout。
 
 在 PostgreSQL 中，`schema` 全程使用精確的 `public` catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 `public` relation。Row count 會同時 qualify 並 quote `"public"` 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。
+
+#### 給 Skill 的能力探索
+
+`dbcli capabilities` 用一個有版本、可解析的形狀回答「這個工具能做什麼」，讓外部 Skill 在動工
+之前就能決定。`dbcli capabilities check --require <ids>` 接著依本機設定回答「這裡有沒有」。
+兩者都不會建立資料庫連線。
+
+```bash
+dbcli capabilities --format json
+dbcli capabilities check --require schema.read,query.read --format json
+```
+
+一個 **capability** 是 dbcli 的單一原子能力——`schema.read`、`data.delete`。它絕不是職務或方法：
+`dba.tune-production` 與 `crud.scaffold` 屬於組合 dbcli 的 Role Skill 或 Method Skill。分層是
+`Story + AGENTS.md + Role Skill + Method Skill + Tool Skill + dbcli`，而 dbcli 只回答最後兩層。
+
+輸出刻意不代表的四件事：
+
+*   **Discovery 不是授權。** 列出一項能力只表示這個程式做得到，不表示你可以做。
+*   **`available` 不等於已核准。** 它只說 engine 與 permission 不會拒絕。Blacklist、write
+    gate、確認與 audit 仍然全部會跑，也沒有任何人類同意過什麼。設定檔裡的 `admin` 是權限
+    等級，不是 DBA 的簽核。
+*   **`schemaVersion` 不是套件版本。** 要 pin 的是 contract 版本，不是 `7.x`。
+*   **Task Pack 的 plan 不是結果。** `status: "planned"` 與驗證結果始終是兩回事。
+
+狀態有 `available`、`unavailable` 與 `unknown`。`unavailable` 的原因有 `engine`、
+`agent-mode`、`permission`、`context-unavailable` 與 `context-unresolvable`，依「最難修的
+排前面」回報，讓 reason 指到真正擋路的那一個。在 `DBCLI_AGENT_MODE=1` 之下，會變更設定的
+能力一律被拒，不管權限等級寫什麼。`context-unresolvable` 與 `context-unavailable` 刻意分開：
+`{"$env": "..."}` 密碼指向未設定變數的設定檔是存在且可讀的，宣稱「沒有設定」是假話。
+
+無法辨識的 id 一律 fail closed，絕不會被解析成長得像的那一個。Exit code：`0` 全部可用、
+`1` 有任一不可用或未知、`2` 輸入無效。
 
 #### `inspect` 給 agent 的輸出
 

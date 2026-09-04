@@ -11,6 +11,38 @@ export type DatabaseSystem =
   | 'redis'
   | 'elasticsearch'
 
+/**
+ * Every supported system, in the order engine-facing output enumerates them.
+ *
+ * `DatabaseSystem` is a type and vanishes at runtime, so code that must iterate
+ * the roster — the capability catalog, engine-support tables — previously
+ * rebuilt its own list. The `satisfies` clause below is what makes this one
+ * authoritative: adding a member to the union without adding it here is a type
+ * error, and `tests/unit/adapters/database-systems-roster.test.ts` asserts it
+ * matches the keys of `ENGINE_CAPABILITIES`.
+ */
+export const DATABASE_SYSTEMS = Object.freeze([
+  'postgresql',
+  'mysql',
+  'mariadb',
+  'mongodb',
+  'redis',
+  'elasticsearch',
+] as const) satisfies readonly DatabaseSystem[]
+
+/**
+ * Compile-time exhaustiveness for the roster above.
+ *
+ * `satisfies` alone only rejects a *wrong* member; it says nothing about a
+ * *missing* one, which is the direction that actually breaks callers. This
+ * alias stops compiling the moment a `DatabaseSystem` member is absent from
+ * `DATABASE_SYSTEMS`, and names the missing member in the error.
+ */
+type AssertNever<T extends never> = T
+export type DatabaseSystemRosterIsExhaustive = AssertNever<
+  Exclude<DatabaseSystem, (typeof DATABASE_SYSTEMS)[number]>
+>
+
 export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
 
 export type SqlExecutionMode = 'normal' | 'native-read-only'

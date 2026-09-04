@@ -277,6 +277,12 @@ export const COMMAND_LOADERS: Record<string, () => Promise<(program: Command) =>
       program.addCommand(impactCommand)
     }
   },
+  capabilities: async () => {
+    const { capabilitiesCommand } = await import('./commands/capabilities')
+    return (program) => {
+      program.addCommand(capabilitiesCommand)
+    }
+  },
 }
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMAND_LOADERS)

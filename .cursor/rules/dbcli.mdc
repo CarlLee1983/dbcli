@@ -139,6 +139,35 @@ their descriptive evidence policy; it never authorizes an assertion or query. If
 migrate that file without an explicit human request; semantic vocabulary never replaces
 schema confirmation or the normal query/write safety gates.
 
+## Capability discovery
+
+Before composing a workflow, ask dbcli what it can do here rather than assuming. The
+catalog is static and the check reads only the local config — **neither opens a database
+connection.**
+
+```bash
+dbcli capabilities --format json                                  # full catalog
+dbcli capabilities --format markdown                              # table for docs
+dbcli capabilities check --require schema.read,query.read         # gate your workflow
+dbcli capabilities check --require data.delete --format json      # machine-readable
+```
+
+A capability is one atomic dbcli ability (`schema.read`, `data.delete`), never a job or a
+method. `dba.tune-production` and `crud.scaffold` belong to the Role or Method Skill that
+composes dbcli — this Tool Skill only covers operating dbcli safely.
+
+- `schemaVersion` is the capability contract version, **not** the npm package version.
+- Statuses are `available`, `unavailable` (reason `engine`, `agent-mode`, `permission`,
+  `context-unavailable` or `context-unresolvable`) and `unknown`. A misspelled id fails
+  closed and is never guessed.
+- Under `DBCLI_AGENT_MODE=1`, capabilities that change configuration are `unavailable`
+  with reason `agent-mode` whatever the permission level says.
+- Exit codes: `0` all available, `1` any unavailable or unknown, `2` bad input.
+- **`available` is not approval.** Blacklist, write gate, confirmation and audit still run
+  at execution time, and `admin` in a config file is a permission level, not a DBA sign-off.
+- v1 covers the commands the engine capability matrix governs; anything outside it returns
+  `unknown` rather than an unaudited engine claim.
+
 ## Agent Task Packs
 
 When the user asks for a database workflow ("diagnose this slow query", "audit
@@ -422,6 +451,7 @@ Full flags and edge cases: see [reference.md](../skills/dbcli/reference.md#init)
 |---------|-----------------|---------|
 | `init` | n/a | Create `.dbcli` (v1 single or v2 multi via `--conn-name` / `--env-file`). **Usually run by the human** — do NOT re-run to strip `{"$env"}` references; that format is intentional. |
 | `use` | n/a | Show/switch default named connection (v2 only). |
+| `capabilities` | n/a | Static capability catalog + `check --require <ids>` requirement gate. No database connection. `--format text\|json\|markdown` (`check` is `text\|json`). Exit `0`/`1`/`2`. |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |
 | `schema` | query-only+ | SQL: per-table or full scan into `.dbcli/schemas/`. MongoDB: sampled. ES: flattened mapping. Redis: per-key only (type/TTL/size). Supports `--recovery`. |
 | `query` | query-only+ | SQL, Mongo JSON (`--collection`), Redis command, or ES DSL/Lucene (`--collection`). `--format table\|json\|csv\|html`, `--ui` to open the interactive dashboard in a browser. `--fields` (projection), `--truncate` (cell width), `-f/--query-file` (read query from file or stdin), `--use a,b` (read-only fan-out). Supports `--recovery`. `--slow-ms <n>` sets the passive slow-query hint threshold (default 1000, `0` off): at or above it, table output gains a `Performance hint` footer and JSON gains `metadata.performanceAdvisory`; it runs no extra diagnostics and is suppressed under `--recovery`. Distinct from the `proxy` flag of the same name. See **Query workflow flags**. |

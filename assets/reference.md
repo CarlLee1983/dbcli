@@ -43,6 +43,7 @@ never the right move.
 [snapshot](#snapshot) ·
 [assert](#assert) ·
 [proxy](#proxy) ·
+[capabilities](#capabilities) ·
 [status](#status) ·
 [inspect](#inspect) ·
 [report](#report) ·
@@ -1672,6 +1673,90 @@ Every actionable block carries machine-readable next steps so an agent can move 
 
 **Engines:** MySQL / MariaDB / PostgreSQL
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
+
+### capabilities
+
+Discovery. Lists the static dbcli capability catalog — what this tool can do,
+described in a versioned shape an external Skill can parse before it starts
+working. It never opens a database connection and never writes anything.
+
+A **capability** names one atomic dbcli ability (`schema.read`, `data.delete`).
+It is not a job and not a method: `dba.tune-production` or `crud.scaffold`
+belong to the Role or Method Skill that composes dbcli, never to dbcli itself.
+
+```bash
+dbcli capabilities                       # human-readable (default)
+dbcli capabilities --format json         # for agents and Skills
+dbcli capabilities --format markdown     # table, for docs
+```
+
+Each entry carries `id`, `description`, `command`, `risk`, `sideEffect`,
+`engines`, `limitedEngines`, `engineIndependent`, `minimumPermission`,
+`requiresConnection`, `mutatesConfiguration`, `supportsJson` and
+`supportsEvidence`. `limitedEngines` is the subset of `engines` the support
+matrix marks *limited* rather than fully supported. Output is sorted by `id`, so two runs of
+the same build are byte-identical.
+
+`schemaVersion` is the **capability contract** version, not the npm package
+version. Pin `schemaVersion`, never `7.x`.
+
+**Scope of v1:** the catalog covers the commands the engine capability matrix
+governs. Commands outside it — `explain`, `plan`, `impact`, `assert`, `verify`,
+`evidence`, `contract`, `semantic`, `design`, `snapshot`, `backfill`, `proxy` —
+are absent rather than described with engine claims nothing has audited. Ask for
+one and you get `unknown`, which fails closed.
+
+**Permission:** query-only+ (no connection is made)
+
+#### capabilities check
+
+Asks whether the capabilities you need are available *here* — against this
+machine's local configuration only. It reads engine and permission from the
+config; it does not connect to the database to find out.
+
+```bash
+dbcli capabilities check --require schema.read,query.read
+dbcli capabilities check --require schema.read,data.delete --format json
+dbcli --use staging capabilities check --require schema.read --format json
+```
+
+| Flag | Purpose |
+|---|---|
+| `--require <ids>` | Comma-separated capability ids. Required; an empty list is refused rather than reported as ok. |
+| `--format <type>` | `text` (default) or `json`. |
+
+Each result is `available`, `unavailable` or `unknown`:
+
+| Status | Reason | Means |
+|---|---|---|
+| `available` | `null` | The configured engine and permission would not refuse it. |
+| `unavailable` | `engine` | The configured engine does not support it. |
+| `unavailable` | `permission` | The configured permission level is below its minimum. |
+| `unavailable` | `agent-mode` | `DBCLI_AGENT_MODE=1` is set and the capability changes configuration, permission or credentials — refused unconditionally. |
+| `unavailable` | `context-unavailable` | No local config here, so there is nothing to evaluate against. |
+| `unavailable` | `context-unresolvable` | A config exists but could not be resolved into an engine and a permission — an `{"$env": "..."}` reference pointing at an unset variable, for instance. Distinct from "no config", because saying there is none would be false. |
+| `unknown` | `unknown-capability` | No such capability id. Never guessed at — a typo is refused, not resolved to a neighbour. |
+
+A duplicate id in `--require` is de-duplicated in first-seen order and reported
+in `warnings`; `required` and `results` each hold it once.
+
+**Exit codes:** `0` every requirement available · `1` any unavailable or
+unknown · `2` invalid input or an unreadable format.
+
+Blockers are reported least-fixable first — engine, then agent mode, then
+permission — so `reason` names the one actually in the way.
+
+**`available` is not approval.** It says the gate would not refuse on engine,
+agent-mode and permission grounds. Blacklist, write gate, confirmation and audit all still run
+at execution time, and no human has agreed to anything. `admin` in a config file
+is a permission level, not a DBA sign-off.
+
+One known overstatement: `dbcli schema` persists its result into `config.json`,
+and that write is refused under `DBCLI_AGENT_MODE=1`. `schema.read` still
+reports `available` there, because the read itself works and marking it
+unavailable would suggest schema cannot be read at all.
+
+**Permission:** query-only+ (no connection is made)
 
 ### status
 

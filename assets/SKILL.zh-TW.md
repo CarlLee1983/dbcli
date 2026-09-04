@@ -109,6 +109,34 @@ blacklist、schema、permission、dry-run、production 選取或寫入確認閘�
 除非人類明確要求，絕不可建立、更新或 migrate 此檔案；語意詞彙不能取代 schema 確認或正常的
 query/write 安全閘門。
 
+## 能力探索 (Capability discovery)
+
+在組合工作流之前，先問 dbcli 在這裡能做什麼，不要用猜的。Catalog 是靜態的，check 只讀本機
+設定——**兩者都不會建立資料庫連線。**
+
+```bash
+dbcli capabilities --format json                                  # full catalog
+dbcli capabilities --format markdown                              # table for docs
+dbcli capabilities check --require schema.read,query.read         # gate your workflow
+dbcli capabilities check --require data.delete --format json      # machine-readable
+```
+
+一個 capability 是 dbcli 的單一原子能力（`schema.read`、`data.delete`），不是職務也不是方法。
+`dba.tune-production` 與 `crud.scaffold` 屬於組合 dbcli 的 Role Skill 或 Method Skill——這份
+Tool Skill 只負責安全地操作 dbcli。
+
+- `schemaVersion` 是 capability contract 的版本，**不是** npm 套件版本。
+- 狀態有 `available`、`unavailable`（原因為 `engine`、`agent-mode`、`permission`、
+  `context-unavailable` 或 `context-unresolvable`）與 `unknown`。拼錯的 id 一律 fail
+  closed，絕不猜測。
+- 在 `DBCLI_AGENT_MODE=1` 之下，會變更設定的能力一律 `unavailable`、原因 `agent-mode`，
+  不管權限等級寫什麼。
+- Exit code：`0` 全部可用、`1` 有任一不可用或未知、`2` 輸入無效。
+- **`available` 不等於已核准。** Blacklist、write gate、確認與 audit 在執行時仍然會跑，
+  設定檔裡的 `admin` 是權限等級，不是 DBA 的簽核。
+- v1 涵蓋 engine capability matrix 管轄的指令；不在其中的一律回 `unknown`，而不是給出未經
+  稽核的引擎宣稱。
+
 ## Agent Task Packs
 
 當使用者要求一個資料庫工作流（例如「診斷這個慢查詢」、「審計權限」、「審視長時間執行的操作」），**優先選用已發布的任務模板，而非憑記憶自行組合步驟。**
@@ -329,6 +357,7 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 |---------|-----------------|---------|
 | `init` | n/a | 建立 `.dbcli`（v1 單一或 v2 多連線，透過 `--conn-name` / `--env-file`）。**通常由真人執行** — 不要為了清掉 `{"$env"}` 參照而重跑；該格式是刻意設計。 |
 | `use` | n/a | 顯示 / 切換預設命名連線（僅 v2）。 |
+| `capabilities` | n/a | 靜態 capability catalog 與 `check --require <ids>` 需求閘門。不連線資料庫。`--format text\|json\|markdown`（`check` 為 `text\|json`）。Exit `0`/`1`/`2`。 |
 | `list` | query-only+ | 資料表（SQL）、collections（MongoDB）、keys（Redis）或 indices（Elasticsearch）。 |
 | `schema` | query-only+ | SQL：單表或全掃描存入 `.dbcli/schemas/`。MongoDB：sampled。ES：flattened mapping。Redis：僅單一 key（type / TTL / size）。支援 `--recovery`。 |
 | `query` | query-only+ | SQL、Mongo JSON（`--collection`）、Redis 指令、ES DSL / Lucene（`--collection`）。`--format table\|json\|csv\|html`、`--ui` 開啟瀏覽器互動式 dashboard。`--fields`（欄位投影）、`--truncate`（欄位值寬度）、`-f/--query-file`（從檔案或 stdin 讀查詢）、`--use a,b`（唯讀扇出）。支援 `--recovery`。`--slow-ms <n>` 設定被動慢查詢提示的門檻（預設 1000，`0` 關閉）：達到門檻時 table 輸出多一行 `Performance hint` footer、JSON 多出 `metadata.performanceAdvisory`；它不執行任何額外診斷，且在 `--recovery` 下被抑制。與 `proxy` 的同名旗標不同。見 **查詢工作流程旗標**。 |

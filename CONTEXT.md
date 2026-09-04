@@ -114,3 +114,74 @@ anything was verified.
 Whether an explicit proxy event file offered to an impact assessment could be
 used — `available`, `absent`, `invalid`, or `unavailable`. It describes the
 source, not a finding about the database, and it is always advisory.
+
+## Agent integration language
+
+**Capability**:
+One atomic dbcli ability with a stable dotted id — `schema.read`,
+`data.delete`. It names what the *tool* can do. A job or a method
+(`dba.tune-production`, `crud.scaffold`) is not a capability; it belongs to the
+Role Skill or Method Skill that composes dbcli.
+
+**Capability catalog**:
+The complete, versioned, statically known set of capabilities. It is derived
+from the engine capability matrix rather than declared beside it, so it cannot
+claim engine support the matrix does not grant. Reading it requires no database
+connection.
+
+**Capability contract version**:
+`CAPABILITY_CONTRACT_SCHEMA_VERSION`. It moves when the catalog's shape
+changes and never because the npm package version moved, following the same
+rule as the evidence artifact versions.
+
+**Discovery**:
+Answering "what can this tool do". It is not a permission grant: a capability
+appearing in the catalog says the binary is able to do it, not that anyone may.
+
+**Capability availability**:
+Whether the *locally configured* engine, agent mode and permission would refuse
+a capability — `available`, `unavailable`, or `unknown`. It is a statement about
+this machine's configuration, evaluated without connecting to a database. It is
+distinct from approval: blacklist, write gate, confirmation and audit all still
+run at execution time, and human consent is not modelled at all. `admin` in a
+config file is a permission level, not a DBA sign-off.
+
+**Context unavailable**:
+There is no local configuration here, so availability could not be established.
+It is neither `available` nor `unknown`: the requirement was understood, the
+environment was not. The default configuration is never reported as though it
+were configured.
+
+**Context unresolvable**:
+A configuration exists and could not be turned into an engine and a permission
+— an `{"$env": "..."}` reference naming an unset variable, for instance. It is
+a different fact from *context unavailable*, and reporting it as one would
+state something false about the machine. Both fail closed.
+
+**Environment gate**:
+A refusal decided before execution and knowable without connecting — agent
+mode is the only one today. It is distinct from an execution-time gate
+(blacklist, write gate, confirmation, audit), which capability availability
+deliberately does not speak for. The dividing line is *when* the refusal is
+decided: what is decidable here is the contract's responsibility to report.
+
+## Skill layering
+
+**Tool** (`dbcli`):
+What can be done at all.
+
+**Tool Skill** (the dbcli Skill):
+How to operate dbcli safely.
+
+**Method Skill**:
+How a method of working proceeds — CQRS, event sourcing, migration practice.
+
+**Role Skill**:
+How a job proceeds — DBA operations, CRUD engineering, review.
+
+**Project governance** (`AGENTS.md`):
+Which Skills apply here, how they are routed, and where the permission
+boundaries lie.
+
+Role, Method and project knowledge never enter dbcli core. dbcli answers only
+for the first two layers.

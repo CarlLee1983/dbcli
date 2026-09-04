@@ -56,9 +56,16 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   的指令寫 engine 支援度，正是這份契約要防的那種捏造。
 
   這次每一條宣稱都是從實作讀出來的，證據（`file:line`）逐條寫在 Story 裡。程式碼
-  會直接拒絕非 SQL 連線的九個指令標成 `unsupported`，並指名那道 gate；完全不碰資料庫
-  的標成 `not-applicable`。判定不了的一律 `unsupported`，不新增第三種狀態——一個
-  「我們沒查」的值，呼叫端拿到也不能做任何事，而且會永遠留在那裡沒人查。
+  會直接拒絕非 SQL 連線的六個指令標成 `unsupported`，並指名那道 gate；只有某一個
+  *模式* 需要 SQL 的（`impact assess` 與 `design` 的 `--against-cache`、`semantic`
+  的 `draft validate`）標成 `limited`，因為指令其餘部分照跑；完全不碰資料庫的標成
+  `not-applicable`。判定不了的一律 `unsupported`，不新增第三種狀態——一個「我們沒查」
+  的值，呼叫端拿到也不能做任何事，而且會永遠留在那裡沒人查。
+
+  那三條 `limited` 是第一版寫錯、被第二個讀者抓回來的：grep 到 engine check 就停手，
+  少讀了一層 caller——那道 check 擋的是模式，不是指令。寫成 `unsupported` 會對著
+  MongoDB 上的 agent 說一個它其實跑得動的指令不能用；fail-closed，所以永遠不會看起來
+  像錯的，只會讓契約悄悄比工具本身沒用。
 
   `capabilities` 自己也在 catalog 裡（`capability.discover`、`capability.check`），
   決定寫在 ADR-0023：live 讀的時候它確實是個常數，但 catalog 本來就是設計成可以被

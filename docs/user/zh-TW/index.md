@@ -322,10 +322,11 @@ dbcli capabilities check --require schema.read,query.read --format json
 `1` 有任一不可用或未知、`2` 輸入無效。
 
 Catalog 涵蓋所有公開指令，包含 `capabilities` 自己，而且每一條 engine 宣稱都是從實作讀出
-來的。程式碼會直接拒絕非 SQL 連線的那些指令——`explain`、`plan`、`impact assess`、
-`assert`、`snapshot`、`verify`、`semantic`、`design`、`proxy`——在 MongoDB、Redis 與
-Elasticsearch 上會回 `unavailable` 加上 reason `engine`。程式碼判定不了的引擎，一律不會被
-標成支援。
+來的。程式碼會直接拒絕非 SQL 連線的那些指令——`explain`、`plan`、`assert`、`snapshot`、
+`verify`、`proxy`——在 MongoDB、Redis 與 Elasticsearch 上會回 `unavailable` 加上 reason
+`engine`。只有某一個模式需要 SQL 的指令——`impact assess` 與 `design` 的 `--against-cache`、
+`semantic` 的 `draft validate`——在那三個引擎上仍是 `available`，只標成 `limited`。程式碼
+判定不了的引擎，一律不會被標成支援。
 
 `required` 與 `results` 依**首次出現的輸入順序**（first-seen input order）保留你送進來的
 id，因此 `results[i]` 回答的就是 `required[i]`，重複的 id 只出現一次。把參數換個順序等於

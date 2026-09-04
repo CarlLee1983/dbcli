@@ -261,10 +261,22 @@ PLAT-001 把十六個指令留在 catalog 之外是對的：替沒稽核過的�
 拿到也不能做任何事，而且會永遠留在那裡沒人查；`unsupported` 用的是呼叫端已經會解析
 的詞彙，說的是同一件事：別建在這上面。判定不了的地方寫進 Story，給人看。
 
-九個指令的程式碼會直接拒絕非 SQL 連線，逐條指名那道 gate（`explain.ts:43`、
-`assert.ts:41`、`snapshot.ts:30`、`verify.ts:75`、`semantic.ts:104`、`design.ts:236`、
-`impact.ts:189`、`proxy.ts:15`、以及 `plan` 的 `toSqlDialect`）。完全不碰資料庫的標
-`not-applicable`。
+六個指令的程式碼會直接拒絕非 SQL 連線，逐條指名那道 gate（`explain.ts:43`、
+`assert.ts:41`、`snapshot.ts:30`、`verify.ts:75`、`proxy.ts:15`，以及 `plan` 的
+`toSqlDialect`）。完全不碰資料庫的標 `not-applicable`。
+
+**三條第一版寫錯，被第二個讀者抓回來。** `impact assess`、`design`、`semantic` 原本
+也標成 `unsupported`——依據是 grep 到每個指令模組裡的 engine check 然後把它讀了。那
+是對的，但少走一步：讀 caller 才看得出那道 check 擋的是**模式**，不是指令。
+`--against-cache`（impact/design）與 `draft validate`（semantic）之外的路徑根本不看
+連線。改成 `limited`，並在 note 裡指名失去的是哪一個模式。寫成 `unsupported` 會對著
+MongoDB 上的 agent 說一個它其實跑得動的指令不能用——fail-closed，所以永遠不會看起來
+像錯的，只會讓契約悄悄比工具本身沒用。
+
+`plan` 沒有跟著改，這個不對稱是刻意的：`design` 在非 SQL 上還有 `--against-orm`、
+`semantic` 還有 context/search/drift，是真的還有東西可用；`plan` 從頭到尾只有一件事
+——評估一段 SQL 的寫入風險——在 Redis 連線上根本沒有 SQL 可評估。`limited` 會承諾一個
+不存在的模式。
 
 **contract test 抓到兩件讀碼沒抓到的事**，這是這批工作真正的收穫：
 
@@ -360,7 +372,7 @@ verification:
   last_command: make verify
   result: pass
   detail: >-
-    6657 pass / 0 fail / 0 skip across 565 files, with the docker-compose.test.yml
+    6658 pass / 0 fail / 0 skip across 565 files, with the docker-compose.test.yml
     services running. The PLAT-012 baseline under the same services was 6622 / 564.
     All 23 static gates passed. Three pre-existing tests changed deliberately and
     are named in the Story's Superseded Behavior. Two earlier attempts failed at

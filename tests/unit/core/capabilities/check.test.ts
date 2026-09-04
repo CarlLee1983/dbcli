@@ -212,12 +212,9 @@ describe('checkCapabilities', () => {
     const SQL_ONLY = [
       'query.explain',
       'query.plan-risk',
-      'schema.impact-assess',
       'data.assert',
       'data.snapshot',
       'verification.run',
-      'semantic.context',
-      'schema.design',
       'diagnostic.proxy',
     ]
 
@@ -238,6 +235,28 @@ describe('checkCapabilities', () => {
           id,
           engine,
           result: { id, status: 'unavailable', reason: 'engine' },
+        })
+      }
+    }
+  })
+
+  test('a mode-limited capability stays available off SQL', () => {
+    // `schema.impact-assess`, `semantic.context` and `schema.design` lose one
+    // documented mode on a non-SQL connection — `--against-cache`, and
+    // `semantic draft validate` — and keep the rest. `unsupported` would have
+    // closed a command the caller can actually run.
+    for (const id of ['schema.impact-assess', 'semantic.context', 'schema.design']) {
+      for (const engine of ['mongodb', 'redis', 'elasticsearch'] as const) {
+        const report = checkCapabilities([id], {
+          engine,
+          permission: 'query-only',
+          connectionName: null,
+          agentMode: false,
+        })
+        expect({ id, engine, status: report.results[0]!.status }).toEqual({
+          id,
+          engine,
+          status: 'available',
         })
       }
     }

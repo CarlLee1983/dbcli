@@ -318,12 +318,9 @@ const SQL_ONLY_UNSUPPORTED = {
     'none',
     'Risk analysis is SQL-dialect based; toSqlDialect resolves no dialect here.'
   ),
-  impactAssess: cap('unsupported', 'none', 'Impact assessment accepts SQL dialects only.'),
   assert: cap('unsupported', 'none', 'src/commands/assert.ts refuses a non-SQL connection.'),
   snapshot: cap('unsupported', 'none', 'src/commands/snapshot.ts refuses a non-SQL connection.'),
   verify: cap('unsupported', 'none', 'src/commands/verify.ts refuses a non-SQL connection.'),
-  semantic: cap('unsupported', 'none', 'Semantic contracts require a SQL schema cache.'),
-  design: cap('unsupported', 'none', 'Design dialects are SQL only.'),
   proxy: cap(
     'unsupported',
     'none',
@@ -331,16 +328,39 @@ const SQL_ONLY_UNSUPPORTED = {
   ),
 } satisfies Pick<
   EngineCapabilities,
-  | 'explain'
-  | 'plan'
-  | 'impactAssess'
-  | 'assert'
-  | 'snapshot'
-  | 'verify'
-  | 'semantic'
-  | 'design'
-  | 'proxy'
+  'explain' | 'plan' | 'assert' | 'snapshot' | 'verify' | 'proxy'
 >
+
+/**
+ * Commands that run on any engine but lose one documented mode off SQL.
+ *
+ * These three were first written into `SQL_ONLY_UNSUPPORTED` on the strength of
+ * an engine check found by grep. Reading the callers showed the check guards a
+ * *mode*, not the command: `--against-cache` for `design diff` / `design
+ * propose` / `impact assess`, and `draft validate` for `semantic`. The
+ * `--against-orm` paths, `design init`, `design render` and the rest of
+ * `semantic` never look at the connection at all. `unsupported` would have told
+ * an agent on MongoDB that a command it can actually run is closed to it — a
+ * fail-closed error, but an error, and the kind that makes a contract less
+ * useful without ever looking wrong.
+ */
+const SQL_MODE_LIMITED = {
+  impactAssess: cap(
+    'limited',
+    'local-write',
+    'Runs against an ORM artifact; --against-cache needs a SQL connection.'
+  ),
+  semantic: cap(
+    'limited',
+    'readonly',
+    'Governed context, search and drift work; draft validate needs a SQL connection.'
+  ),
+  design: cap(
+    'limited',
+    'local-write',
+    'Authoring and ORM comparison work; --against-cache needs a SQL connection.'
+  ),
+} satisfies Pick<EngineCapabilities, 'impactAssess' | 'semantic' | 'design'>
 
 export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabilities>> =
   Object.freeze({
@@ -353,6 +373,9 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     mongodb: Object.freeze({
       ...SQL_BASE,
       ...SQL_ONLY_UNSUPPORTED,
+      ...SQL_MODE_LIMITED,
+      ...SQL_MODE_LIMITED,
+      ...SQL_MODE_LIMITED,
       lint: cap('unsupported', 'none', 'Static lint accepts SQL connections only.'),
       schemaSingle: cap('limited', 'readonly', 'MongoDB schema is sampled from documents.'),
       schemaFullScan: cap('limited', 'readonly', 'Full scan is sampled and document-oriented.'),

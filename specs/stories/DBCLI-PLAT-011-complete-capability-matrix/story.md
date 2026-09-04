@@ -59,12 +59,12 @@ the command constructs a database adapter.
 | --- | --- | --- | --- | --- | --- |
 | `explain` | SQL | `src/commands/explain.ts:43-46` rejects any system outside `['postgresql','mysql','mariadb']` | yes | yes | readonly |
 | `plan` | SQL | `src/commands/plan.ts:42` passes `toSqlDialect(system)`, which returns `undefined` for non-SQL (`src/core/permission-guard.ts:149-151`), so the risk analysis has no dialect to work in | no | yes | readonly |
-| `impact assess` | SQL | `src/commands/impact.ts:189-199` accepts dialect `postgresql \| mysql \| mariadb` only | no | yes | local-write (`impact.ts:500-533` writes the output path) |
+| `impact assess` | SQL `supported`, others `limited` | `src/commands/impact.ts:186-195` gates only `loadCacheBaseline`, reached solely via `--against-cache` (`impact.ts:95-108`); `--against-orm` never reads the connection | no | yes | local-write (`impact.ts:500-533` writes the output path) |
 | `assert` | SQL | `src/commands/assert.ts:41-46` `SQL_SYSTEMS` gate | yes | yes | local-write (`assert.ts:172-181` optional verification artifact) |
 | `snapshot` | SQL | `src/commands/snapshot.ts:30-34` `SQL_SYSTEMS` gate | yes | yes | local-write (`snapshot.ts:46,120` writes `.dbcli/snapshots/`) |
 | `verify` | SQL | `src/commands/verify.ts:75-83` `SQL_SYSTEMS` gate | yes | no — JSON is on the four scenario subcommands | local-write (`verify.ts:1252` writes a verification artifact) |
-| `semantic` | SQL | `src/commands/semantic.ts:104,127-128` `isSqlDatabaseSystem` gate | no | no — JSON is on the subcommands | readonly |
-| `design` | SQL | `src/commands/design.ts:83-84,236` dialect gate | no | no — JSON is on the subcommands | local-write (`design.ts:89` `design init` writes a template) |
+| `semantic` | SQL `supported`, others `limited` | `src/commands/semantic.ts:104` gates `collectDraftValidationContext`, whose only caller is `semantic draft validate` (`semantic.ts:311`); every other subcommand goes through `collectSemanticInputs` (`:54`), which has no engine branch | no | no — JSON is on the subcommands | readonly |
+| `design` | SQL `supported`, others `limited` | `src/commands/design.ts:236` gates only `compareAgainstCache`, reached solely via `--against-cache` (`design.ts:147,211`); the `:83-84` check is on `--dialect`, the SQL flavour being authored, not on the connection | no | no — JSON is on the subcommands | local-write (`design.ts:89` `design init` writes a template) |
 | `proxy` | mysql, mariadb, postgresql | `src/commands/proxy.ts:15,62` `SUPPORTED` proxy engines | yes — `ProxyServer` (`proxy.ts:7`) fronts the upstream engine | yes | interactive |
 | `proxy analyze` | all | `src/commands/proxy.ts:9-13` reads local event files only | no | yes | readonly |
 | `verification` | all | `src/commands/verification.ts` has no engine reference and constructs no adapter | no | no — JSON is on the subcommands | readonly |
@@ -75,12 +75,44 @@ the command constructs a database adapter.
 | `backfill artifact` | all | `src/commands/backfill.ts` reads v2 connection identity metadata only; no adapter | no | no | local-write |
 | `password` | every engine | `src/commands/credential.ts:9,82-83` builds an adapter from whatever the config names, with no engine gate | yes | yes | interactive |
 
+### Three rows the first pass got wrong, and what caught them
+
+`impact assess`, `semantic` and `design` were first written `unsupported` off
+SQL. All three were found by grepping each command module for an engine check
+and reading the check — which is true as far as it goes, and stops one step too
+early. Reading the *callers* showed each check guards a mode, not the command:
+`--against-cache` for `impact assess`, `design diff` and `design propose`, and
+`draft validate` for `semantic`. The `--against-orm` paths, `design init`,
+`design render` and the rest of `semantic` never look at the connection.
+
+They are `limited` off SQL, with the lost mode named in the matrix note.
+`unsupported` would have told an agent on MongoDB that a command it can in fact
+run is closed to it — fail-closed, so it would never have looked wrong, and it
+would have made the contract quietly less useful than the tool.
+
+Four subagents were dispatched at the start of this Story to audit these
+commands and returned nothing usable in time, so the matrix was built by hand.
+Their reports arrived after the first commit, and two of them carried exactly
+this correction. The lesson is not about delegation: it is that "grep for the
+engine check" is a weaker method than it feels like, and the thing that closed
+the gap was a second reader, not a better grep.
+
 ### What the audit could not settle, and what was done about it
 
-* **`plan` on a non-SQL engine.** It does not refuse; it analyses the input as
-  SQL with no dialect. Whether that is "limited" or "broken" is not decidable
-  from the code, so it is recorded `unsupported` per R1 — a Skill should not
-  build on it, and the reason is written here rather than smoothed away.
+* **`plan` on a non-SQL engine, and why it is not `limited` like the three
+  above.** It does not refuse either: `toSqlDialect` returns `undefined` off SQL
+  and the risk analysis runs anyway. The difference is what is left. `design`
+  off SQL still has `--against-orm`, `semantic` still has context, search and
+  drift — a real mode a caller can use. `plan` is one thing end to end, "assess
+  the write risk of this SQL statement", and on a Redis connection there is no
+  SQL to assess. `limited` would promise a mode that does not exist, so it is
+  `unsupported`, and this paragraph is the reason rather than the asymmetry
+  looking like an oversight.
+* **`verify` on MySQL and MariaDB.** The code permits all three SQL engines
+  (`verify.ts:75-83`), and all four `verify` integration suites pin
+  `system: 'postgresql'`. So the claim is "the command does not refuse this
+  engine", which is what the matrix means — not "this has been exercised
+  there". The same holds for `password` below.
 * **`password` per engine.** No gate exists, so every engine is claimed; what is
   not established is that a credential rotation has been exercised against each
   of the six. The claim is "the command does not refuse this engine", which is
@@ -92,12 +124,6 @@ the command constructs a database adapter.
   keys because they differ in engine coupling and in side-effect tier, which the
   precedent `audit tail` / `audit clear` already covers.
 
-### Delegation note
-
-Four subagents were dispatched to audit these commands in parallel and none
-returned a usable report, so every row above was read directly. That is the
-better outcome for this particular Story: the evidence rule it operates under
-makes a secondhand support claim exactly the thing it is trying not to ship.
 
 
 ## Classification

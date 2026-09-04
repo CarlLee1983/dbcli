@@ -47,7 +47,11 @@ afterEach(async () => {
  *
  * Inherited `DBCLI_*` variables are stripped: a developer with agent mode
  * exported would otherwise make the "outside agent mode" cases silently test
- * the wrong thing.
+ * the wrong thing. `DB_*` and `DATABASE_URL` go for the same reason one step
+ * further out: Bun loads the repository's `.env` into this process, and
+ * `dbcli init` falls back to those variables for host/user/database. A case
+ * that reached a guard only because the developer had `DB_USER` exported would
+ * pass here and fail in CI — which is exactly what happened.
  */
 function run(
   args: string[],
@@ -56,7 +60,7 @@ function run(
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   const env: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (/^DBCLI_/i.test(key) || key === 'DATABASE_URL') continue
+    if (/^DBCLI_/i.test(key) || /^DB_/i.test(key) || key === 'DATABASE_URL') continue
     env[key] = value
   }
   env.NODE_ENV = 'test'
@@ -204,11 +208,30 @@ describe.skipIf(!PG_AVAILABLE)('a failed cache write is reported as a cache writ
 
 describe.skipIf(!PG_AVAILABLE)('the rest of the boundary did not move', () => {
   test('agent mode still refuses a permission change through the config writers', async () => {
-    const { dir } = await v1Project()
-    // `--force`: without it `init` refuses because `.dbcli` exists, which would
-    // let this pass without the guard ever being consulted.
+    const { dir, storagePath } = await v1Project()
+    // Every connection option is spelled out, and `--force` with it. `init`
+    // validates its arguments before it reaches a writer, and refusing early
+    // for a missing `--user` or an existing `.dbcli` would let this case pass
+    // without the guard ever being consulted.
     const result = await run(
-      ['init', '--no-interactive', '--force', '--skip-test', '--permission', 'admin'],
+      [
+        'init',
+        '--no-interactive',
+        '--force',
+        '--skip-test',
+        '--system',
+        PG_OPTS.system,
+        '--host',
+        PG_OPTS.host,
+        '--port',
+        String(PG_OPTS.port),
+        '--user',
+        PG_OPTS.user,
+        '--name',
+        PG_OPTS.database,
+        '--permission',
+        'admin',
+      ],
       dir,
       { DBCLI_AGENT_MODE: '1' }
     )
@@ -217,6 +240,7 @@ describe.skipIf(!PG_AVAILABLE)('the rest of the boundary did not move', () => {
     expect(`${result.stdout}\n${result.stderr}`).toMatch(
       /Agent mode blocks configuration, permission, and credential changes/
     )
+    expect((await configOf(storagePath)).permission).toBe('query-only')
   }, 60_000)
 
   test('agent mode still refuses a blacklist change', async () => {

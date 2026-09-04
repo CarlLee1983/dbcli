@@ -91,7 +91,13 @@ them: no case in this Story needs a reachable database, which is the point.
 * [x] "Mutates nothing on disk" is asserted recursively —
       `tests/integration/capabilities-command.test.ts`
 
-### Known deviation
+### Known deviation — closed by DBCLI-PLAT-012
+
+Recorded as accepted at delivery, and kept: it is what this Story shipped, and
+deleting it would rewrite that. It no longer describes the product —
+DBCLI-PLAT-012 moved the cache write to `src/core/schema-cache-persistence.ts`,
+and `tests/integration/schema-cache-agent-mode.test.ts` asserts that
+`capabilities check` and `dbcli schema` now agree under agent mode.
 
 Under `DBCLI_AGENT_MODE=1`, `schema.read` / `schema.read-object` /
 `schema.scan` report `available` although `dbcli schema` persists into

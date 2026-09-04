@@ -1758,10 +1758,9 @@ agent-mode and permission grounds. Blacklist, write gate, confirmation and audit
 at execution time, and no human has agreed to anything. `admin` in a config file
 is a permission level, not a DBA sign-off.
 
-One known overstatement: `dbcli schema` persists its result into `config.json`,
-and that write is refused under `DBCLI_AGENT_MODE=1`. `schema.read` still
-reports `available` there, because the read itself works and marking it
-unavailable would suggest schema cannot be read at all.
+`schema.read` is available under `DBCLI_AGENT_MODE=1`, and `dbcli schema` runs
+there: storing the schema cache is not a configuration change. Agent mode still
+refuses every change to connection identity, permission and credentials.
 
 **Permission:** query-only+ (no connection is made)
 

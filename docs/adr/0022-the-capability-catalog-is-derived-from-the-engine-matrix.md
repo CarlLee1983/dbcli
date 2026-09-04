@@ -143,6 +143,14 @@ the identity guard. That is DBCLI-PLAT-012.
 `INCIDENTAL_CONFIG_WRITERS` in `tests/contract/capability-contract.test.ts`
 names the exemption so it cannot become a silent gap.
 
+**Closed by DBCLI-PLAT-012.** The cache write moved to
+`src/core/schema-cache-persistence.ts`, which cannot express a configuration
+change rather than being permitted to make one, so `schema.read` reporting
+`available` under agent mode is now simply true. `INCIDENTAL_CONFIG_WRITERS` is
+empty; it stays in place because re-populating it should be a decision, not a
+refactor. The paragraphs above are kept as the record of what was accepted and
+why — this decision is unchanged, only its one disclosed exception is gone.
+
 **Falsified if:** a capability in `src/core/capabilities/registry.ts` declares an
 `engines` or `risk` value literally instead of deriving it from
 `ENGINE_CAPABILITIES` in `src/adapters/capabilities.ts`, or a

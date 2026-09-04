@@ -47,6 +47,34 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   因為替它們寫 engine 支援度等於憑讀碼捏造未經稽核的宣稱。它們回 `unknown`，
   擴充 matrix 是後續 Story。（DBCLI-PLAT-001，ADR-0022）
 
+### Fixed
+
+- **Schema cache 的寫入不再是一次完整設定的重新發布。** `dbcli schema` 原本透過
+  `configModule.write`（v1）與 `writeV2Config`（v2）存快取，兩者都在
+  `assertConfigMutationApproved()` 後面，所以 `DBCLI_AGENT_MODE=1` 下
+  `capabilities check` 回報 `schema.read` 可用、指令本身卻 exit 1，訊息還說的是
+  「configuration, permission, and credential changes」——只讀 exit code 的 agent
+  只能推論成資料庫讀取失敗，而讀取其實成功了。
+
+  移動時量到一個沒有人記錄過的缺陷：v1 路徑會把 `connection.password` 從
+  `config.json` 刪掉、並整份覆寫 `.env.local`。這件事**在 agent mode 之外也會發生**，
+  也就是每一次 `dbcli schema` 都在搬憑證，而那裡根本沒有任何 guard 會攔。
+
+  新的 `src/core/schema-cache-persistence.ts` 只寫快取欄位，而且**寫不出別的東西**：
+  它的參數只有 schema、connection slot 與兩個時間戳，設定是它自己從磁碟讀的，
+  沒有任何參數能夠承載憑證或權限。窄化在簽章，不在旗標——一個「這次寫入沒問題」的
+  布林參數等於把邊界交給呼叫端的誠實。`assertOnlyCacheFieldsChanged` 把同一句保證
+  講出來，任何擴大寫入範圍的修改會在單元測試指名欄位而失敗。
+
+  `assertConfigMutationApproved()` 一個字都沒改，六個 guarded writer 一個都沒少，
+  並由 `tests/contract/config-mutation-boundary.test.ts` 以名冊釘住。agent mode 下
+  `init`、`use`、`blacklist add` 與憑證指令照樣被拒。（DBCLI-PLAT-012）
+
+- **快取寫入失敗現在說自己是快取寫入失敗。** 訊息明講 schema 已成功讀出、失敗的是
+  存進本機快取那一步，並且是 bounded 的：只有 `SchemaCacheWriteError` 會原樣輸出
+  （它的訊息在建構上就不含路徑），其他成因一律分類而不引用，因為完整性拒絕會帶上
+  它檢查的設定檔路徑。（DBCLI-PLAT-012）
+
 ### Breaking
 
 - **query-only 的最後一道界線改由資料庫提供。** PostgreSQL / MySQL / MariaDB 上

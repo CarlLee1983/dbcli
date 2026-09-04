@@ -158,6 +158,16 @@ A configuration exists and could not be turned into an engine and a permission
 a different fact from *context unavailable*, and reporting it as one would
 state something false about the machine. Both fail closed.
 
+**Schema cache**:
+The table shapes dbcli has read, stored locally so later commands need not read
+them again. It lives inside `config.json` and in the layered store under
+`.dbcli/schemas/`, but storage is the only thing it shares with the
+configuration: it is *derived* data, re-readable at any time from the database
+the configuration already points at, and it holds nothing an agent that can run
+`dbcli schema` cannot already see. Writing it is therefore not a configuration
+change, and it is not behind the agent-mode boundary. Connection identity,
+permission and credentials are configuration; the cache next to them is not.
+
 **Environment gate**:
 A refusal decided before execution and knowable without connecting — agent
 mode is the only one today. It is distinct from an execution-time gate

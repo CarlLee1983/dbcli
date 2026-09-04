@@ -217,18 +217,20 @@ const CONFIG_MUTATORS = [
 /**
  * Commands that write configuration incidentally rather than as their purpose.
  *
- * `schema` persists the discovered schema into `config.json` after reading it
- * (`src/commands/schema.ts:479,532,642,746`). That write is behind the same
- * agent-mode guard, so under `DBCLI_AGENT_MODE=1` the persistence step is
- * refused — but the read itself is the capability, and marking `schema.read`
- * `unavailable` would overstate the refusal far worse than staying silent
- * understates it. The trade-off is disclosed in the spec, and DBCLI-PLAT-012
- * covers moving cache persistence out from behind the identity guard.
+ * Empty, and that is the finding rather than an absence of one. `schema` was
+ * the single entry: it persisted the discovered schema through
+ * `configModule.write`, which is behind the agent-mode guard, so
+ * `capabilities check` reported `schema.read` available while the command
+ * exited 1 under `DBCLI_AGENT_MODE=1`. The exemption existed to hold that
+ * disclosed contradiction in view until DBCLI-PLAT-012 removed its cause: the
+ * cache now goes through `persistSchemaCache`, which writes the cache fields
+ * and nothing else and is not a configuration mutation at all.
  *
  * Listing them here rather than skipping them silently means adding a
- * capability on such a command forces the decision back into view.
+ * capability on such a command forces the decision back into view. Re-adding an
+ * entry is that decision, not a refactor.
  */
-const INCIDENTAL_CONFIG_WRITERS = new Set(['schema'])
+const INCIDENTAL_CONFIG_WRITERS = new Set<string>()
 
 async function commandWritesConfig(commandPath: string): Promise<boolean> {
   const entry = join(SRC, `commands/${commandPath.split(' ')[0]}.ts`)

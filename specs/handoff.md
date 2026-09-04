@@ -5,10 +5,9 @@
 採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
 沒有已知的產品缺口。
 
-之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 與 DBCLI-PLAT-013 已交付，
-DBCLI-PLAT-012 已交付，關掉了 PLAT-001 記下的那個已知過度宣稱。目前進行中的是
-DBCLI-PLAT-011——把 catalog 之外的十六個公開指令納入 engine matrix，只在讀得出證據
-的地方寫支援度。
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013 已交付並合併進
+`main`（PR #152、#164、#163、#162）。DBCLI-PLAT-004 Operation Envelope v1 的
+Story 與驗收規格已核准，現在是 current Story；下一個明定為 DBCLI-PLAT-005。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -316,8 +315,8 @@ JSON key，兩者都沒有為其他欄位放寬。
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-011
-  next_story: pending
+  current_story: DBCLI-PLAT-004
+  next_story: DBCLI-PLAT-005
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -333,50 +332,33 @@ workflow:
     - DBCLI-012
     - DBCLI-013
     - DBCLI-PLAT-001
+    - DBCLI-PLAT-011
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
   status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-011-capability-matrix
-  # The state on main when this Agent Platform run started; PLAT-013 → 012 → 011 stack on it.
-  commit: c3e701a1
-  dirty_worktree: false
+  branch: main
+  commit: 4aa8c183213ccb44bdb03db18351797f3522e13f
+  dirty_worktree: true
   story_owned_paths:
-    - specs/stories/DBCLI-PLAT-011-complete-capability-matrix/
-    - src/adapters/capabilities.ts
-    - src/core/capabilities/registry.ts
-    - src/core/orm-drift/input.ts
-    - src/commands/diff.ts
-    - src/commands/impact.ts
-    - src/commands/design.ts
-    - docs/adr/0023-the-capability-catalog-describes-itself.md
-    - tests/contract/capability-contract.test.ts
-    - tests/unit/core/capabilities/registry.test.ts
-    - tests/integration/capabilities-command.test.ts
-    - tests/docs/capability-scope-parity.test.ts
-    - docs/plans/2026-09-04-agent-integration-contract-v1.md
-    - assets/reference.md
-    - .cursor/skills/dbcli/reference.md
-    - .github/skills/dbcli/reference.md
-    - .windsurf/skills/dbcli/reference.md
-    - plugins/dbcli-agent/skills/dbcli/reference.md
-    - skills/dbcli/reference.md
-    - docs/user/
-    - CHANGELOG.md
+    - CONTEXT.md
+    - docs/adr/0024-operation-envelopes-use-an-explicit-root-output-mode.md
+    - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/
     - specs/handoff.md
   known_unrelated_paths: []
 
 verification:
-  last_command: make verify
+  last_command: bun run format:check && bun run forgeflow:check && git diff --check
   result: pass
   detail: >-
-    6658 pass / 0 fail / 0 skip across 565 files, with the docker-compose.test.yml
-    services running. The PLAT-012 baseline under the same services was 6622 / 564.
-    All 23 static gates passed. Three pre-existing tests changed deliberately and
-    are named in the Story's Superseded Behavior. Two earlier attempts failed at
-    step 2/23 on a `bun audit` registry timeout after its retries were exhausted;
-    the registry recovered and the rerun completed. release:check was not run: it
-    is the release gate, and this Story publishes nothing.
+    On this Story-document worktree, make verify passed before the final
+    reviewer-only Markdown corrections: 6658 pass / 0 fail across 565 files,
+    performance 21 pass / 2 intentional SQL skips / 0 fail, reproducible build,
+    and every static gate passed. After the corrections, format:check,
+    forgeflow:check, and git diff --check all passed. Product implementation and
+    its new acceptance tests have not started. release:check was not run because
+    no release was requested.
 ```

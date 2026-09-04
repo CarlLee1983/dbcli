@@ -165,6 +165,25 @@ composes dbcli — this Tool Skill only covers operating dbcli safely.
 - v1 covers the commands the engine capability matrix governs; anything outside it returns
   `unknown` rather than an unaudited engine claim.
 
+**Agent output v1 (PLAT-004):** use `dbcli --agent-output capabilities check --require <ids>`;
+the root flag must precede the subcommand, and no other operation is supported yet. It writes one
+compact UTF-8 JSON envelope plus newline to stdout, with empty stderr. Its ten keys are
+`schemaVersion`, `ok`, `operation`, `status`, `context`, `data`, `warnings`, `evidence`,
+`recovery`, and `error`; `schemaVersion` is `1`, `operation` is `capabilities.check`, and
+`status` is `succeeded` or `failed`. Do not combine it with explicit `--format` or `--for-agent`:
+conflicts, invalid placement/input, and unsupported operations exit `2`; success exits `0`; unmet
+requirements and internal failures exit `1`. The envelope is capped at 64 KiB including newline,
+is not persisted or evidence, and consumers use field names rather than order.
+
+Code/message vocabulary is locale-independent English: errors are
+`INVALID_AGENT_OUTPUT_OPTIONS` (invalid/misplaced/conflicting options),
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION` (outside PLAT-004), `INVALID_CAPABILITY_REQUIREMENTS`
+(invalid `--require`), `CAPABILITY_REQUIREMENTS_UNMET` (completed negative result),
+`AGENT_OUTPUT_LIMIT_EXCEEDED` (64 KiB limit), and `AGENT_OUTPUT_INTERNAL_ERROR` (unexpected
+safe failure). Warnings are `DUPLICATE_CAPABILITY_REQUIREMENT`,
+`CAPABILITY_CONTEXT_UNAVAILABLE`, `CAPABILITY_CONTEXT_UNRESOLVABLE`, and
+`AGENT_MODE_RESTRICTION_ACTIVE`.
+
 ## Agent Task Packs
 
 When the user asks for a database workflow ("diagnose this slow query", "audit

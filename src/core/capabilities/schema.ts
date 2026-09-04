@@ -34,7 +34,8 @@ const SideEffectSchema = z.enum([
 ])
 
 /** Dotted lower-case segments, e.g. `schema.read-object`. */
-const CapabilityIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/, {
+export const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/
+const CapabilityIdSchema = z.string().regex(CAPABILITY_ID_PATTERN, {
   message: 'capability id must be dotted lower-case segments, e.g. schema.read',
 })
 

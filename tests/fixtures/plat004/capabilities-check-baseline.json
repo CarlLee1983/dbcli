@@ -1,0 +1,13 @@
+{
+  "baselineCommit": "4aa8c183213ccb44bdb03db18351797f3522e13f",
+  "success": {
+    "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"required\": [\n    \"schema.read\"\n  ],\n  \"context\": {\n    \"engine\": \"postgresql\",\n    \"permission\": \"query-only\",\n    \"connectionName\": null,\n    \"agentMode\": false\n  },\n  \"results\": [\n    {\n      \"id\": \"schema.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    }\n  ],\n  \"warnings\": []\n}\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "requirementsUnmet": {
+    "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": false,\n  \"required\": [\n    \"data.delete\"\n  ],\n  \"context\": {\n    \"engine\": \"postgresql\",\n    \"permission\": \"query-only\",\n    \"connectionName\": null,\n    \"agentMode\": false\n  },\n  \"results\": [\n    {\n      \"id\": \"data.delete\",\n      \"status\": \"unavailable\",\n      \"reason\": \"permission\"\n    }\n  ],\n  \"warnings\": []\n}\n",
+    "stderr": "",
+    "exitCode": 1
+  }
+}

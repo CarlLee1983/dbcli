@@ -8,7 +8,7 @@
 // from ./program (synchronous, side-effect free, what check-cli-contract.ts,
 // completion and the REPL walk). package.json exports no entry that reaches
 // here; tests/integration/runtime-contract.test.ts pins both facts.
-import type { Command } from 'commander'
+import { CommanderError, type Command } from 'commander'
 import pkg from '../package.json'
 import { createLogger, setGlobalLogger, LogLevel } from './utils/logger'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
@@ -20,7 +20,9 @@ import { isMachineReadableCommand } from './utils/cli-output'
 import { claimUpdateHint, defaultCliSessionKey } from './utils/update-hint-state'
 import { readSkillCheckCache, writeSkillCheckCache } from './utils/skill-check-cache'
 import { buildProgramFor } from './program-lazy'
+import { createRootProgram } from './program-root'
 import { presentCliError } from './utils/cli-error'
+import { emitAgentOutputFailure, inspectAgentOutputInvocation } from './utils/agent-output'
 import { join } from 'path'
 import { writeSync } from 'node:fs'
 import { format } from 'node:util'
@@ -73,6 +75,16 @@ function installSynchronousRedirectedStdout(): void {
 
 installSynchronousRedirectedStdout()
 
+const agentOutputPreflight = inspectAgentOutputInvocation(
+  process.argv.slice(2),
+  createRootProgram().options
+)
+if (agentOutputPreflight.active && agentOutputPreflight.failure) {
+  process.exit(
+    emitAgentOutputFailure(agentOutputPreflight.failure.code, agentOutputPreflight.failure.exitCode)
+  )
+}
+
 // Module-level state for background version check
 let _bgVersionCheckResult: { hasUpdate: boolean; latestVersion: string } | null | undefined
 let _bgVersionCheckContext: {
@@ -103,6 +115,9 @@ async function buildProgramOrExit(): Promise<Command> {
   try {
     return await buildProgramFor(process.argv)
   } catch (error) {
+    if (agentOutputPreflight.active) {
+      process.exit(emitAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', 1))
+    }
     presentCliError(error)
     process.exit(1)
   }
@@ -163,6 +178,18 @@ function configureConnectionSelectorHints(command: typeof program): void {
 }
 
 configureConnectionSelectorHints(program)
+
+function configureAgentOutputErrors(command: typeof program): void {
+  command.exitOverride()
+  command.configureOutput({
+    writeOut: () => undefined,
+    writeErr: () => undefined,
+    outputError: () => undefined,
+  })
+  for (const child of command.commands) configureAgentOutputErrors(child as typeof program)
+}
+
+if (agentOutputPreflight.active) configureAgentOutputErrors(program)
 
 program.hook('preAction', (thisCommand, actionCommand) => {
   // A program instance can be exercised more than once in tests or by an
@@ -293,8 +320,26 @@ if (!process.argv.slice(2).length) {
 try {
   await program.parseAsync(process.argv)
 } catch (error) {
-  presentCliError(error)
-  process.exitCode = 1
+  if (agentOutputPreflight.active) {
+    const invalidRequirements =
+      error instanceof CommanderError &&
+      ['commander.missingMandatoryOptionValue', 'commander.optionMissingArgument'].includes(
+        error.code
+      ) &&
+      error.message.includes('--require')
+    const commanderInputError = error instanceof CommanderError
+    process.exitCode = emitAgentOutputFailure(
+      invalidRequirements
+        ? 'INVALID_CAPABILITY_REQUIREMENTS'
+        : commanderInputError
+          ? 'INVALID_AGENT_OUTPUT_OPTIONS'
+          : 'AGENT_OUTPUT_INTERNAL_ERROR',
+      commanderInputError ? 2 : 1
+    )
+  } else {
+    presentCliError(error)
+    process.exitCode = 1
+  }
 }
 
 export default program

@@ -137,6 +137,24 @@ Tool Skill 只負責安全地操作 dbcli。
 - v1 涵蓋 engine capability matrix 管轄的指令；不在其中的一律回 `unknown`，而不是給出未經
   稽核的引擎宣稱。
 
+**Agent output v1（PLAT-004）：** 使用 `dbcli --agent-output capabilities check --require <ids>`；
+root flag 必須放在 subcommand 前，目前沒有其他支援的 operation。它會在 stdout 輸出一份 compact
+UTF-8 JSON envelope 與換行，stderr 保持空白。十個 key 是 `schemaVersion`、`ok`、`operation`、
+`status`、`context`、`data`、`warnings`、`evidence`、`recovery` 與 `error`；`schemaVersion` 是
+`1`，`operation` 是 `capabilities.check`，`status` 是 `succeeded` 或 `failed`。不可和明確的
+`--format` 或 `--for-agent` 合用：衝突、無效位置/輸入與不支援 operation 以 exit `2` 結束；成功
+exit `0`；需求未滿足與 internal failure exit `1`。envelope 連同換行上限為 64 KiB，不會持久化、
+不是 evidence，consumer 要依 field name 而非順序讀取。
+
+code/message vocabulary 永遠是 locale-independent English：error 為
+`INVALID_AGENT_OUTPUT_OPTIONS`（無效/位置錯誤/衝突 option）、
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION`（PLAT-004 範圍外）、`INVALID_CAPABILITY_REQUIREMENTS`
+（無效 `--require`）、`CAPABILITY_REQUIREMENTS_UNMET`（已完成的 negative result）、
+`AGENT_OUTPUT_LIMIT_EXCEEDED`（64 KiB 上限）與 `AGENT_OUTPUT_INTERNAL_ERROR`（未預期但安全的
+failure）。warning 為 `DUPLICATE_CAPABILITY_REQUIREMENT`、
+`CAPABILITY_CONTEXT_UNAVAILABLE`、`CAPABILITY_CONTEXT_UNRESOLVABLE` 與
+`AGENT_MODE_RESTRICTION_ACTIVE`。
+
 ## Agent Task Packs
 
 當使用者要求一個資料庫工作流（例如「診斷這個慢查詢」、「審計權限」、「審視長時間執行的操作」），**優先選用已發布的任務模板，而非憑記憶自行組合步驟。**

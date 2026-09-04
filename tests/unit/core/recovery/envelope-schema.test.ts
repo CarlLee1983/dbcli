@@ -90,6 +90,17 @@ describe('recoveryEnvelopeSchema verify field', () => {
     expect(r.ok).toBe(false)
     expect(r.reason).toContain('password')
   })
+
+  test('keeps standalone recovery step cardinality independent from the emitter cap', () => {
+    const steps = Array.from({ length: 7 }, (_, index) => ({
+      order: index + 1,
+      command: `dbcli step-${index + 1}`,
+      rationale: 'r',
+      risk: 'readonly',
+      expects: 'e',
+    }))
+    expect(parseRecoveryEnvelope({ ...baseEnvelope, recovery: steps }).ok).toBe(true)
+  })
 })
 
 describe('SavedRecoveryEnvelope id + audit_ref (Phase 25)', () => {

@@ -117,6 +117,15 @@ source, not a finding about the database, and it is always advisory.
 
 ## Agent integration language
 
+**Operation envelope**:
+A versioned, bounded, machine-readable response for one explicitly requested,
+finite dbcli invocation. One invocation produces exactly one complete JSON
+document. It is not persisted or itself evidence; its `evidence` field contains
+only bounded references to existing evidence receipts. Its `status` describes
+only whether the invocation succeeded or failed; command-specific findings and
+outcomes remain in `data`.
+_Avoid_: Evidence envelope, agent receipt
+
 **Capability**:
 One atomic dbcli ability with a stable dotted id — `schema.read`,
 `data.delete`. It names what the *tool* can do. A job or a method

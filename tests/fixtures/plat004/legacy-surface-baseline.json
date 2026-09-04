@@ -1,0 +1,64 @@
+{
+  "baselineCommit": "cc7427bedbd72215ccf370911bd262ba9f315717",
+  "cases": [
+    {
+      "name": "capability catalog JSON",
+      "args": ["capabilities", "--format", "json"],
+      "exitCode": 0,
+      "stdoutSha256": "e19e5b9c69c763180d3cbaa92d40c3868b864830867e5a10f48396027888b207",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capability catalog text",
+      "args": ["capabilities"],
+      "exitCode": 0,
+      "stdoutSha256": "8d1df0ef76d1ad960093f907bc9f2bdf44446a18ea96012ce65a10667afddecc",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capability catalog Markdown",
+      "args": ["capabilities", "--format", "markdown"],
+      "exitCode": 0,
+      "stdoutSha256": "7b8aafe40ef9cabd77efb08c2420f56fcce55fcb0da775f3cbe8b210778a711b",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-local for-agent",
+      "args": ["recovery", "--code", "PERMISSION_DENIED", "--for-agent"],
+      "normalizeGeneratedAt": true,
+      "exitCode": 0,
+      "stdoutSha256": "08c836c4b508b19c30d5dca88baabde3f518990318ef816b4a51d6b2b58730dc",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "standalone version",
+      "args": ["--version"],
+      "exitCode": 0,
+      "stdoutSha256": "318630f32c0dac5c715d91aecff9c07b2ce055b792ccb015a815cb013ea80fc6",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "unknown root option",
+      "args": ["--definitely-unknown"],
+      "exitCode": 1,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "b21b0b733e1a71c77bb65f26eed814a3a440ada4136e0e9ccfb73b79a7c2df83"
+    },
+    {
+      "name": "English human error",
+      "args": ["blacklist", "column", "add", "invalid"],
+      "lang": "en",
+      "exitCode": 1,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "b285c7007a2e8f52fe596be0677345df96e8dad5acd302887f9288a71e44d3a4"
+    },
+    {
+      "name": "Traditional Chinese human error",
+      "args": ["blacklist", "column", "add", "invalid"],
+      "lang": "zh-TW",
+      "exitCode": 1,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "5aa300e30f84420d4ad20d0257c8b832c88ab121e378b737a2d2a7ee89c1ba98"
+    }
+  ]
+}

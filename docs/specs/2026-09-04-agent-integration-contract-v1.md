@@ -230,7 +230,7 @@ DBCLI-PLAT-008 owns it.
 
 | Story | Scope |
 | --- | --- |
-| DBCLI-PLAT-004 | Operation Envelope v1: `schemaVersion`, `ok`, `operation`, `status`, `context`, `data`, `warnings`, `evidence`, `recovery`. Additive and opt-in; existing `--format json` output is not rewritten in place. The opt-in mechanism needs its own ADR. |
+| DBCLI-PLAT-004 | Operation Envelope v1: the ten always-present keys `schemaVersion`, `ok`, `operation`, `status`, `context`, `data`, `warnings`, `evidence`, `recovery`, `error`. Additive and explicitly selected by the root `--agent-output` option; existing `--format json` output is not rewritten in place. ADR-0024 supersedes this table's preliminary shape and defines the accepted contract. |
 | DBCLI-PLAT-005 | Opt-in agent JSON mode, including per-subcommand JSON granularity. |
 | DBCLI-PLAT-006 | Cross-command correlation id tying commands to a Story, incident, change request, migration or backfill. Correlation metadata must not bypass audit, redaction or evidence validation. |
 | DBCLI-PLAT-007 | Bounded evidence receipts for `inspect`, `report`, `schema`, `plan`, `lint`, `explain`, `impact`. Never stores raw rows, credentials, connection strings, unmasked SQL, raw error bodies or unbounded stdout/stderr. |

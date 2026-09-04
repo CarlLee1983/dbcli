@@ -336,6 +336,32 @@ dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json
 ```
 
+#### Agent output v1
+
+`--agent-output` is a root option and must appear before the subcommand. In PLAT-004,
+only `dbcli --agent-output capabilities check --require <ids>` is supported; it emits one
+compact UTF-8 JSON document plus a newline on stdout and nothing on stderr. It is
+ephemeral: it is not persisted, is not evidence, and creates no timestamp or correlation id.
+
+The v1 envelope always has these ten keys: `schemaVersion`, `ok`, `operation`, `status`,
+`context`, `data`, `warnings`, `evidence`, `recovery`, and `error`. `schemaVersion` is `1`;
+`operation` is `capabilities.check`; `status` is `succeeded` or `failed`; and consumers must
+address keys by name, not field order. It is capped at 64 KiB including the newline.
+
+Do not combine `--agent-output` with an explicitly supplied `--format` or `--for-agent`;
+either conflict, placement after the subcommand, invalid input, or an unsupported operation
+fails with one envelope and exit `2`. Success exits `0`; unmet requirements and unexpected
+internal failures exit `1`. Existing output behavior is unchanged when `--agent-output` is absent.
+
+Error and warning code/message vocabulary is locale-independent English. Error codes are
+`INVALID_AGENT_OUTPUT_OPTIONS` (invalid, misplaced, or conflicting output options),
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION` (operation outside PLAT-004),
+`INVALID_CAPABILITY_REQUIREMENTS` (invalid `--require`), `CAPABILITY_REQUIREMENTS_UNMET`
+(a completed negative capability result), `AGENT_OUTPUT_LIMIT_EXCEEDED` (the 64 KiB limit), and
+`AGENT_OUTPUT_INTERNAL_ERROR` (an unexpected safe failure). Warning codes are
+`DUPLICATE_CAPABILITY_REQUIREMENT`, `CAPABILITY_CONTEXT_UNAVAILABLE`,
+`CAPABILITY_CONTEXT_UNRESOLVABLE`, and `AGENT_MODE_RESTRICTION_ACTIVE`.
+
 A **capability** is one atomic dbcli ability — `schema.read`, `data.delete`. It is never a
 job or a method: `dba.tune-production` and `crud.scaffold` belong to the Role Skill or
 Method Skill that composes dbcli. The layering is `Story + AGENTS.md + Role Skill + Method

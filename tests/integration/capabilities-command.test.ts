@@ -12,6 +12,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { writeV2Config } from '@/core/config-v2'
+import { parseOperationEnvelope } from '@/core/operation-envelope'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 const workDirs: string[] = []
@@ -34,16 +35,25 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
 
 function run(
   args: string[],
-  workDir: string
+  workDir: string,
+  env: NodeJS.ProcessEnv = sanitizeEnv()
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((res) => {
-    const child = spawn('bun', ['run', CLI, ...args], { cwd: workDir, env: sanitizeEnv() })
+    const child = spawn('bun', ['run', CLI, ...args], { cwd: workDir, env })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (buffer) => (stdout += buffer.toString()))
     child.stderr.on('data', (buffer) => (stderr += buffer.toString()))
     child.on('close', (code) => res({ stdout, stderr, code: code ?? 0 }))
   })
+}
+
+const baseline = (await Bun.file(
+  resolve(import.meta.dir, '../fixtures/plat004/capabilities-check-baseline.json')
+).json()) as {
+  baselineCommit: string
+  success: { stdout: string; stderr: string; exitCode: number }
+  requirementsUnmet: { stdout: string; stderr: string; exitCode: number }
 }
 
 /**
@@ -635,5 +645,379 @@ describe('dbcli capabilities check', () => {
     expect(code).toBe(1)
     expect(stdout).toContain('unavailable')
     expect(stdout).toContain('Some requirements are not met.')
+  })
+})
+
+describe('dbcli --agent-output capabilities check', () => {
+  test('emits one compact, strict ten-key success envelope', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
+    const first = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+      ],
+      dir
+    )
+    const second = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+      ],
+      dir
+    )
+
+    expect(first.code).toBe(0)
+    expect(first.stderr).toBe('')
+    expect(first.stdout).toBe(second.stdout)
+    expect(first.stdout.endsWith('\n')).toBe(true)
+    expect(first.stdout.endsWith('\n\n')).toBe(false)
+    expect(first.stdout).not.toContain('\n ')
+
+    const envelope = JSON.parse(first.stdout)
+    expect(Object.keys(envelope)).toEqual([
+      'schemaVersion',
+      'ok',
+      'operation',
+      'status',
+      'context',
+      'data',
+      'warnings',
+      'evidence',
+      'recovery',
+      'error',
+    ])
+    expect(envelope).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'capabilities.check',
+      status: 'succeeded',
+      context: {
+        engine: 'postgresql',
+        permission: 'query-only',
+        connectionName: null,
+        agentMode: false,
+      },
+      data: {
+        required: ['schema.read'],
+        results: [{ id: 'schema.read', status: 'available', reason: null }],
+      },
+      warnings: [],
+      evidence: [],
+      recovery: null,
+      error: null,
+    })
+    expect(parseOperationEnvelope(envelope).ok).toBe(true)
+  })
+
+  test('retains bounded result data for unmet requirements and exits 1', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
+    const result = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'data.delete',
+      ],
+      dir
+    )
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toBe('')
+    const envelope = JSON.parse(result.stdout)
+    expect(envelope.status).toBe('failed')
+    expect(envelope.data).toEqual({
+      required: ['data.delete'],
+      results: [{ id: 'data.delete', status: 'unavailable', reason: 'permission' }],
+    })
+    expect(envelope.error).toEqual({
+      code: 'CAPABILITY_REQUIREMENTS_UNMET',
+      message: 'One or more required capabilities are unavailable.',
+    })
+    expect(parseOperationEnvelope(envelope).ok).toBe(true)
+  })
+
+  test.each([
+    ['missing', ['--agent-output', 'capabilities', 'check']],
+    ['empty', ['--agent-output', 'capabilities', 'check', '--require', '']],
+    ['empty element', ['--agent-output', 'capabilities', 'check', '--require', 'schema.read,']],
+    [
+      'overlong id',
+      ['--agent-output', 'capabilities', 'check', '--require', `schema.${'x'.repeat(154)}`],
+    ],
+    [
+      'too many ids',
+      [
+        '--agent-output',
+        'capabilities',
+        'check',
+        '--require',
+        Array.from({ length: 129 }, (_, index) => `unknown.${index}`).join(','),
+      ],
+    ],
+    [
+      'SQL-shaped id',
+      ['--agent-output', 'capabilities', 'check', '--require', 'SELECT * FROM users'],
+    ],
+    ['path-shaped id', ['--agent-output', 'capabilities', 'check', '--require', '/tmp/secret']],
+  ])('%s --require emits a bounded input failure', async (_name, args) => {
+    const dir = await emptyDir()
+    const result = await run(args, dir)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toBe('')
+    expect(result.stdout).not.toContain('SELECT * FROM users')
+    expect(result.stdout).not.toContain('/tmp/secret')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      data: null,
+      error: {
+        code: 'INVALID_CAPABILITY_REQUIREMENTS',
+        message: 'Capability requirements are invalid.',
+      },
+    })
+  })
+
+  test('de-duplicates requirements and maps the warning without changing success', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'admin')
+    const result = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read,schema.read',
+      ],
+      dir
+    )
+    const envelope = JSON.parse(result.stdout)
+    expect(result.code).toBe(0)
+    expect(envelope.data.required).toEqual(['schema.read'])
+    expect(envelope.data.results).toHaveLength(1)
+    expect(envelope.warnings).toEqual([
+      {
+        code: 'DUPLICATE_CAPABILITY_REQUIREMENT',
+        message: "Duplicate capability id 'schema.read' in --require was ignored.",
+      },
+    ])
+  })
+
+  test('refuses a 129th derived warning instead of slicing it', async () => {
+    const dir = await emptyDir()
+    const ids = Array.from({ length: 128 }, (_, index) => `unknown.${index}`)
+    const result = await run(
+      ['--agent-output', 'capabilities', 'check', '--require', [...ids, ...ids].join(',')],
+      dir
+    )
+    expect(result.code).toBe(2)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout).error.code).toBe('INVALID_CAPABILITY_REQUIREMENTS')
+  })
+
+  test('maps absent and unresolvable contexts to stable warnings without paths', async () => {
+    const absentDir = await emptyDir()
+    const absent = await run(
+      ['--agent-output', 'capabilities', 'check', '--require', 'schema.read'],
+      absentDir
+    )
+    expect(absent.code).toBe(1)
+    expect(JSON.parse(absent.stdout).warnings[0].code).toBe('CAPABILITY_CONTEXT_UNAVAILABLE')
+
+    const brokenDir = await emptyDir()
+    const configPath = join(brokenDir, 'broken.json')
+    await writeFile(configPath, '{ not json')
+    const broken = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+      ],
+      brokenDir
+    )
+    expect(broken.code).toBe(1)
+    expect(broken.stderr).toBe('')
+    expect(JSON.parse(broken.stdout).warnings[0].code).toBe('CAPABILITY_CONTEXT_UNRESOLVABLE')
+    expect(broken.stdout).not.toContain(brokenDir)
+    expect(broken.stdout).not.toContain('broken.json')
+  })
+
+  test('maps active agent-mode restrictions to a stable warning', async () => {
+    const dir = await emptyDir()
+    const configPath = join(dir, 'store')
+    await mkdir(configPath, { recursive: true })
+    await writeV2Config(configPath, {
+      version: 2,
+      default: 'primary',
+      connections: {
+        primary: {
+          system: 'postgresql',
+          host: '203.0.113.1',
+          port: 5432,
+          user: 'u',
+          password: 'p',
+          database: 'd',
+          permission: 'admin',
+        },
+      },
+      schema: {},
+      schemas: {},
+      metadata: { version: '1.0', createdAt: '2026-09-04T00:00:00.000Z' },
+      blacklist: { tables: [], columns: {} },
+      audit: {
+        enabled: true,
+        strict: false,
+        rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+      },
+    } as never)
+    const result = await run(
+      [
+        '--agent-output',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'connection.select',
+      ],
+      dir,
+      { ...sanitizeEnv(), DBCLI_AGENT_MODE: '1' }
+    )
+    expect(result.code).toBe(1)
+    expect(JSON.parse(result.stdout).warnings[0].code).toBe('AGENT_MODE_RESTRICTION_ACTIVE')
+  })
+
+  test('accepts a 160-character connection label and fails closed at 161', async () => {
+    const dir = await emptyDir()
+    const configPath = join(dir, 'store')
+    await mkdir(configPath, { recursive: true })
+
+    for (const length of [160, 161]) {
+      const name = `c.${'x'.repeat(length - 2)}`
+      await writeV2Config(configPath, {
+        version: 2,
+        default: name,
+        connections: {
+          [name]: {
+            system: 'postgresql',
+            host: '203.0.113.1',
+            port: 5432,
+            user: 'u',
+            password: 'p',
+            database: 'd',
+            permission: 'query-only',
+          },
+        },
+        schema: {},
+        schemas: {},
+        metadata: { version: '1.0', createdAt: '2026-09-04T00:00:00.000Z' },
+        blacklist: { tables: [], columns: {} },
+        audit: {
+          enabled: true,
+          strict: false,
+          rotation: { max_bytes: 10_485_760, max_entries: 1000 },
+        },
+      } as never)
+
+      const result = await run(
+        [
+          '--agent-output',
+          '--config',
+          configPath,
+          'capabilities',
+          'check',
+          '--require',
+          'schema.read',
+        ],
+        dir
+      )
+      expect(result.stderr).toBe('')
+      const envelope = JSON.parse(result.stdout)
+      if (length === 160) {
+        expect(result.code).toBe(0)
+        expect(envelope.context.connectionName).toBe(name)
+      } else {
+        expect(result.code).toBe(1)
+        expect(envelope.context).toBeNull()
+        expect(envelope.error).toEqual({
+          code: 'AGENT_OUTPUT_INTERNAL_ERROR',
+          message: 'Agent output failed safely.',
+        })
+        expect(result.stdout).not.toContain(name)
+      }
+    }
+  })
+
+  test('both result paths remain offline, leave the directory unchanged, and leak no config data', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
+    const before = await treeOf(dir)
+    for (const required of ['schema.read', 'data.delete']) {
+      const result = await run(
+        ['--agent-output', '--config', configPath, 'capabilities', 'check', '--require', required],
+        dir
+      )
+      expect(result.stdout).not.toMatch(/unused-secret-value|203\.0\.113\.1|nobody/)
+      expect(result.stderr).toBe('')
+    }
+    expect(await treeOf(dir)).toEqual(before)
+  })
+
+  test('legacy JSON bytes and exits still match the baseline commit fixtures', async () => {
+    expect(baseline.baselineCommit).toBe('4aa8c183213ccb44bdb03db18351797f3522e13f')
+    const dir = await emptyDir()
+    const configPath = resolve(import.meta.dir, '../fixtures/sample.dbcli.json')
+    const success = await run(
+      [
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+        '--format',
+        'json',
+      ],
+      dir
+    )
+    const unmet = await run(
+      [
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'data.delete',
+        '--format',
+        'json',
+      ],
+      dir
+    )
+
+    expect(success).toEqual({
+      stdout: baseline.success.stdout,
+      stderr: baseline.success.stderr,
+      code: baseline.success.exitCode,
+    })
+    expect(unmet).toEqual({
+      stdout: baseline.requirementsUnmet.stdout,
+      stderr: baseline.requirementsUnmet.stderr,
+      code: baseline.requirementsUnmet.exitCode,
+    })
   })
 })

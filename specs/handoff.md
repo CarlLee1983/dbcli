@@ -5,10 +5,10 @@
 採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
 沒有已知的產品缺口。
 
-之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 與 DBCLI-PLAT-013 已交付，
-DBCLI-PLAT-012 已交付，關掉了 PLAT-001 記下的那個已知過度宣稱。目前進行中的是
-DBCLI-PLAT-011——把 catalog 之外的十六個公開指令納入 engine matrix，只在讀得出證據
-的地方寫支援度。
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013 已交付並合併進
+`main`（PR #152、#164、#163、#162）。DBCLI-PLAT-004 Operation Envelope v1 已在
+本機完成實作、測試、文件與完整 gate，現在仍是 current Story，等待人類 review；下一個明定為
+DBCLI-PLAT-005。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -46,8 +46,8 @@ top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`eviden
 不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
 稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
 
-後續 backlog（DBCLI-PLAT-004 到 011）只寫進 spec，沒有實作。Task Pack 仍是
-`plan-only`，`safety.requires` 沒有動。
+後續 backlog（DBCLI-PLAT-005 到 010）只寫進 spec，沒有實作。Task Pack 仍是
+`plan-only`，`safety.requires` 沒有動；PLAT-004 只新增顯式輸出投影，沒有改 Task Pack。
 
 ## 交付紀錄
 
@@ -316,8 +316,8 @@ JSON key，兩者都沒有為其他欄位放寬。
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-011
-  next_story: pending
+  current_story: DBCLI-PLAT-004
+  next_story: DBCLI-PLAT-005
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -333,50 +333,60 @@ workflow:
     - DBCLI-012
     - DBCLI-013
     - DBCLI-PLAT-001
+    - DBCLI-PLAT-011
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
   status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-011-capability-matrix
-  # The state on main when this Agent Platform run started; PLAT-013 → 012 → 011 stack on it.
-  commit: c3e701a1
+  branch: feat/dbcli-plat-004-operation-envelope-v1
+  commit: cc7427bedbd72215ccf370911bd262ba9f315717
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-PLAT-011-complete-capability-matrix/
-    - src/adapters/capabilities.ts
-    - src/core/capabilities/registry.ts
-    - src/core/orm-drift/input.ts
-    - src/commands/diff.ts
-    - src/commands/impact.ts
-    - src/commands/design.ts
-    - docs/adr/0023-the-capability-catalog-describes-itself.md
-    - tests/contract/capability-contract.test.ts
-    - tests/unit/core/capabilities/registry.test.ts
-    - tests/integration/capabilities-command.test.ts
-    - tests/docs/capability-scope-parity.test.ts
-    - docs/plans/2026-09-04-agent-integration-contract-v1.md
-    - assets/reference.md
+    - .cursor/rules/dbcli.mdc
     - .cursor/skills/dbcli/reference.md
-    - .github/skills/dbcli/reference.md
+    - .github/skills/dbcli/
+    - .windsurfrules
     - .windsurf/skills/dbcli/reference.md
-    - plugins/dbcli-agent/skills/dbcli/reference.md
-    - skills/dbcli/reference.md
-    - docs/user/
-    - CHANGELOG.md
+    - assets/SKILL.md
+    - assets/SKILL.zh-TW.md
+    - assets/reference.md
+    - docs/user/en/
+    - docs/user/zh-TW/
+    - plugins/dbcli-agent/skills/dbcli/
+    - resources/lang/en/messages.json
+    - resources/lang/zh-TW/messages.json
+    - skills/dbcli/
+    - src/cli-runtime.ts
+    - src/cli.ts
+    - src/commands/capabilities.ts
+    - src/core/capabilities/schema.ts
+    - src/core/operation-envelope.ts
+    - src/core/public.ts
+    - src/core/recovery/envelope-schema.ts
+    - src/program-root.ts
+    - src/utils/agent-output.ts
+    - src/utils/cli-output.ts
+    - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/
     - specs/handoff.md
+    - tests/fixtures/plat004/
+    - tests/integration/capabilities-command.test.ts
+    - tests/integration/lazy-entry-path.test.ts
+    - tests/unit/core-public.test.ts
+    - tests/unit/core/operation-envelope.test.ts
+    - tests/unit/core/recovery/envelope-schema.test.ts
+    - tests/unit/i18n/root-help-messages.test.ts
   known_unrelated_paths: []
 
 verification:
   last_command: make verify
   result: pass
   detail: >-
-    6658 pass / 0 fail / 0 skip across 565 files, with the docker-compose.test.yml
-    services running. The PLAT-012 baseline under the same services was 6622 / 564.
-    All 23 static gates passed. Three pre-existing tests changed deliberately and
-    are named in the Story's Superseded Behavior. Two earlier attempts failed at
-    step 2/23 on a `bun audit` registry timeout after its retries were exhausted;
-    the registry recovered and the rerun completed. release:check was not run: it
-    is the release gate, and this Story publishes nothing.
+    On the completed PLAT-004 worktree, make verify passed: 6711 tests passed
+    across 567 files with 0 failures; performance checks passed 21 tests with 2
+    intentional SQL skips and 0 failures; the build was reproducible; and every
+    static gate passed. The focused PLAT-004 suite passed 99 of 99 tests.
+    git diff --check passed; graft check reported an in-sync 5519-node graph.
+    release:check was not run because no release was requested.
 ```

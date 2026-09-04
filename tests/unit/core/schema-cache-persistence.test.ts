@@ -262,18 +262,27 @@ describe('persistSchemaCache — refusals leave the config alone', () => {
     expect((await readConfig()).schema).toEqual(DEMO_SCHEMA)
   })
 
-  test('an unwritable storage directory fails without a partial config', async () => {
-    await seed(V1_CONFIG)
-    const before = await readFile(join(storagePath, 'config.json'), 'utf8')
-    await chmod(storagePath, 0o500)
+  // POSIX mode bits are how this fault is injected, and Windows does not honour
+  // them: `chmod(dir, 0o500)` there leaves the directory writable, the seam
+  // succeeds, and the test fails for a reason that has nothing to do with the
+  // seam. Skipped rather than weakened — the property still holds on Windows,
+  // it just cannot be provoked this way. Same reasoning as
+  // `refusesGroupOrWorldWritable` in `src/core/config-integrity.ts`.
+  test.skipIf(process.platform === 'win32')(
+    'an unwritable storage directory fails without a partial config',
+    async () => {
+      await seed(V1_CONFIG)
+      const before = await readFile(join(storagePath, 'config.json'), 'utf8')
+      await chmod(storagePath, 0o500)
 
-    try {
-      await expect(persistSchemaCache({ storagePath, ...CACHE_WRITE })).rejects.toThrow()
-      expect(await readFile(join(storagePath, 'config.json'), 'utf8')).toBe(before)
-    } finally {
-      await chmod(storagePath, 0o700)
+      try {
+        await expect(persistSchemaCache({ storagePath, ...CACHE_WRITE })).rejects.toThrow()
+        expect(await readFile(join(storagePath, 'config.json'), 'utf8')).toBe(before)
+      } finally {
+        await chmod(storagePath, 0o700)
+      }
     }
-  })
+  )
 })
 
 describe('assertOnlyCacheFieldsChanged', () => {

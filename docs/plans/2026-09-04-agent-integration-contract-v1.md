@@ -38,7 +38,7 @@ This plan covers the first vertical slice only. Everything after it is backlog.
 13. `minimumPermission` comes from the runtime permission ladder rather than a transcription — covered by: `tests/unit/core/capabilities/registry.test.ts`
 14. `DATABASE_SYSTEMS` matches the keys of `ENGINE_CAPABILITIES` — covered by: `tests/unit/adapters/database-systems-roster.test.ts`
 15. `requiresConnection: true` is not independently proven; only the `false` direction is checked, since a false offline claim is the one that misleads — unverified: no test asserts that a connection-requiring command actually opens one
-16. Under `DBCLI_AGENT_MODE=1`, `schema.read` reports `available` although the command's schema-cache persistence step is refused — known deviation: marking the `schema` capabilities would tell an agent schema cannot be read at all, a larger error in the opposite direction; DBCLI-PLAT-012 removes the cause
+16. Under `DBCLI_AGENT_MODE=1`, `schema.read` reports `available` and `dbcli schema` succeeds there — covered by: `tests/integration/schema-cache-agent-mode.test.ts` (shipped as a known deviation and closed by DBCLI-PLAT-012, which moved the cache write out from behind the identity guard)
 
 ## Five things this slice got wrong first, and what caught them
 

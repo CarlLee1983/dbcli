@@ -10,7 +10,9 @@ import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter } from '@/formatters'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
-import { patchConnectionSchema, readV2Config } from '@/core/config-v2'
+import { persistSchemaCache, SchemaCacheWriteError } from '@/core/schema-cache-persistence'
+import { ConfigError } from '@/utils/errors'
+import { readV2Config } from '@/core/config-v2'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { SchemaDiffEngine } from '@/core/schema-diff'
 import { SchemaWriter } from '@/core'
@@ -520,7 +522,7 @@ export async function handleSchemaRefresh(
 
   // Wave 1 Integration: Persist to layered storage
   const writer = new SchemaWriter(storagePath)
-  await writer.save(newSchema, connectionName)
+  await reportingCacheWriteFailure('store', () => writer.save(newSchema, connectionName))
   if (isFirstTime) {
     console.log(`✅ Schema cache initialised (${Object.keys(newSchema).length} tables)`)
   } else {
@@ -577,11 +579,11 @@ async function handleSchemaReset(
   }
 
   // Write cleared config first (in case scan fails, at least old stale data is gone)
-  await writeSchema(storagePath, configWithoutSchema as DbcliConfig, connectionName)
+  await writeSchema(storagePath, configWithoutSchema as DbcliConfig, connectionName, 'clear')
 
   // Wave 1 Integration: Clear layered storage
   const writer = new SchemaWriter(storagePath)
-  await writer.clear(connectionName)
+  await reportingCacheWriteFailure('clear', () => writer.clear(connectionName))
 
   // Now do a full fresh scan
   console.log(t('schema.scanning_database'))
@@ -636,7 +638,9 @@ async function handleSchemaReset(
   }
 
   // Wave 1 Integration: Persist to layered storage
-  await writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  await reportingCacheWriteFailure('store', () =>
+    writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  )
   console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
 
   await writeSchema(storagePath, updatedConfig as DbcliConfig, connectionName)
@@ -740,7 +744,9 @@ async function handleFullDatabaseScan(
 
   // Wave 1 Integration: Persist to layered storage
   const writer = new SchemaWriter(storagePath)
-  await writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  await reportingCacheWriteFailure('store', () =>
+    writer.save(schemaData as Record<string, TableSchema>, connectionName)
+  )
   console.log(`✅ Schema persisted to layered storage (.dbcli/schemas/${connectionName || ''})`)
 
   await writeSchema(storagePath, updatedConfig as DbcliConfig, connectionName)
@@ -751,24 +757,84 @@ async function handleFullDatabaseScan(
 }
 
 /**
- * Write schema changes: V2 config → patch per-connection slot; V1 → full config write.
+ * Store the schema cache.
+ *
+ * This used to be a whole-config publication: `configModule.write` for v1,
+ * `writeV2Config` for v2. Both sit behind `assertConfigMutationApproved()`, so
+ * caching a schema was refused under agent mode while `capabilities check`
+ * reported `schema.read` available — and the v1 path also deleted
+ * `connection.password` from `config.json` and rewrote `.env.local`, on every
+ * `dbcli schema`, agent mode or not.
+ *
+ * `persistSchemaCache` writes the cache fields and nothing else, and cannot
+ * express anything else: see `src/core/schema-cache-persistence.ts` for why
+ * that narrowness — rather than a flag on the guard — is what makes it safe to
+ * run in an untrusted context. (DBCLI-PLAT-012)
  */
 async function writeSchema(
-  configPath: string,
+  storagePath: string,
   config: DbcliConfig,
-  connectionName: string | undefined
+  connectionName: string | undefined,
+  phase: CachePhase = 'store'
 ): Promise<void> {
-  if (connectionName !== undefined) {
-    await patchConnectionSchema(
-      configPath,
+  await reportingCacheWriteFailure(phase, () =>
+    persistSchemaCache({
+      storagePath,
       connectionName,
-      (config.schema ?? {}) as Record<string, unknown>,
-      {
-        schemaLastUpdated: config.metadata?.schemaLastUpdated,
-        schemaTableCount: config.metadata?.schemaTableCount,
-      }
-    )
-  } else {
-    await configModule.write(configPath, config)
+      schema: (config.schema ?? {}) as Record<string, unknown>,
+      schemaLastUpdated: config.metadata?.schemaLastUpdated,
+      schemaTableCount:
+        config.metadata?.schemaTableCount ?? Object.keys(config.schema ?? {}).length,
+    })
+  )
+}
+
+/** Whether the cache is being stored after a read, or cleared before one. */
+type CachePhase = 'store' | 'clear'
+
+/**
+ * Report a failed cache write as a failed cache write.
+ *
+ * Before this Story, agent mode refused the cache write and the command exited
+ * non-zero with a message about "configuration, permission, and credential
+ * changes" — from which an agent reading the exit code concluded that reading
+ * the database had failed. The read had in fact succeeded. Which step failed is
+ * the thing the caller needs and the thing the old output never said, so the
+ * `store` phase says it explicitly; the `clear` phase runs before any read and
+ * deliberately does not claim one happened.
+ */
+async function reportingCacheWriteFailure<T>(
+  phase: CachePhase,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    const preamble =
+      phase === 'store'
+        ? 'The schema was read from the database successfully; storing it in the local schema cache failed.'
+        : 'Clearing the local schema cache failed; the database was not read.'
+    throw new Error(`${preamble} ${cacheWriteReason(error)}`)
   }
+}
+
+/**
+ * A bounded reason for a failed cache write.
+ *
+ * Two things are being kept apart. The caller has to be able to tell "the
+ * database read failed" from "the read worked and the cache did not" — an agent
+ * that reads only the exit code drew the first conclusion from the second
+ * before this Story. And the reason must stay free of filesystem paths: the
+ * integrity refusal names the config path it checked, which is useful in a
+ * human's terminal and is disclosure in an agent's transcript.
+ *
+ * So only `SchemaCacheWriteError` passes through, because its messages are
+ * path-free by construction; every other cause is classified, never quoted.
+ */
+function cacheWriteReason(error: unknown): string {
+  if (error instanceof SchemaCacheWriteError) return error.message
+  if (error instanceof ConfigError) {
+    return 'The dbcli configuration could not be read back for the cache write; run `dbcli doctor`.'
+  }
+  return 'The local schema cache could not be written.'
 }

@@ -135,6 +135,22 @@ read schema at all — a much larger error in the opposite direction. The real f
 is that a schema *cache* write is not a change of connection identity and should
 not sit behind the identity guard: DBCLI-PLAT-012.
 
+**Closed by DBCLI-PLAT-012.** The reasoning above is left standing because it is
+why shipping the overstatement was defensible, not because it still describes
+the product. `src/core/schema-cache-persistence.ts` now stores the cache
+directly: it takes a schema and two timestamps, reads the config itself, and
+writes back a document differing only in the cache fields, so there is nothing
+for the identity guard to approve. `assertConfigMutationApproved()` is
+unchanged and still refuses every connection, permission and credential change
+under agent mode. The claim and the command are tied together by
+`tests/integration/schema-cache-agent-mode.test.ts`, which asks
+`capabilities check` and then runs `dbcli schema` in one test.
+
+Moving it also closed a defect nobody had recorded: the v1 cache write went
+through `configModule.write`, which republishes the whole document, so every
+`dbcli schema` deleted `connection.password` from `config.json` and rewrote
+`.env.local` — outside agent mode too, where no guard fires.
+
 ### "No config" and "config I cannot resolve" are different facts
 
 Conflating them was a defect, not a simplification. A config whose

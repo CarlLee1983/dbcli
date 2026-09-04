@@ -5,8 +5,9 @@
 採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
 沒有已知的產品缺口。
 
-之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 已交付，DBCLI-PLAT-013 是目前
-進行中的 Story，收 PLAT-001 留下的契約與交接兩個尾，下一個是 DBCLI-PLAT-012。
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001 與 DBCLI-PLAT-013 已交付，
+目前進行中的是 DBCLI-PLAT-012——把 schema cache 的寫入從連線身分的閘門後面搬出來，
+關掉 PLAT-001 記下的那個已知過度宣稱。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -152,7 +153,7 @@ revision 是否存在，所以不宣稱；能查的是這個 repository 對它�
 既有的 `check-forgeflow-handoff.ts` 原封不動，兩支互不涵蓋——一支對帳交付宣稱，
 一支對帳流程版本。
 
-## DBCLI-PLAT-013：契約與交接的收尾
+## 已交付：DBCLI-PLAT-013——契約與交接的收尾
 
 三件事，同一個形狀：一句寫下來的宣稱，沒有任何東西拿它跟 repository 對帳。
 
@@ -203,12 +204,53 @@ shallow clone 仍然拒絕驗證，而且「既不是 true 也不是 false」的
 讀不懂的答案當成「不是 shallow」，就是在證據缺席時假設證據沒事，正是這個 gate
 存在要防的事。
 
+## DBCLI-PLAT-012：schema cache 的寫入邊界
+
+PLAT-001 交付時記下的那個已知過度宣稱，起因已經移除：`DBCLI_AGENT_MODE=1` 下
+`capabilities check` 說 `schema.read` 可用，`dbcli schema` 卻 exit 1。
+
+這個 Story 最值得留下的一句：**真正的缺陷不是 guard 放錯位置，是快取更新根本是一次
+完整設定的重新發布，只是掛著快取的名字。**
+
+原本的辯護是「schema cache 存在 `config.json` 裡，所以擋在設定的閘門後面」。動手
+之前先量了一次：對一份 `connection.password: "testpass"`、`.env.local` 寫著
+`DB_PASSWORD=untouched` 的設定跑一次 schema 寫入，結果是密碼被從 `config.json`
+刪掉、`.env.local` 被整份覆寫成新產生的 `DBCLI_PASSWORD=testpass`。這件事**在
+agent mode 之外也會發生**——那裡沒有任何 guard 會攔。所以那個 guard 不是防線，
+它只是唯一會對這個行為出聲的東西，而且出的還是錯的聲。
+
+修法刻意不是替 guard 開一個例外。一個「這次寫入沒問題」的布林參數，等於把邊界交給
+呼叫端記得誠實；guard 保護的就會變成「大家有沒有老實申報」。
+`src/core/schema-cache-persistence.ts` 的窄化在**簽章**：參數只有 schema、
+connection slot 與兩個時間戳，設定是它自己從磁碟讀的，沒有任何一條路徑能讓憑證、
+權限或 host 通過。寫不出來的東西不需要被批准。
+
+`assertOnlyCacheFieldsChanged` 把同一句保證講出來。它對今天的程式是多餘的——這正是
+重點：任何擴大寫入範圍的修改會在單元測試裡指名欄位而失敗，而不是上線。
+
+`assertConfigMutationApproved()` 一個字都沒改。六個 guarded writer 一個都沒少，並由
+`tests/contract/config-mutation-boundary.test.ts` 以名冊釘住兩個方向：清單裡的都要
+guard，清單外的都不准 guard。名冊的比對只讀程式碼、不讀註解——seam 與 schema 指令的
+檔頭都在**討論**這個 guard，把提及算成呼叫的檢查只能靠刪掉解釋來滿足。
+
+還有一件事是新的：契約與行為現在綁在同一支測試裡。
+`tests/integration/schema-cache-agent-mode.test.ts` 先問 `capabilities check`、
+再跑 `dbcli schema`，對真的 PostgreSQL。PLAT-001 的過度宣稱能活下來，就是因為沒有
+任何東西同時問過這兩件事。
+
+`INCIDENTAL_CONFIG_WRITERS` 因此清空。它留在原地而不是刪掉：再加回一筆應該是一個
+決定，不是一次重構。
+
+過程中撞到、確認為既有且範圍外的一件事：agent mode 下，設定若是透過 symlink 路徑
+（macOS 的 `/var/folders` 對 `/private/var/folders`）讀到，完整性紀錄的 `targetPath`
+會對不上而被判成 tampering。整合測試用 `realpath` 迴避，原因寫在測試裡。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-013
-  next_story: DBCLI-PLAT-012
+  current_story: DBCLI-PLAT-012
+  next_story: pending
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -224,33 +266,36 @@ workflow:
     - DBCLI-012
     - DBCLI-013
     - DBCLI-PLAT-001
+    - DBCLI-PLAT-013
   status: in_progress
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-013-agent-platform-closeout
-  # The state on main when DBCLI-PLAT-013 started: PR #153 merged, PLAT-001 shipped.
+  branch: feat/dbcli-plat-012-schema-cache-write-boundary
+  # The state on main when DBCLI-PLAT-013 started; PLAT-012 continues from its commit.
   commit: c3e701a1
   dirty_worktree: false
   story_owned_paths:
-    - specs/stories/DBCLI-PLAT-013-agent-platform-closeout/
-    - specs/stories/DBCLI-PLAT-001-capability-contract/story.md
+    - specs/stories/DBCLI-PLAT-012-schema-cache-write-boundary/
+    - src/core/schema-cache-persistence.ts
+    - src/commands/schema.ts
+    - tests/unit/core/schema-cache-persistence.test.ts
+    - tests/contract/config-mutation-boundary.test.ts
+    - tests/integration/schema-cache-agent-mode.test.ts
+    - tests/docs/schema-cache-deviation-closed.test.ts
+    - tests/contract/capability-contract.test.ts
+    - tests/unit/commands/schema-refresh-bootstrap.test.ts
     - specs/stories/DBCLI-PLAT-001-capability-contract/acceptance.md
-    - scripts/lib/forgeflow-handoff.ts
-    - scripts/check-forgeflow-handoff.ts
-    - tests/unit/scripts/forgeflow-handoff.test.ts
-    - tests/docs/capability-ordering-parity.test.ts
     - docs/specs/2026-09-04-agent-integration-contract-v1.md
+    - docs/plans/2026-09-04-agent-integration-contract-v1.md
+    - docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md
     - assets/reference.md
     - .cursor/skills/dbcli/reference.md
     - .github/skills/dbcli/reference.md
     - .windsurf/skills/dbcli/reference.md
     - plugins/dbcli-agent/skills/dbcli/reference.md
     - skills/dbcli/reference.md
-    - docs/user/en/index.md
-    - docs/user/en/index.html
-    - docs/user/zh-TW/index.md
-    - docs/user/zh-TW/index.html
+    - CONTEXT.md
     - CHANGELOG.md
     - specs/handoff.md
   known_unrelated_paths: []
@@ -259,12 +304,12 @@ verification:
   last_command: make verify
   result: pass
   detail: >-
-    6576 pass / 0 fail / 0 skip across 560 files, with the docker-compose.test.yml
-    services running, so no integration suite skipped. Baseline on c3e701a1 under the
-    same services was 6533 / 558; the difference is this Story's two new files.
-    All 23 static gates passed, forgeflow:check included — it now reconciles 14
-    completed Stories, the fourteenth being DBCLI-PLAT-001. The first attempt failed
-    at step 2/23 on a `bun audit` registry timeout after its retries were exhausted;
-    the rerun completed. release:check was not run: it is the release gate, and this
-    Story publishes nothing.
+    6622 pass / 0 fail / 0 skip across 564 files, with the docker-compose.test.yml
+    services running, so nothing skipped. The PLAT-013 baseline under the same
+    services was 6576 / 560; the difference is this Story's four new files. All 23
+    static gates passed. Two pre-existing tests changed deliberately and are named
+    in the Story's Superseded Behavior: the capability contract's
+    INCIDENTAL_CONFIG_WRITERS exemption (now empty) and the schema-refresh
+    bootstrap fixture (now has the config it always implied). release:check was not
+    run: it is the release gate, and this Story publishes nothing.
 ```

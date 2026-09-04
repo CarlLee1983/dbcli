@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.."
 step() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 
 step '1/9 bun audit'
-bun audit
+# Same wrapper CI's `audit` job runs, so the two cannot drift.
+bun run audit
 
 # Via `bun run` so the glob lives in one place (package.json) and CI's `format`
 # job checks exactly what this checks — the two drifting apart is how unformatted

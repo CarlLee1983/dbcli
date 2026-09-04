@@ -2,7 +2,7 @@
 
 verify:
 	bun run services:check
-	bun audit
+	bun run audit
 	bun run format:check
 	bun run agent-core:check
 	bun run core-stdout:check

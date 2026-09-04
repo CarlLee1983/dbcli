@@ -67,6 +67,7 @@
     "build": "bun run scripts/build.ts",
     "build:determinism": "bun run scripts/check-build-determinism.ts",
     "prepublishOnly": "bun run build",
+    "audit": "bun run scripts/audit.ts",
     "release:check": "bash scripts/release-check.sh",
     "plugin:sync": "bun run scripts/sync-plugin-assets.ts --write",
     "plugin:check": "bun run scripts/sync-plugin-assets.ts",

@@ -194,4 +194,7 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - name: Dependency audit
-        run: bun audit
+        # Via `bun run audit` rather than `bun audit` directly: the wrapper
+        # retries a registry that is merely unreachable, so red keeps meaning
+        # "a dependency has an advisory". `release:check` runs the same script.
+        run: bun run audit

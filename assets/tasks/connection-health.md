@@ -2,7 +2,7 @@
 name: connection-health
 description: Quick read-only health check of the active connection (reachability, config, capacity signals).
 tags: [diagnostics, health, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   section:
     type: string
@@ -13,7 +13,7 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
+    - blacklist.manage
 steps:
   - type: command
     command: status

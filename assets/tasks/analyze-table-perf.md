@@ -2,7 +2,7 @@
 name: analyze-table-perf
 description: Inspect a single table's structure, indexes and read-only performance signals.
 tags: [diagnostics, performance, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -11,8 +11,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

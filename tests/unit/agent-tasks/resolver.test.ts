@@ -18,7 +18,7 @@ const wrap = (task: AgentTask, hasOverride = false): LoadedTask => ({ task, hasO
 
 describe('filterTasks', () => {
   const map = new Map<string, LoadedTask>([
-    ['a', wrap(t({ name: 'a', tags: ['diag'], engines: ['postgres'] }))],
+    ['a', wrap(t({ name: 'a', tags: ['diag'], engines: ['postgresql'] }))],
     ['b', wrap(t({ name: 'b', tags: ['ops'], engines: ['mongodb'], source: 'shared' }), true)],
     ['c', wrap(t({ name: 'c', tags: ['diag', 'ops'], source: 'local' }))],
   ])
@@ -40,7 +40,7 @@ describe('filterTasks', () => {
   })
 
   test('filters by engine (engine-agnostic tasks always match)', () => {
-    const out = filterTasks(map, { engine: 'postgres' })
+    const out = filterTasks(map, { engine: 'postgresql' })
       .map((x) => x.task.name)
       .sort()
     expect(out).toEqual(['a', 'c'])
@@ -52,7 +52,7 @@ describe('filterTasks', () => {
 
   test('combines filters', () => {
     expect(
-      filterTasks(map, { tag: 'diag', engine: 'postgres' })
+      filterTasks(map, { tag: 'diag', engine: 'postgresql' })
         .map((x) => x.task.name)
         .sort()
     ).toEqual(['a', 'c'])

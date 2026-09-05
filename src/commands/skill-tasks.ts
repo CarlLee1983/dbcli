@@ -1,4 +1,8 @@
 import { Command } from 'commander'
+import { resolveCapabilityContext } from './capability-context'
+import { DATABASE_SYSTEMS } from '@/adapters/types'
+import { checkCapabilities } from '@/core/capabilities'
+import { resolveConfigPath } from '@/utils/config-path'
 import {
   filterTasks,
   loadAgentTasks,
@@ -71,9 +75,9 @@ export function registerSkillTasksCommand(parent: Command): Command {
       (val: string, prev: string[] = []) => prev.concat([val]),
       [] as string[]
     )
-    .action(async (taskName: string, options: PlanOptions) => {
+    .action(async (taskName: string, options: PlanOptions, command: Command) => {
       try {
-        await runPlan(taskName, options)
+        await runPlan(taskName, options, command)
       } catch (e) {
         console.error((e as Error).message)
         process.exit(1)
@@ -86,7 +90,7 @@ export function registerSkillTasksCommand(parent: Command): Command {
 // Runtime allow-lists for the filter flags (mirrors the AgentTaskEngine /
 // AgentTaskSource types). Kept here so an invalid filter fails loudly instead of
 // silently returning an empty list.
-const VALID_ENGINES: AgentTaskEngine[] = ['postgres', 'mysql', 'mongodb', 'redis', 'elasticsearch']
+const VALID_ENGINES: readonly AgentTaskEngine[] = DATABASE_SYSTEMS
 const VALID_SOURCES: AgentTaskSource[] = ['builtin', 'shared', 'local']
 
 async function runList(options: ListOptions): Promise<void> {
@@ -205,9 +209,19 @@ async function runShow(taskName: string, options: ShowOptions): Promise<void> {
   }
 }
 
-async function runPlan(taskName: string, options: PlanOptions): Promise<void> {
+async function runPlan(taskName: string, options: PlanOptions, command: Command): Promise<void> {
   const map = await loadAgentTasks(resolveAgentTaskDirs(process.cwd()))
   const entry = resolveTaskByName(map, taskName)
+  const { context, failure } = await resolveCapabilityContext(resolveConfigPath(command))
+  const capabilities = checkCapabilities(entry.task.safety.requires ?? [], context, [], failure)
+  if (!capabilities.ok) {
+    const blockers = capabilities.results
+      .filter((result) => result.status !== 'available')
+      .map((result) => `${result.id}: ${result.reason}`)
+    throw new Error(
+      `Task '${taskName}' cannot be planned because required capabilities are unavailable: ${blockers.join(', ')}`
+    )
+  }
   const params = parseParamPairs(options.param ?? [])
   const plan = planAgentTask({ task: entry.task, params })
 

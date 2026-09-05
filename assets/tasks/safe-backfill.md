@@ -2,7 +2,7 @@
 name: safe-backfill
 description: Plan a safe data backfill/UPDATE with blacklist, schema and risk checks before any write.
 tags: [data, write, safety]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -15,8 +15,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

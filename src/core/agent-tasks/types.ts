@@ -8,13 +8,14 @@ import type {
   VerificationEvidenceRef,
   VerificationSubject,
 } from '@/core/verification'
+import type { DatabaseSystem } from '@/adapters/types'
 
 export type AgentTaskSource = 'builtin' | 'shared' | 'local'
 export type AgentTaskMode = 'plan-only'
 export type AgentTaskStepType = 'command'
 export type AgentTaskRisk = 'readonly' | 'dry-run' | 'write' | 'unknown'
 
-export type AgentTaskEngine = 'postgres' | 'mysql' | 'mongodb' | 'redis' | 'elasticsearch'
+export type AgentTaskEngine = DatabaseSystem
 
 export type AgentTaskParamType = 'string' | 'number' | 'boolean'
 
@@ -96,6 +97,7 @@ export class AgentTaskError extends Error {
       | 'PARAM_MISSING'
       | 'PARAM_INVALID'
       | 'TEMPLATE_SYNTAX'
+      | 'CAPABILITY_UNAVAILABLE'
       | 'IO_ERROR',
     public readonly file?: string
   ) {

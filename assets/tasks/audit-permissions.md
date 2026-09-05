@@ -2,7 +2,7 @@
 name: audit-permissions
 description: Audit the active permission tier and blacklist coverage before granting an agent write access.
 tags: [security, permissions, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -11,7 +11,7 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
+    - blacklist.manage
 steps:
   - type: command
     command: status

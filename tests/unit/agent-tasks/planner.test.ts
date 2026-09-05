@@ -10,7 +10,7 @@ const buildTask = (over: Partial<AgentTask> = {}): AgentTask => ({
     { name: 'query', type: 'string', required: true, description: 'SQL or fingerprint' },
     { name: 'days', type: 'number', required: false, default: 7 },
   ],
-  safety: { mode: 'plan-only', requires: ['blacklist-list'] },
+  safety: { mode: 'plan-only', requires: ['blacklist.manage'] },
   steps: [
     {
       type: 'command',
@@ -103,7 +103,7 @@ describe('renderMarkdownPlan', () => {
     const md = renderMarkdownPlan(plan)
     expect(md).toContain('diagnose-slow-query')
     expect(md).toContain('plan-only')
-    expect(md).toContain('blacklist-list')
+    expect(md).toContain('blacklist.manage')
     expect(md).toContain('query: SELECT 1')
     expect(md).toContain('plan "SELECT 1"')
     expect(md).toContain('Confirm sensitive tables are protected.')

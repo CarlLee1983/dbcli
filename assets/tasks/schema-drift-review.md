@@ -2,7 +2,7 @@
 name: schema-drift-review
 description: Detect drift between the cached/committed schema and the live database for one table.
 tags: [diagnostics, schema, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -11,8 +11,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

@@ -312,6 +312,15 @@ pin 住的——一個帶著舊 catalog 的 Skill 對著沒有這個指令的 db
 一個指令路徑——unit 版只豁免 `command` 欄位，integration 版改比對 `"password":` 這個
 JSON key，兩者都沒有為其他欄位放寬。
 
+## DBCLI-PLAT-009 — Skill Author Integration Kit
+
+Issue #159 is implemented without a formal ForgeFlow Story. The shipped
+`assets/integration-kit/` contains a runnable Bun/TypeScript consumer fixture,
+strict public-contract parsing and schema pins, a Task Pack `safety.requires`
+example, and correlation/evidence guidance. Its integration test exercises
+catalog discovery plus successful and unsuccessful Operation Envelope
+preflight against the real CLI. `make verify` passed with 6,744 tests.
+
 ## Lifecycle
 
 ```yaml
@@ -344,8 +353,8 @@ workflow:
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-007-evidence-receipts
-  commit: 20436ad1bc48d57da51cadf5ee4cf1e8cb8d66fb
+  branch: feat/dbcli-plat-009-skill-author-integration-kit
+  commit: 27297aae786b01b22f3ea7f8e603cf8797067afd
   dirty_worktree: false
   story_owned_paths:
     - .cursor/rules/dbcli.mdc
@@ -356,41 +365,22 @@ baseline:
     - assets/SKILL.md
     - assets/SKILL.zh-TW.md
     - assets/reference.md
+    - assets/integration-kit/
+    - docs/specs/2026-09-04-agent-integration-contract-v1.md
     - docs/user/en/
     - docs/user/zh-TW/
     - plugins/dbcli-agent/skills/dbcli/
-    - resources/lang/en/messages.json
-    - resources/lang/zh-TW/messages.json
     - skills/dbcli/
-    - src/cli-runtime.ts
-    - src/cli.ts
-    - src/commands/capabilities.ts
-    - src/core/capabilities/registry.ts
-    - src/core/capabilities/schema.ts
-    - src/core/correlation-id.ts
-    - src/core/operation-envelope.ts
-    - src/core/public.ts
-    - src/program-root.ts
-    - src/utils/agent-output.ts
-    - src/utils/redaction.ts
-    - specs/stories/DBCLI-PLAT-005-agent-json-mode/
-    - specs/stories/DBCLI-PLAT-006-correlation-id/
     - specs/handoff.md
-    - tests/contract/capability-contract.test.ts
-    - tests/integration/capabilities-command.test.ts
-    - tests/integration/lazy-entry-path.test.ts
-    - tests/unit/core-public.test.ts
-    - tests/unit/core/operation-envelope.test.ts
-    - tests/unit/core/correlation-id.test.ts
-    - tests/unit/core/audit/integration-helper.test.ts
-    - tests/unit/i18n/root-help-messages.test.ts
+    - tests/integration/skill-author-integration-kit.test.ts
   known_unrelated_paths: []
 
 verification:
   last_command: make verify
   result: pass
   detail: >-
-    DBCLI-PLAT-007 make verify passed with 6734 tests across 568 files and 0
-    failures. Static gates, integration services, performance checks, build,
-    ForgeFlow checks, and git diff --check passed. release:check was not run.
+    DBCLI-PLAT-009 issue implementation make verify passed with 6744 tests
+    across 570 files and 0 failures. Static gates, integration services,
+    performance checks, build, ForgeFlow checks, and git diff --check passed.
+    release:check was not run.
 ```

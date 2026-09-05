@@ -299,6 +299,10 @@ dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json
 ```
 
+套件內的 `assets/integration-kit/` 提供可直接複製的 Bun/TypeScript consumer 與 Task Pack
+fixture。它會 pin 兩個 schema version、strictly parse catalog 與 Operation Envelope，並示範
+exit、correlation 與 evidence 的邊界。
+
 #### Agent output v1
 
 `--agent-output` 是 root option，必須放在 subcommand 前。PLAT-005 支援

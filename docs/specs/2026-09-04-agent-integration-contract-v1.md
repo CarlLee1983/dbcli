@@ -218,13 +218,13 @@ database nobody configured supports the requested capability.
 
 ## Task Pack boundary
 
-Task Packs stay `plan-only`. `safety.requires` remains an unvalidated
-`string[]` (`src/core/agent-tasks/parser.ts:156`). Migrating it to capability
-ids is **not** done here: builtin, shared and local packs in the field carry
-free-form strings, and validating them now would break packs this Story has no
-mandate to change. The migration direction is: accept both forms, warn on a
-non-capability string, then require ids at a future contract version.
-DBCLI-PLAT-008 owns it.
+Task Packs stay `plan-only`. `safety.requires` is a list of capability ids;
+dbcli rejects unknown and legacy command-name requirements while loading a
+pack, then evaluates the requirements against the local engine, permission,
+and agent-mode context before it emits a plan. It is a preflight condition,
+not an execution approval: the generated commands still pass their normal
+blacklist, write, confirmation, and audit gates. DBCLI-PLAT-008 owns this
+validation boundary.
 
 ## Follow-up stories
 

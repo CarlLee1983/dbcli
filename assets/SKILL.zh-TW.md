@@ -121,6 +121,10 @@ dbcli capabilities check --require schema.read,query.read         # gate your wo
 dbcli capabilities check --require data.delete --format json      # machine-readable
 ```
 
+若要取得可直接複製的 Bun/TypeScript consumer（strict parsing、schema pin、exit handling、
+Operation Envelope、Task Pack `safety.requires` 與 correlation/evidence 指引），請從
+`assets/integration-kit/README.md` 開始。
+
 一個 capability 是 dbcli 的單一原子能力（`schema.read`、`data.delete`），不是職務也不是方法。
 `dba.tune-production` 與 `crud.scaffold` 屬於組合 dbcli 的 Role Skill 或 Method Skill——這份
 Tool Skill 只負責安全地操作 dbcli。

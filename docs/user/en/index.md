@@ -336,6 +336,10 @@ dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json
 ```
 
+The packaged `assets/integration-kit/` contains a copyable Bun/TypeScript consumer and
+Task Pack fixture. It pins both schema versions, strictly parses catalog and Operation
+Envelope output, and shows the exit, correlation, and evidence boundary.
+
 #### Agent output v1
 
 `--agent-output` is a root option and must appear before the subcommand. In PLAT-005,

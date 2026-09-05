@@ -1733,6 +1733,10 @@ dbcli --use staging capabilities check --require schema.read --format json
 dbcli --agent-output capabilities check --require schema.read
 ```
 
+For a copyable Bun/TypeScript consumer that strictly parses this contract, pins schema
+versions, handles exit codes and Operation Envelopes, and includes Task Pack and
+correlation/evidence examples, see `assets/integration-kit/README.md`.
+
 #### Agent output v1 (PLAT-005)
 
 `dbcli --agent-output capabilities` and `dbcli --agent-output capabilities check --require <ids>`

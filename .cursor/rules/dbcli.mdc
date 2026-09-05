@@ -152,6 +152,10 @@ dbcli capabilities check --require schema.read,query.read         # gate your wo
 dbcli capabilities check --require data.delete --format json      # machine-readable
 ```
 
+For a copyable Bun/TypeScript consumer with strict parsing, schema pins, exit handling,
+Operation Envelope handling, Task Pack `safety.requires`, and correlation/evidence guidance,
+start with `assets/integration-kit/README.md`.
+
 A capability is one atomic dbcli ability (`schema.read`, `data.delete`), never a job or a
 method. `dba.tune-production` and `crud.scaffold` belong to the Role or Method Skill that
 composes dbcli — this Tool Skill only covers operating dbcli safely.

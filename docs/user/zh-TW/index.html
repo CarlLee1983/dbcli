@@ -270,6 +270,7 @@ dbcli password prod --password "$NEW" --skip-test --format json</code></pre>
             <p><code>dbcli capabilities</code> 用一個有版本、可解析的形狀回答「這個工具能做什麼」，讓外部 Skill 在動工之前就能決定。<code>dbcli capabilities check --require &lt;ids&gt;</code> 接著依本機設定回答「這裡有沒有」。兩者都不會建立資料庫連線。</p>
             <pre><code>dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json</code></pre>
+            <p>套件內的 <code>assets/integration-kit/</code> 提供可直接複製的 Bun/TypeScript consumer 與 Task Pack fixture。它會 pin 兩個 schema version、strictly parse catalog 與 Operation Envelope，並示範 exit、correlation 與 evidence 的邊界。</p>
             <h4 class="mt-8 font-bold text-text-main">Agent output v1</h4>
             <p><code>--agent-output</code> 是 root option，必須放在 subcommand 前。PLAT-005 支援 <code>dbcli --agent-output capabilities</code> 與 <code>dbcli --agent-output capabilities check --require &lt;ids&gt;</code>；兩者都會在 stdout 輸出一份 compact UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：不是 evidence，也不會建立 timestamp。</p>
             <p>可在 subcommand 前使用可選 root option <code>--correlation-id &lt;id&gt;</code>，把一次 invocation 關聯到 Story、incident、change request、migration 或 backfill。ID 限 1&ndash;160 個 ASCII 英數字、點、底線、冒號或連字號；不可放憑證、SQL、個人資料或自由文字標籤。已支援且非 static 的回應會在 <code>context.correlationId</code> 顯示 ID，既有 audit entry 會在 <code>metadata.correlation_id</code> 記錄它；command summary 會遮蔽它。Static <code>capabilities</code> 仍保持 <code>context: null</code>。此 option 不會建立 evidence，也不會改動 receipt。</p>

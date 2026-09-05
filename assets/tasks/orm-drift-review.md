@@ -2,7 +2,7 @@
 name: orm-drift-review
 description: Compare an ORM schema definition (Prisma / DDL / normalized JSON) against the live schema cache and review drift before any corrective migration.
 tags: [diagnostics, schema, orm, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   orm_path:
     type: string
@@ -11,8 +11,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

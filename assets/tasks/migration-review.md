@@ -2,7 +2,7 @@
 name: migration-review
 description: Capture pre-change schema evidence and preview a migration's DDL before it is applied.
 tags: [migration, schema, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -15,8 +15,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

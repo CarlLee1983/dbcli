@@ -2,7 +2,7 @@
 name: slow-endpoint-investigation
 description: Connect proxy, explain and missing-index evidence to investigate a slow endpoint's query.
 tags: [diagnostics, performance, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   query:
     type: string
@@ -15,7 +15,7 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
+    - blacklist.manage
 steps:
   - type: command
     command: blacklist list

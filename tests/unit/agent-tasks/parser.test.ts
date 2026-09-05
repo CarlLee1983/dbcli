@@ -11,7 +11,7 @@ describe('parseAgentTask — happy path', () => {
         'name: diagnose-slow-query',
         'description: Diagnose slow query.',
         'tags: [diagnostics, performance]',
-        'engines: [postgres, mysql]',
+        'engines: [postgresql, mysql]',
         'params:',
         '  query:',
         '    type: string',
@@ -19,7 +19,7 @@ describe('parseAgentTask — happy path', () => {
         '    description: SQL or fingerprint.',
         'safety:',
         '  mode: plan-only',
-        '  requires: [blacklist-list]',
+        '  requires: [blacklist.manage]',
         'steps:',
         '  - type: command',
         '    command: blacklist list',
@@ -37,7 +37,7 @@ describe('parseAgentTask — happy path', () => {
     expect(out.name).toBe('diagnose-slow-query')
     expect(out.description).toBe('Diagnose slow query.')
     expect(out.tags).toEqual(['diagnostics', 'performance'])
-    expect(out.engines).toEqual(['postgres', 'mysql'])
+    expect(out.engines).toEqual(['postgresql', 'mysql'])
     expect(out.params).toEqual([
       {
         name: 'query',
@@ -46,7 +46,7 @@ describe('parseAgentTask — happy path', () => {
         description: 'SQL or fingerprint.',
       },
     ])
-    expect(out.safety).toEqual({ mode: 'plan-only', requires: ['blacklist-list'] })
+    expect(out.safety).toEqual({ mode: 'plan-only', requires: ['blacklist.manage'] })
     expect(out.steps).toEqual([
       {
         type: 'command',
@@ -136,6 +136,42 @@ describe('parseAgentTask — failures', () => {
         ].join('\n')
       )
     ).toThrow(/plan-only/)
+  })
+
+  test('rejects unknown capability requirements and gives legacy packs a migration', () => {
+    const base = [
+      'name: t',
+      'safety:',
+      '  mode: plan-only',
+      '  requires: [blacklist-list]',
+      'steps:',
+      '  - type: command',
+      '    command: blacklist list',
+    ].join('\n')
+    expect(() => must(base)).toThrow(/replace it with 'blacklist.manage'/)
+    expect(() => must(base.replace('blacklist-list', 'not.a.capability'))).toThrow(
+      /unknown capability/
+    )
+  })
+
+  test('normalizes the legacy postgres engine spelling to postgresql', () => {
+    const task = parseAgentTask({
+      name: 't',
+      file: 't.md',
+      source: 'shared',
+      text: wrap(
+        [
+          'name: t',
+          'engines: [postgres]',
+          'safety:',
+          '  mode: plan-only',
+          'steps:',
+          '  - type: command',
+          '    command: blacklist list',
+        ].join('\n')
+      ),
+    })
+    expect(task.engines).toEqual(['postgresql'])
   })
 
   test('rejects unknown step.type', () => {

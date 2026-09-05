@@ -53,9 +53,9 @@ describe('skill tasks list — filter validation', () => {
     expect(errOut).toContain('local')
   })
 
-  test('a valid --engine is accepted (no error)', async () => {
+  test('the canonical PostgreSQL engine spelling is accepted', async () => {
     await makeRoot().parseAsync(
-      ['node', 'dbcli', 'skill', 'tasks', 'list', '--engine', 'postgres'],
+      ['node', 'dbcli', 'skill', 'tasks', 'list', '--engine', 'postgresql'],
       {
         from: 'node',
       }

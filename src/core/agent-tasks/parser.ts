@@ -1,4 +1,6 @@
 import { parseYamlMini } from '@/core/saved-queries/yaml-mini'
+import { DATABASE_SYSTEMS } from '@/adapters/types'
+import { findCapability } from '@/core/capabilities'
 import {
   AgentTaskError,
   type AgentTask,
@@ -10,7 +12,7 @@ import {
   type AgentTaskStep,
 } from './types'
 
-const VALID_ENGINES: AgentTaskEngine[] = ['postgres', 'mysql', 'mongodb', 'redis', 'elasticsearch']
+const VALID_ENGINES: readonly AgentTaskEngine[] = DATABASE_SYSTEMS
 const VALID_PARAM_TYPES: AgentTaskParamType[] = ['string', 'number', 'boolean']
 const VALID_RISKS: AgentTaskRisk[] = ['readonly', 'dry-run', 'write', 'unknown']
 
@@ -94,10 +96,11 @@ function parseEngines(value: unknown, input: ParseInput): AgentTaskEngine[] | un
   const list = Array.isArray(value) ? value : [value]
   const cleaned: AgentTaskEngine[] = []
   for (const v of list) {
-    const s = String(v).toLowerCase()
+    const supplied = String(v).toLowerCase()
+    const s = supplied === 'postgres' ? 'postgresql' : supplied
     if (!VALID_ENGINES.includes(s as AgentTaskEngine)) {
       throw new AgentTaskError(
-        `Unknown engine '${s}' in task '${input.name}' (allowed: ${VALID_ENGINES.join(', ')})`,
+        `Unknown engine '${supplied}' in task '${input.name}' (allowed: ${VALID_ENGINES.join(', ')})`,
         'PARSE_ERROR',
         input.file
       )
@@ -153,8 +156,42 @@ function parseSafety(value: unknown, input: ParseInput): AgentTask['safety'] {
       input.file
     )
   }
-  const requires = Array.isArray(obj.requires) ? obj.requires.map(String) : undefined
-  return requires ? { mode: 'plan-only', requires } : { mode: 'plan-only' }
+  if (obj.requires === undefined) return { mode: 'plan-only' }
+  if (
+    !Array.isArray(obj.requires) ||
+    obj.requires.some((requirement) => typeof requirement !== 'string')
+  ) {
+    throw new AgentTaskError(
+      `Task '${input.name}' has invalid safety.requires (expected capability ids)`,
+      'PARSE_ERROR',
+      input.file
+    )
+  }
+  const requires = obj.requires.map((requirement) => requirement.trim())
+  for (const requirement of requires) {
+    const replacement = LEGACY_REQUIREMENTS[requirement]
+    if (replacement) {
+      throw new AgentTaskError(
+        `Task '${input.name}' uses legacy safety.requires '${requirement}'; replace it with '${replacement}'`,
+        'PARSE_ERROR',
+        input.file
+      )
+    }
+    if (!findCapability(requirement)) {
+      throw new AgentTaskError(
+        `Task '${input.name}' requires unknown capability '${requirement}'`,
+        'PARSE_ERROR',
+        input.file
+      )
+    }
+  }
+  return { mode: 'plan-only', requires }
+}
+
+/** Legacy command names are rejected with their one-to-one capability migration. */
+const LEGACY_REQUIREMENTS: Record<string, string> = {
+  'blacklist-list': 'blacklist.manage',
+  'schema-check': 'schema.read',
 }
 
 function parseSteps(value: unknown, input: ParseInput): AgentTaskStep[] {

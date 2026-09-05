@@ -2,12 +2,12 @@
 name: design-review
 description: Validate and render a version-controlled SQL database design before comparing it with the local schema cache and preparing review-only proposals.
 tags: [design, schema, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

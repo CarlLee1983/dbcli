@@ -2,7 +2,7 @@
 name: safe-backfill-verify
 description: Plan a safe backfill/UPDATE and a read-back assertion that verifies the write achieved its goal.
 tags: [data, write, safety, verification]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   table:
     type: string
@@ -23,8 +23,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

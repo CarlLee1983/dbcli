@@ -13,7 +13,7 @@ describe('builtin pack: design-review', () => {
     const plan = planAgentTask({ task: entry.task, params: {} })
 
     expect(plan.mode).toBe('plan-only')
-    expect(plan.requires).toEqual(['blacklist-list', 'schema-check'])
+    expect(plan.requires).toEqual(['blacklist.manage', 'schema.read'])
     expect(plan.steps.map((step) => step.resolvedCommand)).toEqual([
       'blacklist list',
       'design validate --format json',

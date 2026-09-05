@@ -2,7 +2,7 @@
 name: diagnose-slow-query
 description: Diagnose slow query causes using safe read-only dbcli steps.
 tags: [diagnostics, performance, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   query:
     type: string
@@ -11,8 +11,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

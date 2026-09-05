@@ -1,9 +1,20 @@
 import { describe, test, expect, spyOn, beforeEach, afterAll, mock } from 'bun:test'
 import { Command } from 'commander'
+import { join } from 'node:path'
 import { registerSkillTasksCommand } from '@/commands/skill-tasks'
 
 function makeRoot(): Command {
   const program = new Command().name('dbcli').exitOverride()
+  program.option(
+    '--config <path>',
+    'config path',
+    join(import.meta.dir, '..', '..', 'fixtures', 'agent-tasks', 'capability-context.json')
+  )
+  program.setOptionValueWithSource(
+    'config',
+    join(import.meta.dir, '..', '..', 'fixtures', 'agent-tasks', 'capability-context.json'),
+    'cli'
+  )
   const skill = program.command('skill').description('skill')
   registerSkillTasksCommand(skill)
   return program
@@ -67,7 +78,7 @@ describe('builtin pack: orm-drift-review', () => {
       }>
     }
     expect(plan.mode).toBe('plan-only')
-    expect(plan.requires).toEqual(['blacklist-list', 'schema-check'])
+    expect(plan.requires).toEqual(['blacklist.manage', 'schema.read'])
     expect(plan.steps.map((step) => step.resolvedCommand)).toEqual([
       'blacklist list',
       'schema --format json',

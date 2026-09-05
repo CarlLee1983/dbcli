@@ -2,7 +2,7 @@
 name: pr-database-review
 description: Review a PR's changed persistence paths, queries and migrations for database risk before merge.
 tags: [review, safety, readonly]
-engines: [postgres, mysql]
+engines: [postgresql, mysql]
 params:
   query:
     type: string
@@ -11,8 +11,8 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist-list
-    - schema-check
+    - blacklist.manage
+    - schema.read
 steps:
   - type: command
     command: blacklist list

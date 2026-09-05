@@ -28,6 +28,7 @@ const legacyBaseline = (await Bun.file(
     args: string[]
     lang?: string
     normalizeGeneratedAt?: boolean
+    normalizeVersion?: boolean
     exitCode: number
     stdoutSha256: string
     stderrSha256: string
@@ -140,9 +141,11 @@ describe('lazy entry path', () => {
         timeout: 60_000,
         env,
       })
-      const stdout = fixture.normalizeGeneratedAt
+      let stdout = fixture.normalizeGeneratedAt
         ? result.stdout.replace(/"generatedAt": "[^"]+"/, '"generatedAt": "<generatedAt>"')
         : result.stdout
+      if (fixture.normalizeVersion)
+        stdout = stdout.replace(/^\d+\.\d+\.\d+(?:-[^\n]+)?$/m, '<version>')
 
       expect(result.status).toBe(fixture.exitCode)
       expect(sha256(stdout)).toBe(fixture.stdoutSha256)

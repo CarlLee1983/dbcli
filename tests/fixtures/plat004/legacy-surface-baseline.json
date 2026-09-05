@@ -33,8 +33,9 @@
     {
       "name": "standalone version",
       "args": ["--version"],
+      "normalizeVersion": true,
       "exitCode": 0,
-      "stdoutSha256": "318630f32c0dac5c715d91aecff9c07b2ce055b792ccb015a815cb013ea80fc6",
+      "stdoutSha256": "c2beed3e89f1ef2a1a5747d9fa93c0d9d0026f7e15cc501e401fe82416112f48",
       "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {

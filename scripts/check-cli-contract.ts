@@ -22,7 +22,7 @@ type Example = {
 }
 
 const REFERENCE_PATH = 'assets/reference.md'
-const SKILL_PATHS = ['assets/SKILL.md', 'assets/SKILL.zh-TW.md'] as const
+const SKILL_PATHS = ['assets/SKILL.md'] as const
 
 // These are options belonging to third-party tools or prose wildcards, not
 // dbcli. They are intentionally explicit so a newly documented dbcli flag

@@ -1190,7 +1190,7 @@ QueryLens focuses on the proxy events it can read; do not rely on it as evidence
 | :--- | :--- |
 | `shell` | Launches an interactive REPL with auto-completion and SQL highlighting. |
 | `migrate <action>` | **DDL Engine**: CREATE/ALTER/DROP tables and indexes. A destructive action asks for confirmation on stderr unless `--force`, and reports `status: "cancelled"` if declined. |
-| `skill --install` | Installs `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
+| `skill --install` | Installs the canonical English `SKILL.md` instructions for AI agents (Claude, Gemini, Antigravity, etc.). |
 | `skill context` | Serializes cached schema, connections, and saved queries into LLM-optimized XML/JSON/Markdown for AI prompt injection. |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | Validates, prints, searches, checks drift, stdout-migrates, or safely validates an explicit untrusted query draft against locally cached, blacklist-filtered semantic evidence. Offline and read-only. |
 | `contract validate` / `contract context` / `contract search` / `contract drift` | Validates, prints, searches, or checks the optional reviewed `dbcli.contracts.json` against semantic evidence. Offline and read-only; ordinary agent context includes approved contracts only. |

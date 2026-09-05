@@ -4,9 +4,15 @@
  */
 
 import { test, expect, describe, spyOn, beforeEach, afterAll, mock } from 'bun:test'
+import { Command } from 'commander'
 import { join } from 'path'
 import { unlinkSync, existsSync } from 'fs'
-import { skillCommand, getInstallPath, SUPPORTED_PLATFORMS } from '../../../src/commands/skill'
+import {
+  skillCommand,
+  getInstallPath,
+  registerSkillCommand,
+  SUPPORTED_PLATFORMS,
+} from '../../../src/commands/skill'
 
 describe('skillCommand logic', () => {
   let logOutput = ''
@@ -67,23 +73,13 @@ describe('skillCommand logic', () => {
     expect(errorOutput).toContain('Unknown platform')
   })
 
-  test('default --lang en prints EN SKILL to stdout', async () => {
-    await skillCommand({} as any, { lang: 'en' })
-    expect(logOutput).toContain('# dbcli')
-    expect(logOutput).toContain('Database CLI for AI agents')
-  })
+  test('installs only the canonical English skill', () => {
+    const program = new Command()
+    registerSkillCommand(program)
 
-  test('writes ZH SKILL when --lang zh-TW with --output', async () => {
-    const testFile = join(process.cwd(), 'test-skill-zh.md')
-    if (existsSync(testFile)) unlinkSync(testFile)
-    try {
-      await skillCommand({} as any, { output: testFile, lang: 'zh-TW' })
-      expect(existsSync(testFile)).toBe(true)
-      const content = await Bun.file(testFile).text()
-      expect(content).toMatch(/Audit Log 使用|稽核日誌|繁體中文/)
-    } finally {
-      if (existsSync(testFile)) unlinkSync(testFile)
-    }
+    expect(
+      program.commands.find((command) => command.name() === 'skill')?.options
+    ).not.toContainEqual(expect.objectContaining({ long: '--lang' }))
   })
 })
 

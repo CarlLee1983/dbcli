@@ -173,7 +173,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Documentation & skill drift guards
         run: |
-          bun run skill:check
           bun run platform:check
           bun run plugin:check
           bun run manifest:check

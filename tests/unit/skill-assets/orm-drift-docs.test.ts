@@ -20,31 +20,25 @@ function sectionBetween(document: string, start: string, end: string): string {
 }
 
 describe('ORM drift documentation contract', () => {
-  test('canonical English and Traditional Chinese skills expose the same commands and workflow', async () => {
-    const [english, traditionalChinese] = await Promise.all([
-      read('assets/SKILL.md'),
-      read('assets/SKILL.zh-TW.md'),
-    ])
+  test('canonical skill exposes ORM drift commands and workflow', async () => {
+    const english = await read('assets/SKILL.md')
 
     for (const command of commandStrings) {
       expect(english).toContain(command)
-      expect(traditionalChinese).toContain(command)
     }
 
-    for (const skill of [english, traditionalChinese]) {
-      expect(skill).toContain('`orm-drift-review`')
-      expect(skill).toContain('`--against-orm <path>`')
-      expect(skill).toContain('`--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize`')
-      expect(skill).toContain('`--ignore <globs>`')
-      expect(skill).toContain('`--format json\\|table\\|markdown`')
-      expect(skill).toContain('`migration-review`')
-      expect(skill).toContain('drizzle/meta/<NNNN>_snapshot.json')
-      expect(skill).toContain('drizzle-kit generate')
-      expect(skill).toContain('`.ts`')
-      expect(skill).toContain('TypeORM/Sequelize')
-      expect(skill).toContain('schema:log')
-      expect(skill).toContain('schema-only')
-    }
+    expect(english).toContain('`orm-drift-review`')
+    expect(english).toContain('`--against-orm <path>`')
+    expect(english).toContain('`--orm-format prisma\\|ddl\\|json\\|drizzle\\|typeorm\\|sequelize`')
+    expect(english).toContain('`--ignore <globs>`')
+    expect(english).toContain('`--format json\\|table\\|markdown`')
+    expect(english).toContain('`migration-review`')
+    expect(english).toContain('drizzle/meta/<NNNN>_snapshot.json')
+    expect(english).toContain('drizzle-kit generate')
+    expect(english).toContain('`.ts`')
+    expect(english).toContain('TypeORM/Sequelize')
+    expect(english).toContain('schema:log')
+    expect(english).toContain('schema-only')
   })
 
   test('exhaustive reference pins input, identity, comparison, proposal, and failure semantics', async () => {

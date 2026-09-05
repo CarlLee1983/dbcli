@@ -62,11 +62,8 @@ describe('developer workflow skill guidance', () => {
     expect(skill).toContain('schema confirmation or the normal query/write safety gates')
   })
 
-  test('canonical skills define per-request intent confirmation without weakening safety gates', async () => {
-    const [english, chinese] = await Promise.all([
-      read('assets/SKILL.md'),
-      read('assets/SKILL.zh-TW.md'),
-    ])
+  test('canonical skill defines per-request intent confirmation without weakening safety gates', async () => {
+    const english = await read('assets/SKILL.md')
 
     expect(english).toContain('**Intent confirmation:**')
     expect(english).toContain('`auto`, `confirm`, and `guided`')
@@ -74,13 +71,6 @@ describe('developer workflow skill guidance', () => {
     expect(english).toContain('Do not ask the user a meta-question')
     expect(english).toContain('one compact batch of\n  questions')
     expect(english).toContain('This never bypasses blacklist, schema,')
-
-    expect(chinese).toContain('**意圖確認：**')
-    expect(chinese).toContain('`auto`、`confirm` 與 `guided`')
-    expect(chinese).toContain('而不是 dbcli\n旗標或持久化設定')
-    expect(chinese).toContain('不要先用後設問題詢問使用者')
-    expect(chinese).toContain('一小批精簡問題確認')
-    expect(chinese).toContain('這絕不繞過\nblacklist、schema')
   })
 
   test('user documentation explains intent confirmation in every language and format', async () => {
@@ -106,25 +96,5 @@ describe('developer workflow skill guidance', () => {
       expect(doc).toContain('guided')
       expect(doc).toContain('dry-run')
     }
-  })
-
-  test('Traditional Chinese canonical skill mirrors developer workflow guidance', async () => {
-    const skill = await read('assets/SKILL.zh-TW.md')
-
-    expect(skill).toContain('## 開發者工作流')
-    expect(skill).toContain('當資料庫影響隱含在開發任務中時使用這些流程')
-    expect(skill).toContain('DB-backed 功能')
-    expect(skill).toContain('應用程式資料錯誤')
-    expect(skill).toContain('ORM 或 migration')
-    expect(skill).toContain('PR 資料庫風險審查')
-    expect(skill).toContain('慢 endpoint 或查詢')
-    expect(skill).toContain('安全資料回填')
-    expect(skill).toContain('環境設定驗證')
-    expect(skill).toContain('不要列印 credentials、複製的連線字串或 blacklisted 值')
-    expect(skill).toContain('**業務語言探索：**')
-    expect(skill).toContain('dbcli skill context --context-version 2 --format json')
-    expect(skill).toContain('dbcli semantic search <terms> --format json')
-    expect(skill).toContain('若沒有 semantic 區塊，或搜尋沒有結果')
-    expect(skill).toContain('除非人類明確要求，絕不可建立、更新或 migrate 此檔案')
   })
 })

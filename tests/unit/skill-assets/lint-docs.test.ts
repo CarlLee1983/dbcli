@@ -16,17 +16,12 @@ const RULES = [
 
 describe('lint documentation', () => {
   test('canonical skill assets route slow-query work through lint', async () => {
-    const [english, chinese] = await Promise.all([
-      read('assets/SKILL.md'),
-      read('assets/SKILL.zh-TW.md'),
-    ])
+    const english = await read('assets/SKILL.md')
 
-    for (const skill of [english, chinese]) {
-      expect(skill).toContain('| `lint` | n/a |')
-      expect(skill).toContain('dbcli lint "<SQL>" --format json')
-      expect(skill).toContain('→ `lint "<SQL>"` → `guide missing-index-for "<SQL>"`')
-      expect(skill).toContain('→ `lint "<query>"` → `guide missing-index-for "<query>"`')
-    }
+    expect(english).toContain('| `lint` | n/a |')
+    expect(english).toContain('dbcli lint "<SQL>" --format json')
+    expect(english).toContain('→ `lint "<SQL>"` → `guide missing-index-for "<SQL>"`')
+    expect(english).toContain('→ `lint "<query>"` → `guide missing-index-for "<query>"`')
   })
 
   test('reference documents the complete offline lint contract', async () => {

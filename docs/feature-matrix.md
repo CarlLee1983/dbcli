@@ -60,7 +60,7 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The release gate is 9 shell steps encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`skill:check`, `platform:check`, `plugin:check`, `docs:check`, `contract:check`, `plan:check`, plus the `reference.md` command-coverage test in `bun test`) run in CI on every push/PR via the `docs-parity` job; the full 9-step gate must pass locally via `bun run release:check` before tagging a release:
+The release gate is 9 shell steps encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`platform:check`, `plugin:check`, `docs:check`, `contract:check`, `plan:check`, plus the `reference.md` command-coverage test in `bun test`) run in CI on every push/PR via the `docs-parity` job; the full 9-step gate must pass locally via `bun run release:check` before tagging a release:
 
 ```bash
 bun audit                                                              # 1/9
@@ -76,7 +76,7 @@ bash scripts/release-check.sh   # 9/9 doc-presence (audit row + CHANGELOG versio
 
 - Step 3/9 (`bun run agent-core:check`) rejects database-specific terms and dependencies outside the stable agent-core boundary.
 - Step 5/9 (`bun run lint`) enforces `--max-warnings=0` — any new ESLint warning blocks release.
-- Step 8/9 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install` (including `SKILL.zh-TW.md` since v1.20.0).
+- Step 8/9 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install`.
 - Step 9/9 (doc-presence) is a shell-grep gate: confirms `docs/feature-matrix.md` has the `audit` row and `CHANGELOG.md` has a `## [<package.json version>]` heading. Catches doc-vs-version drift before tagging.
 - Benchmark (`bun run test:perf`) is a blocking CI gate across the supported OS/Bun matrix; each budget is based on runner measurements and prints its observed value.
 - Step 6/9 (`bun test`) runs with `SKIP_INTEGRATION_TESTS=true` in the matrix job, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.

@@ -37,7 +37,6 @@ step '8/9 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
 
 step '9/9 doc & manifest presence'
-bun run skill:check
 bun run platform:check
 bun run plugin:check
 bun run manifest:check

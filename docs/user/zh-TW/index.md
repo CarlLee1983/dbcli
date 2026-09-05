@@ -1057,7 +1057,7 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 | :--- | :--- |
 | `shell` | 啟動互動式 REPL，支援 Tab 自動補全與 SQL 高亮。 |
 | `migrate <action>` | **DDL 引擎**：建立/修改/刪除資料表與索引。具破壞性的動作若未加 `--force` 會在 stderr 詢問確認，拒絕時回報 `status: "cancelled"`。 |
-| `skill --install` | 為 AI 代理安裝 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
+| `skill --install` | 為 AI 代理安裝唯一、英文的 `SKILL.md` 指引（Claude, Gemini, Antigravity 等）。 |
 | `skill context` | 將快取的 schema、連線與儲存的查詢元資料序列化為 LLM 優化的 XML/JSON/Markdown 格式，以供 AI prompt 注入使用。 |
 | `semantic validate` / `semantic context` / `semantic search` / `semantic drift` / `semantic migrate` / `semantic draft validate` | 驗證、輸出、搜尋、檢查漂移、僅輸出遷移後的可版控業務語彙，或安全驗證明確提交的不受信任 query draft；只對照本機快取、已經 blacklist 過濾的 semantic 證據。離線且唯讀。 |
 | `contract validate` / `contract context` / `contract search` / `contract drift` | 驗證、輸出、搜尋或檢查可選的已審閱 `dbcli.contracts.json` 是否仍符合 semantic 證據。離線且唯讀；普通 agent context 只會納入 approved 契約。 |

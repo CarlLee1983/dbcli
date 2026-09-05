@@ -5,6 +5,20 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - 2026-09-06
+
+### Changed
+
+- **AI Skill now has one canonical English source.** `dbcli skill`, `--output`, and every
+  supported platform install emit `assets/SKILL.md`; the user-facing documentation remains
+  bilingual.
+
+### Removed
+
+- **BREAKING:** Removed `dbcli skill --lang <en|zh-TW>`, `assets/SKILL.zh-TW.md`, and the
+  bilingual Skill parity gate. Existing Traditional-Chinese installs are reported as outdated
+  and become the canonical English Skill when reinstalled.
+
 ## [8.0.0] - 2026-09-05
 
 ForgeFlow Story DBCLI-001 到 DBCLI-012 全數在 `v7.0.1`（`224ee59d`）之後交付；該 tag

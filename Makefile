@@ -17,7 +17,6 @@ verify:
 	./dist/cli.mjs --help
 	./dist/cli.mjs --version
 	bun run test:perf
-	bun run skill:check
 	bun run platform:check
 	bun run plugin:check
 	bun run manifest:check

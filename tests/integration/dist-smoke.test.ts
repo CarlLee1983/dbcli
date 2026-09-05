@@ -70,16 +70,6 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
     expect(text).toMatch(/name: dbcli/)
   })
 
-  test('skill --output --lang zh-TW writes packaged ZH SKILL', () => {
-    const out = join(workdir, 'SKILL.zh-TW.md')
-    const r = run(['skill', '--output', out, '--lang', 'zh-TW'], workdir)
-    expect(r.status).toBe(0)
-    const text = readFileSync(out, 'utf8')
-    expect(text).toMatch(/^---/) // YAML frontmatter delimiter
-    expect(text).toMatch(/name: dbcli/) // same frontmatter contract as EN
-    expect(text).toMatch(/Audit Log 使用|稽核日誌|繁體中文/) // ZH content marker
-  })
-
   test('queries list --format json finds builtin snippets via packaged assets', () => {
     const r = run(['queries', 'list', '--format', 'json'], workdir)
     expect(r.status).toBe(0)

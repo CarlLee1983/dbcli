@@ -339,6 +339,8 @@ dbcli capabilities check --require schema.read,query.read --format json
 The packaged `assets/integration-kit/` contains a copyable Bun/TypeScript consumer and
 Task Pack fixture. It pins both schema versions, strictly parses catalog and Operation
 Envelope output, and shows the exit, correlation, and evidence boundary.
+Its CRUD, CQRS, and DBA examples remain external consumer requirements; dbcli does not
+implement or approve those workflows.
 
 #### Agent output v1
 

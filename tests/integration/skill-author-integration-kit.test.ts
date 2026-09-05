@@ -8,6 +8,7 @@ import {
   preflight,
   type RunDbcli,
 } from '../../assets/integration-kit/skill-author-consumer'
+import { EXTERNAL_CONSUMERS } from '../../assets/integration-kit/external-consumers'
 import { parseAgentTask } from '@/core/agent-tasks/parser'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
@@ -101,5 +102,46 @@ describe('Skill Author Integration Kit', () => {
       text,
     })
     expect(task.safety).toEqual({ mode: 'plan-only', requires: ['schema.read', 'query.read'] })
+  })
+
+  test('keeps CRUD, CQRS, and DBA requirements in external consumers', async () => {
+    const { cwd, config } = await workspace('admin')
+    try {
+      const runner = run(cwd)
+      const catalog = await discover(runner)
+      for (const required of Object.values(EXTERNAL_CONSUMERS)) {
+        expect(
+          required.every((id) => catalog.capabilities.some((capability) => capability.id === id))
+        ).toBe(true)
+        const envelope = await preflight(
+          (args) => runner(['--config', config, ...args]),
+          required,
+          'PLAT-010'
+        )
+        expect(envelope.ok).toBe(true)
+        expect(envelope.operation).toBe('capabilities.check')
+        expect(
+          envelope.data && 'required' in envelope.data ? envelope.data.required : null
+        ).toEqual(required)
+      }
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
+  test('lets a CRUD consumer receive a completed permission refusal', async () => {
+    const { cwd, config } = await workspace('query-only')
+    try {
+      const runner = run(cwd)
+      const envelope = await preflight(
+        (args) => runner(['--config', config, ...args]),
+        EXTERNAL_CONSUMERS.crud,
+        'PLAT-010'
+      )
+      expect(envelope.ok).toBe(false)
+      expect(envelope.error?.code).toBe('CAPABILITY_REQUIREMENTS_UNMET')
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
   })
 })

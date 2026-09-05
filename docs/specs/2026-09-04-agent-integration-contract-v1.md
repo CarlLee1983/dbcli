@@ -1,6 +1,7 @@
 # DBCLI Agent Integration Contract v1 — design record
 
-**Status**: accepted for the capability slice; the remaining stories are planned, not built.
+**Status**: accepted and delivered. DBCLI-PLAT-010 keeps CRUD, CQRS, and DBA
+consumer requirements outside dbcli core as public-contract fixtures.
 **Decision record**: [ADR-0022](../adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md)
 
 ## The problem
@@ -236,6 +237,6 @@ validation boundary.
 | DBCLI-PLAT-007 | Bounded evidence receipts for `inspect`, `report`, `schema`, `plan`, `lint`, `explain`, `impact`. Never stores raw rows, credentials, connection strings, unmasked SQL, raw error bodies or unbounded stdout/stderr. |
 | DBCLI-PLAT-008 | Task Pack `safety.requires` validated against capability ids, and the `postgres`/`postgresql` reconciliation. |
 | DBCLI-PLAT-009 | Skill author integration kit. |
-| DBCLI-PLAT-010 | External consumer contract tests: a CRUD Skill, a CQRS Skill and a DBA Operator Skill as out-of-repo consumers. Their behaviour is never implemented inside dbcli. |
+| DBCLI-PLAT-010 | Delivered: external CRUD, CQRS, and DBA consumer contract fixtures. Their behaviour is never implemented inside dbcli. |
 | DBCLI-PLAT-011 | Extend `ENGINE_CAPABILITIES` to the sixteen commands v1 could not describe. |
 | DBCLI-PLAT-012 | Move schema-cache persistence out from behind the agent-mode *identity* guard, so `schema` stops being a configuration writer. |

@@ -31,6 +31,10 @@ version other than the exported constants.
 Use [`task-pack.md`](./task-pack.md) as the smallest `safety.requires` example.
 It remains plan-only; do not put a CRUD, CQRS, or DBA workflow into dbcli.
 
+[`external-consumers.ts`](./external-consumers.ts) supplies the requirements for
+the three contract-test consumers: CRUD, CQRS, and DBA. They use this kit's
+public contract only; dbcli neither implements nor approves their workflows.
+
 The optional correlation ID is returned in `context.correlationId` for
 non-static agent output and is recorded as audit metadata. It is not evidence:
 for a supported command, request an evidence receipt with

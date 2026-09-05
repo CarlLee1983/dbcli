@@ -5,6 +5,7 @@ import { AuditLogger, type AuditWriteResult } from './logger'
 import { SessionIdService } from './session-id'
 import { resolveConfigStoragePath } from '../config-binding'
 import { getGlobalConnectionName } from '../config'
+import { getGlobalCorrelationId } from '../correlation-id'
 import type { DbcliConfig } from '../../utils/validation'
 import type { DatabaseSystem } from '../../adapters/types'
 import { getEngineCapability, type SideEffectTier } from '../../adapters/capabilities'
@@ -176,6 +177,9 @@ export async function writeAuditEntryResult(
   outcome: AuditOutcome
 ): Promise<AuditWriteResult> {
   try {
+    const correlationId = getGlobalCorrelationId()
+    const outcomeMetadata = { ...(outcome.metadata ?? {}) }
+    delete outcomeMetadata.correlation_id
     const connectionName =
       (typeof options.connectionName === 'string' && options.connectionName) ||
       (config as { effectiveConnectionName?: string }).effectiveConnectionName ||
@@ -245,10 +249,13 @@ export async function writeAuditEntryResult(
       // entry so audit consumers can distinguish otherwise identical commands
       // across environments without reading endpoint or credential fields.
       metadata: {
-        ...(outcome.metadata ?? {}),
+        ...outcomeMetadata,
         ...(blacklistChecked.length > 0 && { blacklist_checked: blacklistChecked }),
         connection_name: connectionName,
         environment: (config as { effectiveEnvironment?: string }).effectiveEnvironment ?? null,
+        ...(correlationId !== undefined && {
+          correlation_id: correlationId,
+        }),
       },
     }
 

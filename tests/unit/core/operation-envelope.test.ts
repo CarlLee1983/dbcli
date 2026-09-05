@@ -6,6 +6,7 @@ import {
   serializeOperationEnvelope,
   type OperationEnvelope,
 } from '@/core/operation-envelope'
+import { buildCapabilityCatalog } from '@/core/capabilities'
 import type { RecoveryEnvelope } from '@/core/recovery/types'
 
 function successEnvelope(): OperationEnvelope {
@@ -24,6 +25,21 @@ function successEnvelope(): OperationEnvelope {
       required: ['schema.read'],
       results: [{ id: 'schema.read', status: 'available', reason: null }],
     },
+    warnings: [],
+    evidence: [],
+    recovery: null,
+    error: null,
+  }
+}
+
+function catalogSuccessEnvelope(): OperationEnvelope {
+  return {
+    schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
+    ok: true,
+    operation: 'capabilities.list',
+    status: 'succeeded',
+    context: null,
+    data: buildCapabilityCatalog(),
     warnings: [],
     evidence: [],
     recovery: null,
@@ -110,6 +126,28 @@ describe('Operation Envelope v1', () => {
       },
     ]) {
       expect(parseOperationEnvelope(value).ok).toBe(false)
+    }
+  })
+
+  test('accepts only a bounded correlation ID in context', () => {
+    const valid = {
+      ...clone(successEnvelope()),
+      context: { ...successEnvelope().context, correlationId: 'INC-2026.09.05' },
+    }
+    expect(parseOperationEnvelope(valid).ok).toBe(true)
+
+    for (const correlationId of [
+      '../../PLAT006_PATH',
+      'postgresql://plat006:PLAT006_SECRET@db.internal:5432/prod',
+      "SELECT * FROM users WHERE email='plat006@example.com'",
+      'x'.repeat(161),
+    ]) {
+      expect(
+        parseOperationEnvelope({
+          ...clone(successEnvelope()),
+          context: { ...successEnvelope().context, correlationId },
+        }).ok
+      ).toBe(false)
     }
   })
 
@@ -384,6 +422,83 @@ describe('Operation Envelope v1', () => {
     expect(fallback.exceededLimit).toBe(true)
     expect(fallback.envelope.error?.code).toBe('AGENT_OUTPUT_LIMIT_EXCEEDED')
     expect(parseOperationEnvelope(JSON.parse(fallback.output)).ok).toBe(true)
+
+    const catalog = buildCapabilityCatalog()
+    const oversizedList: OperationEnvelope = {
+      ...catalogSuccessEnvelope(),
+      data: {
+        ...catalog,
+        capabilities: Array.from({ length: 256 }, () => catalog.capabilities[0]!),
+      },
+    }
+    const listFallback = serializeOperationEnvelope(oversizedList)
+    expect(listFallback.envelope.operation).toBe('capabilities.list')
+    expect(parseOperationEnvelope(JSON.parse(listFallback.output)).ok).toBe(true)
+  })
+
+  test('accepts capabilities.list success envelope, strictly validates catalog data, and stays well under 64 KiB', () => {
+    const envelope = catalogSuccessEnvelope()
+    const parsed = parseOperationEnvelope(envelope)
+    expect(parsed).toEqual({ ok: true, value: envelope })
+
+    const serialized = serializeOperationEnvelope(envelope)
+    expect(serialized.exceededLimit).toBe(false)
+    expect(serialized.output.endsWith('\n')).toBe(true)
+    expect(new TextEncoder().encode(serialized.output).byteLength).toBeLessThan(
+      MAX_OPERATION_ENVELOPE_BYTES
+    )
+
+    // Invariants for capabilities.list
+    expect(parseOperationEnvelope({ ...clone(envelope), ok: false }).ok).toBe(false)
+    expect(parseOperationEnvelope({ ...clone(envelope), status: 'failed' }).ok).toBe(false)
+    expect(
+      parseOperationEnvelope({ ...clone(envelope), error: { code: 'FAIL', message: 'err' } }).ok
+    ).toBe(false)
+    expect(parseOperationEnvelope({ ...clone(envelope), data: null }).ok).toBe(false)
+    expect(parseOperationEnvelope({ ...clone(envelope), data: successEnvelope().data }).ok).toBe(
+      false
+    )
+    expect(
+      parseOperationEnvelope({ ...clone(envelope), context: successEnvelope().context }).ok
+    ).toBe(false)
+    expect(
+      parseOperationEnvelope({
+        ...clone(envelope),
+        warnings: [{ code: 'WARNING', message: 'not static' }],
+      }).ok
+    ).toBe(false)
+    expect(
+      parseOperationEnvelope({
+        ...clone(envelope),
+        evidence: [{ kind: 'audit', id: 'audit-1' }],
+      }).ok
+    ).toBe(false)
+    expect(
+      parseOperationEnvelope({
+        ...clone(envelope),
+        recovery: {
+          id: 'recovery-1',
+          error: { code: 'FAIL', message: 'err' },
+          recovery: [],
+        },
+      }).ok
+    ).toBe(false)
+
+    const failedList: OperationEnvelope = {
+      schemaVersion: 1,
+      ok: false,
+      operation: 'capabilities.list',
+      status: 'failed',
+      context: null,
+      data: null,
+      warnings: [],
+      evidence: [],
+      recovery: null,
+      error: { code: 'UNSUPPORTED_AGENT_OUTPUT_OPERATION', message: 'err' },
+    }
+    expect(parseOperationEnvelope(failedList).ok).toBe(true)
+    // Failed capabilities.list must have data: null
+    expect(parseOperationEnvelope({ ...clone(failedList), data: envelope.data }).ok).toBe(false)
   })
 
   test('rejects every exact structural leak fixture without output or persistence', () => {
@@ -415,6 +530,41 @@ describe('Operation Envelope v1', () => {
         context: {
           ...successEnvelope().context,
           configPath: '/Users/plat004/private/config.json',
+        },
+      },
+      // PLAT-005 security fixture matrix
+      {
+        ...clone(catalogSuccessEnvelope()),
+        data: {
+          ...buildCapabilityCatalog(),
+          capabilities: [
+            {
+              ...buildCapabilityCatalog().capabilities[0]!,
+              command: 'PLAT005_EXEC_CMD',
+            },
+          ],
+        },
+      },
+      {
+        ...clone(successEnvelope()),
+        context: { ...successEnvelope().context, password: 'PLAT005_PASSWORD_SENTINEL' },
+      },
+      {
+        ...clone(successEnvelope()),
+        context: {
+          ...successEnvelope().context,
+          connectionString: 'postgresql://plat005:PLAT005_SECRET@db.internal:5432/prod',
+        },
+      },
+      {
+        ...clone(successEnvelope()),
+        data: { ...successEnvelope().data, rows: [{ ssn: 'PLAT005_ROW_SENTINEL' }] },
+      },
+      {
+        ...clone(successEnvelope()),
+        data: {
+          ...successEnvelope().data,
+          sql: "SELECT * FROM users WHERE email='plat005@example.com'",
         },
       },
     ]

@@ -6,6 +6,7 @@ const REDACTED_VALUE_FLAGS = new Set([
   '--param',
   '--param-file',
   '--config',
+  '--correlation-id',
   '--use',
   '--password',
   '--token',

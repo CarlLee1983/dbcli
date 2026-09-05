@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { setGlobalCorrelationId } from '@/core/correlation-id'
 import type { DbcliConfig } from '@/utils/validation'
 import { extractTableReferences } from '@/utils/sql-tables'
 
@@ -38,6 +39,7 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
   })
 
   afterEach(async () => {
+    setGlobalCorrelationId(undefined)
     await rm(workDir, { recursive: true, force: true })
   })
 
@@ -144,6 +146,33 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     })
     expect(JSON.stringify(last.metadata)).not.toContain('localhost')
     expect(JSON.stringify(last.metadata)).not.toContain('password')
+  })
+
+  test('persists only the validated invocation correlation ID', async () => {
+    setGlobalCorrelationId('DBCLI-PLAT-006')
+    await writeAuditEntry(
+      makeConfig(true),
+      'query',
+      { config: workDir },
+      { success: true, target: 'users', metadata: { correlation_id: '../../untrusted' } }
+    )
+
+    const raw = await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).text()
+    const last = JSON.parse(raw.trim().split('\n').pop()!)
+    expect(last.metadata.correlation_id).toBe('DBCLI-PLAT-006')
+  })
+
+  test('does not persist an outcome-provided correlation ID without a root option', async () => {
+    await writeAuditEntry(
+      makeConfig(true),
+      'query',
+      { config: workDir },
+      { success: true, target: 'users', metadata: { correlation_id: '../../untrusted' } }
+    )
+
+    const raw = await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).text()
+    const last = JSON.parse(raw.trim().split('\n').pop()!)
+    expect(last.metadata).not.toHaveProperty('correlation_id')
   })
 })
 

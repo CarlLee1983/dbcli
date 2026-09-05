@@ -165,18 +165,24 @@ composes dbcli — this Tool Skill only covers operating dbcli safely.
 - v1 covers the commands the engine capability matrix governs; anything outside it returns
   `unknown` rather than an unaudited engine claim.
 
-**Agent output v1 (PLAT-004):** use `dbcli --agent-output capabilities check --require <ids>`;
-the root flag must precede the subcommand, and no other operation is supported yet. It writes one
-compact UTF-8 JSON envelope plus newline to stdout, with empty stderr. Its ten keys are
-`schemaVersion`, `ok`, `operation`, `status`, `context`, `data`, `warnings`, `evidence`,
-`recovery`, and `error`; `schemaVersion` is `1`, `operation` is `capabilities.check`, and
-`status` is `succeeded` or `failed`. Do not combine it with explicit `--format` or `--for-agent`:
-conflicts, invalid placement/input, and unsupported operations exit `2`; success exits `0`; unmet
-requirements and internal failures exit `1`. The envelope is capped at 64 KiB including newline,
-is not persisted or evidence, and consumers use field names rather than order.
+**Agent output v1 (PLAT-005):** use `dbcli --agent-output capabilities` or
+`dbcli --agent-output capabilities check --require <ids>`; the root flag must precede the
+subcommand, and no other operation is supported yet. It writes one compact UTF-8 JSON envelope plus
+newline to stdout, with empty stderr. Its ten keys are `schemaVersion`, `ok`, `operation`, `status`,
+`context`, `data`, `warnings`, `evidence`, `recovery`, and `error`; `schemaVersion` is `1`,
+`operation` is `capabilities.list` or `capabilities.check`, and `status` is `succeeded` or `failed`.
+Do not combine it with explicit `--format` or `--for-agent`: conflicts, invalid placement/input, and
+unsupported operations exit `2`; success exits `0`; unmet requirements and internal failures exit `1`.
+The envelope is capped at 64 KiB including newline, and consumers use field names rather than order.
+The optional root `--correlation-id <id>` must also precede the subcommand. It accepts 1–160 ASCII
+letters, numbers, `.`, `_`, `:`, or `-`; never put secrets or free-form input in it.
+For supported non-static output it appears as `context.correlationId` and existing audit
+`metadata.correlation_id`; command summaries redact it. Static capabilities stays `context: null`.
+It creates no evidence receipt.
 
 Code/message vocabulary is locale-independent English: errors are
 `INVALID_AGENT_OUTPUT_OPTIONS` (invalid/misplaced/conflicting options),
+`INVALID_CORRELATION_ID` (invalid or missing `--correlation-id` value),
 `UNSUPPORTED_AGENT_OUTPUT_OPERATION` (outside PLAT-004), `INVALID_CAPABILITY_REQUIREMENTS`
 (invalid `--require`), `CAPABILITY_REQUIREMENTS_UNMET` (completed negative result),
 `AGENT_OUTPUT_LIMIT_EXCEEDED` (64 KiB limit), and `AGENT_OUTPUT_INTERNAL_ERROR` (unexpected

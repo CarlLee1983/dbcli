@@ -102,6 +102,7 @@ export {
 } from '@/core/operation-envelope'
 export type {
   OperationEnvelope,
+  OperationEnvelopeOperation,
   OperationEnvelopeCapabilitiesCheckData,
   OperationEnvelopeCapabilityResult,
   OperationEnvelopeContext,

@@ -301,14 +301,20 @@ dbcli capabilities check --require schema.read,query.read --format json
 
 #### Agent output v1
 
-`--agent-output` 是 root option，必須放在 subcommand 前。PLAT-004 只支援
-`dbcli --agent-output capabilities check --require <ids>`；它會在 stdout 輸出一份 compact
-UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：不會持久化、不是 evidence，
-也不會建立 timestamp 或 correlation id。
+`--agent-output` 是 root option，必須放在 subcommand 前。PLAT-005 支援
+`dbcli --agent-output capabilities` 與 `dbcli --agent-output capabilities check --require <ids>`；
+兩者都會在 stdout 輸出一份 compact UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：
+不是 evidence，也不會建立 timestamp。
+
+可在 subcommand 前使用可選 root option `--correlation-id <id>`，把一次 invocation 關聯到 Story、incident、
+change request、migration 或 backfill。ID 限 1～160 個 ASCII 英數字、點、底線、冒號或連字號；不可放憑證、SQL、
+個人資料或自由文字標籤。已支援且非 static 的回應會在 `context.correlationId` 顯示 ID，既有 audit entry 會在
+`metadata.correlation_id` 記錄它；command summary 會遮蔽它。Static `capabilities` 仍保持 `context: null`。
+此 option 不會建立 evidence，也不會改動 receipt。
 
 v1 envelope 一律有十個 key：`schemaVersion`、`ok`、`operation`、`status`、`context`、`data`、
 `warnings`、`evidence`、`recovery` 與 `error`。`schemaVersion` 是 `1`；`operation` 是
-`capabilities.check`；`status` 是 `succeeded` 或 `failed`；consumer 必須依 key 名稱讀取，
+`capabilities.list` 或 `capabilities.check`；`status` 是 `succeeded` 或 `failed`；consumer 必須依 key 名稱讀取，
 不能依欄位順序。文件連同換行上限為 64 KiB。
 
 不可把 `--agent-output` 和明確提供的 `--format` 或 `--for-agent` 一起使用；這類衝突、放在
@@ -318,10 +324,11 @@ exit `0`；需求未滿足或未預期的 internal failure exit `1`。未使用 
 
 error 與 warning 的 code/message vocabulary 永遠是 locale-independent English。Error code 為
 `INVALID_AGENT_OUTPUT_OPTIONS`（無效、位置錯誤或衝突的 output option）、
-`UNSUPPORTED_AGENT_OUTPUT_OPERATION`（PLAT-004 範圍外的 operation）、
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION`（PLAT-005 範圍外的 operation）、
 `INVALID_CAPABILITY_REQUIREMENTS`（無效的 `--require`）、`CAPABILITY_REQUIREMENTS_UNMET`
 （已完成的 negative capability result）、`AGENT_OUTPUT_LIMIT_EXCEEDED`（64 KiB 上限）與
-`AGENT_OUTPUT_INTERNAL_ERROR`（未預期但安全的 failure）。Warning code 為
+`AGENT_OUTPUT_INTERNAL_ERROR`（未預期但安全的 failure）與 `INVALID_CORRELATION_ID`（無效的 root correlation ID）。
+Warning code 為
 `DUPLICATE_CAPABILITY_REQUIREMENT`、`CAPABILITY_CONTEXT_UNAVAILABLE`、
 `CAPABILITY_CONTEXT_UNRESOLVABLE` 與 `AGENT_MODE_RESTRICTION_ACTIVE`。
 

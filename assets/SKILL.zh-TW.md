@@ -137,17 +137,22 @@ Tool Skill 只負責安全地操作 dbcli。
 - v1 涵蓋 engine capability matrix 管轄的指令；不在其中的一律回 `unknown`，而不是給出未經
   稽核的引擎宣稱。
 
-**Agent output v1（PLAT-004）：** 使用 `dbcli --agent-output capabilities check --require <ids>`；
-root flag 必須放在 subcommand 前，目前沒有其他支援的 operation。它會在 stdout 輸出一份 compact
-UTF-8 JSON envelope 與換行，stderr 保持空白。十個 key 是 `schemaVersion`、`ok`、`operation`、
-`status`、`context`、`data`、`warnings`、`evidence`、`recovery` 與 `error`；`schemaVersion` 是
-`1`，`operation` 是 `capabilities.check`，`status` 是 `succeeded` 或 `failed`。不可和明確的
-`--format` 或 `--for-agent` 合用：衝突、無效位置/輸入與不支援 operation 以 exit `2` 結束；成功
-exit `0`；需求未滿足與 internal failure exit `1`。envelope 連同換行上限為 64 KiB，不會持久化、
-不是 evidence，consumer 要依 field name 而非順序讀取。
+**Agent output v1（PLAT-005）：** 使用 `dbcli --agent-output capabilities` 或
+`dbcli --agent-output capabilities check --require <ids>`；root flag 必須放在 subcommand 前，目前沒有
+其他支援的 operation。它會在 stdout 輸出一份 compact UTF-8 JSON envelope 與換行，stderr 保持空白。
+十個 key 是 `schemaVersion`、`ok`、`operation`、`status`、`context`、`data`、`warnings`、`evidence`、
+`recovery` 與 `error`；`schemaVersion` 是 `1`，`operation` 是 `capabilities.list` 或
+`capabilities.check`，`status` 是 `succeeded` 或 `failed`。不可和明確的 `--format` 或 `--for-agent`
+合用：衝突、無效位置/輸入與不支援 operation 以 exit `2` 結束；成功 exit `0`；需求未滿足與 internal failure
+exit `1`。envelope 連同換行上限為 64 KiB，consumer 要依 field name 而非順序讀取。
+可選的 root `--correlation-id <id>` 也必須放在 subcommand 前；它只接受 1–160 個 ASCII 英文字母、數字、
+`.`、`_`、`:` 或 `-`，不可放入 secret 或 free-form input。支援的非 static output 會寫入
+`context.correlationId` 與既有 audit 的 `metadata.correlation_id`，command summary 會遮罩它；static
+capabilities 保持 `context: null`，也不建立 evidence receipt。
 
 code/message vocabulary 永遠是 locale-independent English：error 為
 `INVALID_AGENT_OUTPUT_OPTIONS`（無效/位置錯誤/衝突 option）、
+`INVALID_CORRELATION_ID`（無效或缺少 `--correlation-id` 值）、
 `UNSUPPORTED_AGENT_OUTPUT_OPERATION`（PLAT-004 範圍外）、`INVALID_CAPABILITY_REQUIREMENTS`
 （無效 `--require`）、`CAPABILITY_REQUIREMENTS_UNMET`（已完成的 negative result）、
 `AGENT_OUTPUT_LIMIT_EXCEEDED`（64 KiB 上限）與 `AGENT_OUTPUT_INTERNAL_ERROR`（未預期但安全的

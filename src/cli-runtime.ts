@@ -13,6 +13,7 @@ import pkg from '../package.json'
 import { createLogger, setGlobalLogger, LogLevel } from './utils/logger'
 import { checkForUpdate, type VersionCheckCache } from './utils/version-check'
 import { setGlobalConnectionName } from './core/config'
+import { setGlobalCorrelationId } from './core/correlation-id'
 import { setGlobalConnectionTimeout, setGlobalStatementTimeout } from './utils/connection-timeout'
 import { resolveConnectionSelector } from './core/connection-selector'
 import { resolveConfigPath } from './utils/config-path'
@@ -81,7 +82,11 @@ const agentOutputPreflight = inspectAgentOutputInvocation(
 )
 if (agentOutputPreflight.active && agentOutputPreflight.failure) {
   process.exit(
-    emitAgentOutputFailure(agentOutputPreflight.failure.code, agentOutputPreflight.failure.exitCode)
+    emitAgentOutputFailure(
+      agentOutputPreflight.failure.code,
+      agentOutputPreflight.failure.exitCode,
+      agentOutputPreflight.operation
+    )
   )
 }
 
@@ -116,7 +121,9 @@ async function buildProgramOrExit(): Promise<Command> {
     return await buildProgramFor(process.argv)
   } catch (error) {
     if (agentOutputPreflight.active) {
-      process.exit(emitAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', 1))
+      process.exit(
+        emitAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', 1, agentOutputPreflight.operation)
+      )
     }
     presentCliError(error)
     process.exit(1)
@@ -178,6 +185,28 @@ function configureConnectionSelectorHints(command: typeof program): void {
 }
 
 configureConnectionSelectorHints(program)
+configureCorrelationIdErrors(program)
+
+function configureCorrelationIdErrors(command: typeof program): void {
+  command.exitOverride((error) => {
+    if (isCorrelationIdCommanderError(error)) {
+      throw error
+    }
+    process.exit(error.exitCode)
+  })
+  for (const child of command.commands) configureCorrelationIdErrors(child as typeof program)
+}
+
+function isCorrelationIdCommanderError(error: CommanderError): boolean {
+  return (
+    error.message.includes('--correlation-id') &&
+    [
+      'commander.invalidArgument',
+      'commander.optionMissingArgument',
+      'commander.unknownOption',
+    ].includes(error.code)
+  )
+}
 
 function configureAgentOutputErrors(command: typeof program): void {
   command.exitOverride()
@@ -208,6 +237,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
       environment: process.env.DBCLI_CONNECTION,
     })
   )
+  setGlobalCorrelationId(opts.correlationId as string | undefined)
 
   setGlobalConnectionTimeout(opts.timeout as number | undefined)
   setGlobalStatementTimeout(opts.statementTimeout as number | undefined)
@@ -320,6 +350,8 @@ if (!process.argv.slice(2).length) {
 try {
   await program.parseAsync(process.argv)
 } catch (error) {
+  const invalidCorrelationId =
+    error instanceof CommanderError && isCorrelationIdCommanderError(error)
   if (agentOutputPreflight.active) {
     const invalidRequirements =
       error instanceof CommanderError &&
@@ -331,14 +363,21 @@ try {
     process.exitCode = emitAgentOutputFailure(
       invalidRequirements
         ? 'INVALID_CAPABILITY_REQUIREMENTS'
-        : commanderInputError
-          ? 'INVALID_AGENT_OUTPUT_OPTIONS'
-          : 'AGENT_OUTPUT_INTERNAL_ERROR',
-      commanderInputError ? 2 : 1
+        : invalidCorrelationId
+          ? 'INVALID_CORRELATION_ID'
+          : commanderInputError
+            ? 'INVALID_AGENT_OUTPUT_OPTIONS'
+            : 'AGENT_OUTPUT_INTERNAL_ERROR',
+      commanderInputError ? 2 : 1,
+      agentOutputPreflight.operation
     )
   } else {
-    presentCliError(error)
-    process.exitCode = 1
+    if (error instanceof CommanderError) {
+      process.exitCode = invalidCorrelationId ? 2 : error.exitCode
+    } else {
+      presentCliError(error)
+      process.exitCode = 1
+    }
   }
 }
 

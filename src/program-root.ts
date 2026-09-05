@@ -1,5 +1,6 @@
 import { Command, InvalidArgumentError } from 'commander'
 import { createConnectionSelectorOption } from './core/connection-selector'
+import { isCorrelationId } from './core/correlation-id'
 import {
   parseTimeoutOption,
   parseStatementTimeoutOption,
@@ -53,6 +54,15 @@ export function parseSlowMs(value: string): number {
   } catch {
     throw new InvalidArgumentError('must be a non-negative integer')
   }
+}
+
+export function parseCorrelationId(value: string): string {
+  if (!isCorrelationId(value)) {
+    throw new InvalidArgumentError(
+      'must be 1-160 ASCII letters, numbers, dots, underscores, colons, or hyphens'
+    )
+  }
+  return value
 }
 
 /**
@@ -114,6 +124,11 @@ export function createRootProgram(): Command {
       )
       .option('-q, --quiet', 'Suppress non-essential output')
       .option('--agent-output', t('cli.agent_output_option'), false)
+      .option(
+        '--correlation-id <id>',
+        'Correlation ID for audit and agent output',
+        parseCorrelationId
+      )
       .option('--config <path>', 'Path to .dbcli config file', '.dbcli')
       .option('--global', 'Use the user-global connection registry (~/.config/dbcli)', false)
       .option(

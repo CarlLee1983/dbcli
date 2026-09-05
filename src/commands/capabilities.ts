@@ -38,6 +38,7 @@ import {
   type OperationEnvelopeWarning,
 } from '@/core/operation-envelope'
 import { emitAgentOutputEnvelope, emitAgentOutputFailure } from '@/utils/agent-output'
+import { isCorrelationId } from '@/core/correlation-id'
 
 const CATALOG_FORMATS = ['text', 'json', 'markdown'] as const
 const CHECK_FORMATS = ['text', 'json'] as const
@@ -207,6 +208,11 @@ function agentOutputRequested(command: Command): boolean {
   return command.optsWithGlobals<Record<string, unknown>>().agentOutput === true
 }
 
+function correlationId(command: Command): string | undefined {
+  const value = command.optsWithGlobals<Record<string, unknown>>().correlationId
+  return isCorrelationId(value) ? value : undefined
+}
+
 function validAgentRequirements(ids: readonly string[], warnings: readonly string[]): boolean {
   return (
     ids.length <= MAX_OPERATION_ENVELOPE_ITEMS &&
@@ -236,14 +242,20 @@ function toAgentWarnings(warnings: readonly string[]): OperationEnvelopeWarning[
   })
 }
 
-function toAgentEnvelope(report: CapabilityCheckReport): OperationEnvelope {
+function toAgentEnvelope(
+  report: CapabilityCheckReport,
+  correlationId: string | undefined
+): OperationEnvelope {
   const ok = report.ok
   return {
     schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
     ok,
     operation: 'capabilities.check',
     status: ok ? 'succeeded' : 'failed',
-    context: report.context,
+    context:
+      report.context === null
+        ? null
+        : { ...report.context, ...(correlationId !== undefined && { correlationId }) },
     data: { required: report.required, results: report.results },
     warnings: toAgentWarnings(report.warnings),
     evidence: [],
@@ -265,10 +277,27 @@ export const capabilitiesCommand = new Command('capabilities')
   // prose. See the same opt-in on the root program.
   .enablePositionalOptions()
   .option('--format <type>', 'Output format: text, json, markdown', 'text')
-  .action((options: { format: string }) => {
+  .action((options: { format: string }, command: Command) => {
+    const agentOutput = agentOutputRequested(command)
     try {
       validateFormat(options.format, CATALOG_FORMATS, 'capabilities')
       const catalog = buildCapabilityCatalog()
+
+      if (agentOutput) {
+        const envelope: OperationEnvelope = {
+          schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
+          ok: true,
+          operation: 'capabilities.list',
+          status: 'succeeded',
+          context: null,
+          data: catalog,
+          warnings: [],
+          evidence: [],
+          recovery: null,
+          error: null,
+        }
+        process.exit(emitAgentOutputEnvelope(envelope, 0))
+      }
 
       if (options.format === 'json') {
         console.log(JSON.stringify(catalog, null, 2))
@@ -278,6 +307,9 @@ export const capabilitiesCommand = new Command('capabilities')
         console.log(renderCatalogText(catalog.capabilities, catalog.schemaVersion))
       }
     } catch (error) {
+      if (agentOutput) {
+        process.exit(emitAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', 1, 'capabilities.list'))
+      }
       console.error(`Error: ${(error as Error).message}`)
       process.exit(EXIT_INVALID_INPUT)
     }
@@ -290,6 +322,7 @@ capabilitiesCommand
   .option('--format <type>', 'Output format: text, json', 'text')
   .action(async (options: { require: string; format: string }, command: Command) => {
     const agentOutput = agentOutputRequested(command)
+    const commandCorrelationId = correlationId(command)
     let parsed
     try {
       validateFormat(options.format, CHECK_FORMATS, 'capabilities check')
@@ -326,7 +359,9 @@ capabilitiesCommand
       if (report.warnings.length > MAX_OPERATION_ENVELOPE_ITEMS) {
         process.exit(emitAgentOutputFailure('INVALID_CAPABILITY_REQUIREMENTS', 2))
       }
-      process.exit(emitAgentOutputEnvelope(toAgentEnvelope(report), report.ok ? 0 : 1))
+      process.exit(
+        emitAgentOutputEnvelope(toAgentEnvelope(report, commandCorrelationId), report.ok ? 0 : 1)
+      )
     }
 
     if (options.format === 'json') {

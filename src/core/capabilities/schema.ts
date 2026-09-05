@@ -39,11 +39,16 @@ const CapabilityIdSchema = z.string().regex(CAPABILITY_ID_PATTERN, {
   message: 'capability id must be dotted lower-case segments, e.g. schema.read',
 })
 
+export const CAPABILITY_COMMAND_PATTERN = /^[a-z][a-z0-9]*(?: [a-z][a-z0-9]*)*$/
+const CapabilityCommandSchema = z.string().regex(CAPABILITY_COMMAND_PATTERN, {
+  message: 'capability command must be space-separated lower-case CLI command segments',
+})
+
 export const CapabilitySchema = z
   .object({
     id: CapabilityIdSchema,
     description: z.string().min(1),
-    command: z.string().min(1),
+    command: CapabilityCommandSchema,
     risk: RiskSchema,
     sideEffect: SideEffectSchema,
     engines: z.array(EngineSchema),

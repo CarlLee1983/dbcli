@@ -20,6 +20,7 @@ import { formatExplain, type ExplainFormat } from '@/formatters/explain'
 import { loadSnippets, resolveSnippetDirs } from '@/core/saved-queries'
 import type { ExplainPlan } from '@/core/explain/types'
 import { assertAnalyzeReadOnlySql } from '@/core/explain/read-only'
+import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 
 type GlobalOpts = {
   config?: string
@@ -95,6 +96,8 @@ export const explainCommand = new Command()
       await adapter.disconnect()
     }
   })
+
+attachCommandEvidenceReceipt(explainCommand, 'explain')
 
 /**
  * Build a saved-query loader that resolves a name (or glob) against the

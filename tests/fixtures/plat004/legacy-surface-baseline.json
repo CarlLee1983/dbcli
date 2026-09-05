@@ -5,7 +5,7 @@
       "name": "capability catalog JSON",
       "args": ["capabilities", "--format", "json"],
       "exitCode": 0,
-      "stdoutSha256": "e19e5b9c69c763180d3cbaa92d40c3868b864830867e5a10f48396027888b207",
+      "stdoutSha256": "715a708ac45c4011864d7498bd1881705b682e5f4ba90c9ab7e7f422f6b3dbc3",
       "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {

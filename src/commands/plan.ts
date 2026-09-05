@@ -6,12 +6,14 @@ import { validateFormat } from '@/utils/validation'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
 import { toSqlDialect } from '@/core/permission-guard'
+import { writeCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
 type PlanCommandOptions = {
   format?: 'text' | 'json'
   config?: string
+  evidenceReceipt?: string
 }
 
 export async function planCommand(
@@ -47,8 +49,6 @@ export async function planCommand(
       },
     })
 
-    console.log(formatPlanResult(result, format))
-
     if (config) {
       await writeAuditEntry(
         config,
@@ -64,6 +64,35 @@ export async function planCommand(
           },
         }
       )
+    }
+    const receipt =
+      typeof options.evidenceReceipt === 'string'
+        ? await writeCommandEvidenceReceipt({
+            workspaceRoot: process.cwd(),
+            outputPath: options.evidenceReceipt,
+            config,
+            operation: 'plan',
+            outcome: 'succeeded',
+          })
+        : undefined
+    const evidenceReceiptPath = receipt && 'path' in receipt ? receipt.path : undefined
+    const evidenceReceiptError = receipt && 'error' in receipt ? receipt.error : undefined
+    if (format === 'json') {
+      console.log(
+        JSON.stringify(
+          {
+            ...result,
+            ...(evidenceReceiptPath ? { evidenceReceiptPath } : {}),
+            ...(evidenceReceiptError ? { evidenceReceiptError } : {}),
+          },
+          null,
+          2
+        )
+      )
+    } else {
+      console.log(formatPlanResult(result, format))
+      if (evidenceReceiptPath) console.log(`Evidence receipt: ${evidenceReceiptPath}`)
+      if (evidenceReceiptError) console.error(evidenceReceiptError)
     }
   } catch (error) {
     if (config) {

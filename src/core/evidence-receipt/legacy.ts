@@ -14,9 +14,9 @@
 import { createHash } from 'node:crypto'
 
 /** The format the current builder writes. */
-export const EVIDENCE_RECEIPT_CURRENT_VERSION = 2 as const
+export const EVIDENCE_RECEIPT_CURRENT_VERSION = 3 as const
 
-export const KNOWN_EVIDENCE_RECEIPT_VERSIONS = [1, 2] as const
+export const KNOWN_EVIDENCE_RECEIPT_VERSIONS = [1, 2, 3] as const
 
 export type EvidenceReceiptLegacyFormat =
   /** Shipped in v2.1.0 and earlier: `observation.fingerprint`. */
@@ -37,7 +37,7 @@ export type EvidenceReceiptUnsupportedReason =
   | 'version-structure-mismatch'
 
 export type EvidenceReceiptClassification =
-  | { format: 'current'; formatVersion: typeof EVIDENCE_RECEIPT_CURRENT_VERSION }
+  | { format: 'current'; formatVersion: 2 | typeof EVIDENCE_RECEIPT_CURRENT_VERSION }
   | {
       format: 'legacy'
       formatVersion: 1
@@ -71,7 +71,10 @@ function legacyIntegrity(raw: Record<string, unknown>): EvidenceReceiptLegacyInt
 export function classifyEvidenceReceiptArtifact(raw: unknown): EvidenceReceiptClassification {
   if (!isRecord(raw)) return { format: 'unsupported', reason: 'not-an-object', formatVersion: null }
   const version = raw.version
-  if (typeof version !== 'number' || !KNOWN_EVIDENCE_RECEIPT_VERSIONS.includes(version as 1 | 2)) {
+  if (
+    typeof version !== 'number' ||
+    !KNOWN_EVIDENCE_RECEIPT_VERSIONS.includes(version as 1 | 2 | 3)
+  ) {
     return {
       format: 'unsupported',
       reason: 'unknown-version',
@@ -79,7 +82,7 @@ export function classifyEvidenceReceiptArtifact(raw: unknown): EvidenceReceiptCl
     }
   }
   const fingerprinted = hasFingerprintObservation(raw)
-  if (version === EVIDENCE_RECEIPT_CURRENT_VERSION) {
+  if (version === 2 || version === EVIDENCE_RECEIPT_CURRENT_VERSION) {
     if (fingerprinted) {
       return { format: 'unsupported', reason: 'version-structure-mismatch', formatVersion: version }
     }

@@ -6,6 +6,7 @@ import { validateFormat } from '@/utils/validation'
 import { collectInspect, renderJson, renderMarkdown } from '@/core/inspect'
 import { configModule } from '@/core/config'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
+import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
 
@@ -104,3 +105,5 @@ export const inspectCommand = new Command()
       process.exit(1)
     }
   })
+
+attachCommandEvidenceReceipt(inspectCommand, 'inspect')

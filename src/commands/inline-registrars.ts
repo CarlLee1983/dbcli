@@ -90,6 +90,7 @@ export function registerPlanCommand(
     .command('plan <sql>')
     .description('Analyze SQL risk without executing')
     .option('--format <type>', 'Output format: text, json', 'text')
+    .option('--evidence-receipt <path>', 'Write a safe provenance receipt after the result')
     .action(async (sql: string, options: Record<string, unknown>, command) => {
       await run(sql, options as never, command)
     })

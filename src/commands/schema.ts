@@ -6,6 +6,7 @@
 
 import crypto from 'node:crypto'
 import { Command } from 'commander'
+import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter } from '@/formatters'
@@ -121,6 +122,8 @@ export const schemaCommand = new Command()
     false
   )
   .action(schemaAction)
+
+attachCommandEvidenceReceipt(schemaCommand, 'schema')
 
 /**
  * Schema command action handler

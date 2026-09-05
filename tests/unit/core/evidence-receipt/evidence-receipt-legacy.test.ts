@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  buildCommandEvidenceReceipt,
   buildEvidenceReceipt,
   classifyEvidenceReceiptArtifact,
   EVIDENCE_RECEIPT_VERSION,
@@ -44,14 +45,39 @@ const buildCurrent = () =>
   )
 
 describe('evidence receipt format version', () => {
-  test('the current builder writes version 2', () => {
-    expect(EVIDENCE_RECEIPT_VERSION).toBe(2)
-    expect(buildCurrent().version).toBe(2)
+  test('the current builder writes version 3', () => {
+    expect(EVIDENCE_RECEIPT_VERSION).toBe(3)
+    expect(buildCurrent().version).toBe(3)
   })
 
   test('a round trip through the parser preserves a current receipt', () => {
     const built = buildCurrent()
     expect(parseEvidenceReceipt(JSON.parse(JSON.stringify(built)))).toEqual(built)
+  })
+
+  test('a version-2 assert receipt remains readable', () => {
+    const receipt = { ...buildCurrent(), version: 2 as const }
+    expect(parseEvidenceReceipt(receipt)).toEqual(receipt)
+  })
+
+  test('a command receipt binds its safe subject, capability, and correlation ID', () => {
+    const receipt = buildCommandEvidenceReceipt({
+      operation: 'impact.assess',
+      outcome: 'succeeded',
+      context: CONTEXT,
+      correlationId: 'DBCLI:PLAT-007',
+    })
+    expect(receipt).toMatchObject({
+      version: 3,
+      operation: 'impact.assess',
+      observation: {
+        kind: 'command-outcome',
+        subject: { kind: 'command', name: 'impact.assess' },
+        capability: 'schema.impact-assess',
+        correlationId: 'DBCLI:PLAT-007',
+      },
+    })
+    expect(parseEvidenceReceipt(receipt)).toEqual(receipt)
   })
 })
 

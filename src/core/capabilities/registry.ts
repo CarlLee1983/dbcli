@@ -647,7 +647,22 @@ export const COMMAND_SURFACE: CommandSurfaceFacts = Object.freeze({
     // the catalog did not cover — and `recover`, which was catalogued all
     // along and has written an artifact under `--write-verification-artifact`
     // since before the contract existed.
-    new Set(['assert', 'verify', 'recover', 'evidence'])
+    new Set([
+      'assert',
+      'insert',
+      'update',
+      'delete',
+      'verify',
+      'recover',
+      'evidence',
+      'inspect',
+      'report',
+      'schema',
+      'plan',
+      'lint',
+      'explain',
+      'impact assess',
+    ])
   ) as ReadonlySet<string>,
 })
 

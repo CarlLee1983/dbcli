@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { isVerificationStatus, type VerificationStatus } from '@/core/verification'
+import { isCorrelationId } from '@/core/correlation-id'
 import {
   classifyEvidenceReceiptArtifact,
   describeEvidenceReceiptClassification,
@@ -27,16 +28,49 @@ export {
  */
 export const EVIDENCE_RECEIPT_VERSION = EVIDENCE_RECEIPT_CURRENT_VERSION
 
+export type CommandEvidenceReceiptOperation =
+  | 'inspect'
+  | 'report'
+  | 'schema'
+  | 'plan'
+  | 'lint'
+  | 'explain'
+  | 'impact.assess'
+
+export type EvidenceReceiptOperation = 'assert' | 'verify' | CommandEvidenceReceiptOperation
+
+export const EVIDENCE_RECEIPT_OPERATIONS: readonly EvidenceReceiptOperation[] = [
+  'assert',
+  'verify',
+  'inspect',
+  'report',
+  'schema',
+  'plan',
+  'lint',
+  'explain',
+  'impact.assess',
+]
+
+const COMMAND_CAPABILITIES: Readonly<Record<CommandEvidenceReceiptOperation, string>> = {
+  inspect: 'context.inspect',
+  report: 'diagnostic.report',
+  schema: 'schema.read',
+  plan: 'query.plan-risk',
+  lint: 'query.lint',
+  explain: 'query.explain',
+  'impact.assess': 'schema.impact-assess',
+}
+
 const SHA256 = /^sha256:[a-f0-9]{64}$/
 const SAFE_TEXT = /^[A-Za-z0-9_.:@<>= -]+$/
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/
 const MAX_RECEIPT_BYTES = 64 * 1024
 
 export interface EvidenceReceipt {
-  version: typeof EVIDENCE_RECEIPT_VERSION
+  version: 2 | typeof EVIDENCE_RECEIPT_VERSION
   id: string
   createdAt: string
-  operation: 'assert' | 'verify'
+  operation: EvidenceReceiptOperation
   outcome: 'succeeded' | 'failed'
   context: {
     engine: string
@@ -65,6 +99,12 @@ export interface EvidenceReceipt {
   observation:
     | { kind: 'assert-verdict'; checksPassed: number; checksTotal: number }
     | { kind: 'verify-outcome'; status: VerificationStatus }
+    | {
+        kind: 'command-outcome'
+        subject: { kind: 'command'; name: CommandEvidenceReceiptOperation }
+        capability: string
+        correlationId: string | null
+      }
 }
 
 interface BuildEvidenceReceiptBase {
@@ -89,6 +129,12 @@ export type BuildEvidenceReceiptInput =
       /** Whether the linked verification artifact persisted. */
       verificationArtifactPersisted: boolean
     })
+
+export type BuildCommandEvidenceReceiptInput = Omit<BuildEvidenceReceiptBase, 'command'> & {
+  operation: CommandEvidenceReceiptOperation
+  outcome: 'succeeded' | 'failed'
+  correlationId?: string
+}
 
 export class EvidenceReceiptValidationError extends Error {
   constructor(message: string) {
@@ -155,6 +201,14 @@ function nullableId(value: unknown, label: string): string | null {
   return safeId(value, label)
 }
 
+function nullableCorrelationId(value: unknown, label: string): string | null {
+  if (value === null || value === undefined) return null
+  if (!isCorrelationId(value)) {
+    throw new EvidenceReceiptValidationError(`${label} must be a valid correlation ID`)
+  }
+  return value
+}
+
 function fingerprint(value: unknown, label: string): string {
   if (typeof value !== 'string' || !SHA256.test(value)) {
     throw new EvidenceReceiptValidationError(`${label} must be a sha256 fingerprint`)
@@ -181,10 +235,13 @@ export function canonicalizeEvidenceReceiptCommand(
   // Runtime argv includes absolute executable/source paths. Discard that prefix first;
   // only the already-redacted operation segment is allowed into the receipt.
   const source = boundedCommandSource(command)
-  const match = new RegExp(`(?:^|\\s)${operation}(?:\\s|$)`).exec(source)
-  if (!match) throw new EvidenceReceiptValidationError(`command must contain ${operation}`)
-  const args = source.slice(match.index + match[0].indexOf(operation) + operation.length).trim()
-  const canonical = `dbcli ${operation}${args ? ` ${args}` : ''}`
+  const commandOperation = operation.replace('.', ' ')
+  const match = new RegExp(`(?:^|\\s)${commandOperation}(?:\\s|$)`).exec(source)
+  if (!match) throw new EvidenceReceiptValidationError(`command must contain ${commandOperation}`)
+  const args = source
+    .slice(match.index + match[0].indexOf(commandOperation) + commandOperation.length)
+    .trim()
+  const canonical = `dbcli ${commandOperation}${args ? ` ${args}` : ''}`
   if (
     !SAFE_TEXT.test(canonical) ||
     /\b(?:select|insert|update|delete|from|password|secret|token|error|exception)\b/i.test(
@@ -288,6 +345,37 @@ export function buildEvidenceReceipt(
   return receipt
 }
 
+export function buildCommandEvidenceReceipt(
+  input: BuildCommandEvidenceReceiptInput,
+  options: { now?: () => Date; idFactory?: () => string } = {}
+): EvidenceReceipt {
+  const correlationId = nullableCorrelationId(input.correlationId, 'correlationId')
+  const operation = input.operation
+  const command = `dbcli ${operation.replace('.', ' ')}`
+  const receipt: EvidenceReceipt = {
+    version: EVIDENCE_RECEIPT_VERSION,
+    id: safeId(options.idFactory?.() ?? `evr_${randomUUID()}`, 'id'),
+    createdAt: (options.now?.() ?? new Date()).toISOString(),
+    operation,
+    outcome: input.outcome,
+    context: parseContext(input.context),
+    provenance: {
+      command,
+      commandHash: sha256(command),
+      auditRef: input.auditRef === undefined ? null : nullableId(input.auditRef, 'auditRef'),
+      verificationArtifactRef: null,
+    },
+    replay: { status: 'context-required' },
+    observation: {
+      kind: 'command-outcome',
+      subject: { kind: 'command', name: operation },
+      capability: COMMAND_CAPABILITIES[operation],
+      correlationId,
+    },
+  }
+  return receipt
+}
+
 function parseContext(value: unknown): EvidenceReceipt['context'] {
   if (!record(value)) throw new EvidenceReceiptValidationError('context must be an object')
   exact(
@@ -336,9 +424,13 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
     ],
     'evidence receipt'
   )
-  if (raw.operation !== 'assert' && raw.operation !== 'verify')
+  if (!isEvidenceReceiptOperation(raw.operation))
     throw new EvidenceReceiptValidationError('operation is invalid')
   const operation: EvidenceReceipt['operation'] = raw.operation
+  const version = raw.version as 2 | typeof EVIDENCE_RECEIPT_VERSION
+  if (version === 2 && isCommandEvidenceReceiptOperation(operation)) {
+    throw new EvidenceReceiptValidationError('command receipt operations require version 3')
+  }
   if (raw.outcome !== 'succeeded' && raw.outcome !== 'failed')
     throw new EvidenceReceiptValidationError('outcome is invalid')
   if (!record(raw.provenance))
@@ -365,7 +457,7 @@ export function parseEvidenceReceipt(raw: unknown): EvidenceReceipt {
     throw new EvidenceReceiptValidationError('replay must be context-required')
   const observation = parseObservation(raw.observation, operation)
   return {
-    version: EVIDENCE_RECEIPT_VERSION,
+    version,
     id: safeId(raw.id, 'id'),
     createdAt: timestamp(raw.createdAt),
     operation,
@@ -390,6 +482,25 @@ function parseObservation(
   operation: EvidenceReceipt['operation']
 ): EvidenceReceipt['observation'] {
   if (!record(raw)) throw new EvidenceReceiptValidationError('observation must be an object')
+  if (isCommandEvidenceReceiptOperation(operation)) {
+    exact(raw, ['kind', 'subject', 'capability', 'correlationId'], 'observation')
+    if (
+      raw.kind !== 'command-outcome' ||
+      !record(raw.subject) ||
+      raw.subject.kind !== 'command' ||
+      raw.subject.name !== operation ||
+      raw.capability !== COMMAND_CAPABILITIES[operation] ||
+      raw.correlationId !== nullableCorrelationId(raw.correlationId, 'observation.correlationId')
+    ) {
+      throw new EvidenceReceiptValidationError('observation must match receipt operation')
+    }
+    return {
+      kind: 'command-outcome',
+      subject: { kind: 'command', name: operation },
+      capability: COMMAND_CAPABILITIES[operation],
+      correlationId: raw.correlationId as string | null,
+    }
+  }
   if (operation === 'verify') {
     exact(raw, ['kind', 'status'], 'observation')
     if (raw.kind !== 'verify-outcome' || !isVerificationStatus(raw.status))
@@ -411,6 +522,19 @@ function parseObservation(
     checksPassed: checksPassed as number,
     checksTotal: checksTotal as number,
   }
+}
+
+function isCommandEvidenceReceiptOperation(
+  value: unknown
+): value is CommandEvidenceReceiptOperation {
+  return typeof value === 'string' && Object.hasOwn(COMMAND_CAPABILITIES, value)
+}
+
+function isEvidenceReceiptOperation(value: unknown): value is EvidenceReceiptOperation {
+  return (
+    typeof value === 'string' &&
+    EVIDENCE_RECEIPT_OPERATIONS.includes(value as EvidenceReceiptOperation)
+  )
 }
 
 function inside(root: string, target: string): boolean {

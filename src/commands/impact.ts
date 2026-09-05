@@ -3,6 +3,7 @@ import { link, lstat, mkdir, realpath, unlink, writeFile } from 'node:fs/promise
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { Command } from 'commander'
 import { configModule } from '@/core/config'
+import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 import {
   assessImpact,
   type ImpactEvidenceSource,
@@ -65,7 +66,7 @@ export const impactCommand = new Command('impact').description(
   'Assess declared local dependencies for a proposed schema change without connecting'
 )
 
-impactCommand
+const impactAssessCommand = impactCommand
   .command('assess')
   .description(
     'Write an offline impact assessment for a design against a local cache or ORM artifact'
@@ -183,6 +184,8 @@ impactCommand
       process.exitCode = 1
     }
   })
+
+attachCommandEvidenceReceipt(impactAssessCommand, 'impact.assess')
 
 function loadCacheBaseline(
   config: Awaited<ReturnType<typeof configModule.read>>,

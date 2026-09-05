@@ -8,6 +8,7 @@ import {
   EVIDENCE_PACK_CURRENT_VERSION,
   type EvidencePackClassification,
 } from '@/core/evidence-pack/legacy'
+import { EVIDENCE_RECEIPT_OPERATIONS, type EvidenceReceiptOperation } from '@/core/evidence-receipt'
 
 export {
   classifyEvidencePackArtifact,
@@ -61,7 +62,7 @@ export type EvidenceReference =
       kind: 'receipt'
       id: string
       createdAt: string
-      operation: 'assert' | 'verify'
+      operation: EvidenceReceiptOperation
       outcome: 'succeeded' | 'failed'
       digest: string
       path: string
@@ -275,7 +276,7 @@ function parseReference(value: unknown): EvidenceReference {
       'receipt evidence'
     )
     if (
-      !['assert', 'verify'].includes(String(value.operation)) ||
+      !EVIDENCE_RECEIPT_OPERATIONS.includes(value.operation as EvidenceReceiptOperation) ||
       !['succeeded', 'failed'].includes(String(value.outcome))
     ) {
       throw new EvidencePackValidationError('receipt evidence has an invalid operation or outcome')
@@ -291,7 +292,7 @@ function parseReference(value: unknown): EvidenceReference {
       kind,
       id: id(value.id, 'receipt evidence.id'),
       createdAt: iso(value.createdAt, 'receipt evidence.createdAt'),
-      operation: value.operation as 'assert' | 'verify',
+      operation: value.operation as EvidenceReceiptOperation,
       outcome: value.outcome as 'succeeded' | 'failed',
       digest,
       path,

@@ -5,6 +5,7 @@
  * Schema facts come only from the layered cache under `.dbcli/schemas/`.
  */
 import { Command } from 'commander'
+import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { resolveBulkInputs } from '@/core/explain/bulk-runner'
@@ -305,3 +306,5 @@ export function createLintCommand(actionOverrides: Partial<LintCommandActionDeps
 }
 
 export const lintCommand = createLintCommand()
+
+attachCommandEvidenceReceipt(lintCommand, 'lint')

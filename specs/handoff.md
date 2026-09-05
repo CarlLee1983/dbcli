@@ -339,12 +339,13 @@ workflow:
     - DBCLI-PLAT-011
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
+    - DBCLI-PLAT-007
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-005-agent-json-mode
-  commit: 8d3384d63b30cd2a9140d2708e9b0d33d1b152de
+  branch: feat/dbcli-plat-007-evidence-receipts
+  commit: 20436ad1bc48d57da51cadf5ee4cf1e8cb8d66fb
   dirty_worktree: false
   story_owned_paths:
     - .cursor/rules/dbcli.mdc
@@ -389,10 +390,7 @@ verification:
   last_command: make verify
   result: pass
   detail: >-
-    PLAT-005 and PLAT-006 make verify passed: 6732 tests across 568 files with 0
-    failures; performance checks passed 21 tests with 2 intentional SQL skips and 0
-    failures; the build was reproducible; and every static gate (skill, platform,
-    plugin, manifest, docs, contract, plan, forgeflow) passed. Focused PLAT-006
-    placement, agent-envelope, audit, and strict-envelope regression tests passed.
-    git diff --check passed. release:check was not run because no release was requested.
+    DBCLI-PLAT-007 make verify passed with 6734 tests across 568 files and 0
+    failures. Static gates, integration services, performance checks, build,
+    ForgeFlow checks, and git diff --check passed. release:check was not run.
 ```

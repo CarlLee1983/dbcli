@@ -5,7 +5,10 @@
  * Schema facts come only from the layered cache under `.dbcli/schemas/`.
  */
 import { Command } from 'commander'
-import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
+import {
+  attachCommandEvidenceReceipt,
+  finalizeCommandEvidenceReceipt,
+} from '@/commands/command-evidence-receipt'
 import { configModule, getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import { resolveBulkInputs } from '@/core/explain/bulk-runner'
@@ -153,6 +156,7 @@ export interface ExecuteLintRuntime {
   loadSavedQuery: SavedQueryLoader
   writeAudit: AuditWriter
   randomUUID: () => string
+  beforeRecovery?: (config: DbcliConfig | undefined, auditRef: string | null) => Promise<void>
   emitRecovery?: (error: unknown, context: RecoveryContext, options: EmitOptions) => Promise<void>
 }
 
@@ -214,6 +218,7 @@ export async function executeLintCommand(
     }
 
     if (envelopeId !== undefined) {
+      await runtime.beforeRecovery?.(config, auditId)
       const context: RecoveryContext = {
         operation: 'lint',
         system: config?.connection.system ?? null,
@@ -296,10 +301,14 @@ export function createLintCommand(actionOverrides: Partial<LintCommandActionDeps
       const options = normalizeLintCommandOptions(rawOptions)
 
       try {
-        const { output } = await actionDeps.execute(queries, options, configPath)
+        const { output } = await actionDeps.execute(queries, options, configPath, {
+          beforeRecovery: (config, auditRef) =>
+            finalizeCommandEvidenceReceipt(command, 'lint', 'failed', config, auditRef),
+        })
         actionDeps.writeOutput(output)
       } catch (error) {
         actionDeps.writeError((error as Error).message)
+        await finalizeCommandEvidenceReceipt(command, 'lint', 'failed')
         actionDeps.exit(1)
       }
     })

@@ -317,6 +317,18 @@ example, and correlation/evidence guidance. Its integration test exercises
 catalog discovery plus successful and unsuccessful Operation Envelope
 preflight against the real CLI. `make verify` passed with 6,744 tests.
 
+## DBCLI-PLAT-007 與 issue #150 收尾
+
+DBCLI-PLAT-007 的既有實作已補齊七個 receipt 指令的失敗路徑；各指令會在原本的
+exit 或 throw 前完成要求的 failed receipt，並保留原輸出、exit code 與 schema
+early-exit 的 audit 行為。整合測試以實際 command rows、credential、connection URI、
+SQL、error、session ID、absolute path 與 stdout payload 驗證八個指定值都不會寫進
+receipt，也涵蓋無 correlation、非覆寫路徑與固定寫入失敗訊息。
+
+Issue #150 已以 `tests/unit/core/semantic/semantic.test.ts` 釘住 semantic context 的
+版本邊界：v1、v2 合法，v3、字串 `"2"`、缺版本與 v1 migration 以外的來源均拒絕。
+本次 `make verify` 通過 6,757 tests、0 failures。
+
 ## Lifecycle
 
 ```yaml
@@ -367,10 +379,10 @@ baseline:
   known_unrelated_paths: []
 
 verification:
-  last_command: bun run release:check
+  last_command: make verify
   result: pass
   detail: >-
-    8.0.0 release check passed with 6746 tests across 570 files and 0 failures.
-    Audit, formatting, typecheck, lint, build, dist smoke, documentation,
-    package manifests, and git diff --check passed.
+    Full verification passed with 6757 tests across 571 files and 0 failures.
+    Audit, formatting, typecheck, lint, deterministic build, performance,
+    documentation, capability contracts, plugin manifests, and ForgeFlow passed.
 ```

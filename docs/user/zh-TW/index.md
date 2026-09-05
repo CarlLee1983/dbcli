@@ -673,7 +673,7 @@ dbcli skill tasks plan migration-review \
 
 `evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 
-`inspect`、`report`、`schema`、`plan`、`lint`、`explain` 與 `impact assess` 也支援 `--evidence-receipt <工作區相對路徑>`。receipt 只記錄指令 capability、固定 command subject、時間、安全 context digest 與可選 correlation ID；絕不複製指令輸入、SQL、rows、路徑或原始錯誤。receipt 寫入失敗會另外回報，不會改變指令結果。
+`inspect`、`report`、`schema`、`plan`、`lint`、`explain` 與 `impact assess` 也支援 `--evidence-receipt <工作區相對路徑>`。receipt 只記錄指令 capability、固定 command subject、時間、安全 context digest 與可選 correlation ID；絕不複製指令輸入、SQL、rows、路徑或原始錯誤。要求 receipt 時，成功與失敗的指令結果都會產生 receipt。receipt 寫入失敗會另外回報，不會改變指令結果或 exit code。
 
 **輸出合約：**
 

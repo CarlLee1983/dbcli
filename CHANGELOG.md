@@ -111,6 +111,12 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數在 `v7.0.1`（`224ee59d`）之後
 
 ### Fixed
 
+- **要求 receipt 的失敗命令現在也會留下 `outcome: failed`。** `inspect`、`report`、
+  `schema`、`plan`、`lint` 與 `explain` 原本會在 Commander `postAction` 前 exit 或 throw，
+  因而跳過 receipt；`schema` 的既有快取／未加 `--force` 成功路徑也會提早 exit。
+  這些路徑現在保留原本的輸出與 exit code，再完成 bounded receipt；任何 receipt 寫入
+  失敗仍只回報 `Failed to write evidence receipt`。（DBCLI-PLAT-007、#157）
+
 - **Schema cache 的寫入不再是一次完整設定的重新發布。** `dbcli schema` 原本透過
   `configModule.write`（v1）與 `writeV2Config`（v2）存快取，兩者都在
   `assertConfigMutationApproved()` 後面，所以 `DBCLI_AGENT_MODE=1` 下

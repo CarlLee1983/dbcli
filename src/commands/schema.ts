@@ -6,7 +6,10 @@
 
 import crypto from 'node:crypto'
 import { Command } from 'commander'
-import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
+import {
+  attachCommandEvidenceReceipt,
+  finalizeCommandEvidenceReceipt,
+} from '@/commands/command-evidence-receipt'
 import { t, t_vars } from '@/i18n/message-loader'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { TableFormatter, TableSchemaJSONFormatter } from '@/formatters'
@@ -161,6 +164,7 @@ async function schemaAction(
     sampleSize?: string
     sampleMethod?: string
     recovery?: boolean
+    evidenceReceipt?: string
   },
   command: Command
 ) {
@@ -282,7 +286,9 @@ async function schemaAction(
           connectionName,
           existingSchemaCount,
           storagePath,
-          inferenceOptions
+          inferenceOptions,
+          undefined,
+          () => finalizeCommandEvidenceReceipt(command, 'schema', 'succeeded', config)
         )
         await writeAuditEntry(config, 'schema', options, {
           success: true,
@@ -345,7 +351,8 @@ async function schemaAction(
           existingSchemaCount,
           storagePath,
           inferenceOptions,
-          mongoMeta
+          mongoMeta,
+          () => finalizeCommandEvidenceReceipt(command, 'schema', 'succeeded', config)
         )
       }
 
@@ -372,6 +379,7 @@ async function schemaAction(
     }
 
     if (envelopeId !== undefined) {
+      await finalizeCommandEvidenceReceipt(command, 'schema', 'failed', config, auditId)
       const { emitRecoveryEnvelope } = await import('@/core/recovery')
       emitRecoveryEnvelope(
         error,
@@ -380,6 +388,7 @@ async function schemaAction(
       )
     }
 
+    await finalizeCommandEvidenceReceipt(command, 'schema', 'failed', config, auditId)
     throw error
   }
 }
@@ -668,7 +677,8 @@ async function handleFullDatabaseScan(
   existingSchemaCount: number,
   storagePath: string,
   inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
-  mongoMeta?: MongoDecorateMeta
+  mongoMeta?: MongoDecorateMeta,
+  beforeExistingCacheExit?: () => Promise<void>
 ): Promise<void> {
   console.log(t('schema.scanning_database'))
 
@@ -730,7 +740,7 @@ async function handleFullDatabaseScan(
       console.log('\n' + t('schema.schema_exists_warning'))
       console.log(t('schema.use_force_to_override'))
     }
-    // In interactive mode we could prompt here; for now just exit
+    await beforeExistingCacheExit?.()
     process.exit(0)
   }
 

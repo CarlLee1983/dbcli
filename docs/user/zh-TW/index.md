@@ -302,6 +302,7 @@ dbcli capabilities check --require schema.read,query.read --format json
 套件內的 `assets/integration-kit/` 提供可直接複製的 Bun/TypeScript consumer 與 Task Pack
 fixture。它會 pin 兩個 schema version、strictly parse catalog 與 Operation Envelope，並示範
 exit、correlation 與 evidence 的邊界。
+其中的 CRUD、CQRS 與 DBA 範例仍是外部 consumer 的需求；dbcli 不實作也不核准這些工作流程。
 
 #### Agent output v1
 

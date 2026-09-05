@@ -10,6 +10,11 @@ function makeRoot(): Command {
     'config path',
     join(import.meta.dir, '..', '..', 'fixtures', 'agent-tasks', 'capability-context.json')
   )
+  program.setOptionValueWithSource(
+    'config',
+    join(import.meta.dir, '..', '..', 'fixtures', 'agent-tasks', 'capability-context.json'),
+    'cli'
+  )
   const skill = program.command('skill').description('skill')
   registerSkillTasksCommand(skill)
   return program

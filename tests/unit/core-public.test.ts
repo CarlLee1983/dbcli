@@ -119,4 +119,18 @@ test('public API 暴露 Operation Envelope v1 parser', () => {
     error: null,
   })
   expect(parsed.ok).toBe(true)
+
+  const catalogEnvelope = core.parseOperationEnvelope({
+    schemaVersion: 1,
+    ok: true,
+    operation: 'capabilities.list',
+    status: 'succeeded',
+    context: null,
+    data: core.buildCapabilityCatalog(),
+    warnings: [],
+    evidence: [],
+    recovery: null,
+    error: null,
+  })
+  expect(catalogEnvelope.ok).toBe(true)
 })

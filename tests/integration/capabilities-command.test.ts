@@ -719,6 +719,30 @@ describe('dbcli --agent-output capabilities check', () => {
     expect(parseOperationEnvelope(envelope).ok).toBe(true)
   })
 
+  test('adds a validated correlation ID only to a non-null agent context', async () => {
+    const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
+    const { stdout, stderr, code } = await run(
+      [
+        '--agent-output',
+        '--correlation-id',
+        'INC-2026.09.05',
+        '--config',
+        configPath,
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+      ],
+      dir
+    )
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('')
+    const envelope = JSON.parse(stdout)
+    expect(envelope.context.correlationId).toBe('INC-2026.09.05')
+    expect(parseOperationEnvelope(envelope).ok).toBe(true)
+  })
+
   test('retains bounded result data for unmet requirements and exits 1', async () => {
     const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
     const result = await run(
@@ -1019,5 +1043,98 @@ describe('dbcli --agent-output capabilities check', () => {
       stderr: baseline.requirementsUnmet.stderr,
       code: baseline.requirementsUnmet.exitCode,
     })
+  })
+})
+
+describe('dbcli --agent-output capabilities', () => {
+  test('emits one compact, strict ten-key success envelope for capabilities.list', async () => {
+    const dir = await emptyDir()
+    const first = await run(['--agent-output', 'capabilities'], dir)
+    const second = await run(['--agent-output', 'capabilities'], dir)
+
+    expect(first.code).toBe(0)
+    expect(first.stderr).toBe('')
+    expect(first.stdout).toBe(second.stdout)
+    expect(first.stdout.endsWith('\n')).toBe(true)
+    expect(first.stdout.endsWith('\n\n')).toBe(false)
+    expect(first.stdout).not.toContain('\n ')
+
+    const envelope = JSON.parse(first.stdout)
+    expect(Object.keys(envelope)).toEqual([
+      'schemaVersion',
+      'ok',
+      'operation',
+      'status',
+      'context',
+      'data',
+      'warnings',
+      'evidence',
+      'recovery',
+      'error',
+    ])
+    expect(envelope).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'capabilities.list',
+      status: 'succeeded',
+      context: null,
+      warnings: [],
+      evidence: [],
+      recovery: null,
+      error: null,
+    })
+    expect(envelope.data.schemaVersion).toBe(1)
+    expect(Array.isArray(envelope.data.capabilities)).toBe(true)
+    expect(envelope.data.capabilities.length).toBeGreaterThan(0)
+    expect(parseOperationEnvelope(envelope).ok).toBe(true)
+  })
+
+  test('keeps a static agent context null when a correlation ID is supplied', async () => {
+    const dir = await emptyDir()
+    const { stdout, stderr, code } = await run(
+      ['--agent-output', '--correlation-id', 'DBCLI-PLAT-006', 'capabilities'],
+      dir
+    )
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('')
+    expect(JSON.parse(stdout).context).toBeNull()
+  })
+
+  test('misplaced --agent-output after capabilities emits INVALID_AGENT_OUTPUT_OPTIONS and exit 2', async () => {
+    const dir = await emptyDir()
+    const result = await run(['capabilities', '--agent-output'], dir)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toBe('')
+    const envelope = JSON.parse(result.stdout)
+    expect(envelope).toMatchObject({
+      ok: false,
+      status: 'failed',
+      error: {
+        code: 'INVALID_AGENT_OUTPUT_OPTIONS',
+        message: 'Agent output options are invalid.',
+      },
+    })
+  })
+
+  test.each([
+    ['format json', ['--agent-output', 'capabilities', '--format', 'json']],
+    ['format markdown', ['--agent-output', 'capabilities', '--format', 'markdown']],
+    ['for-agent', ['--agent-output', 'capabilities', '--for-agent']],
+  ])('conflicting option %s emits INVALID_AGENT_OUTPUT_OPTIONS and exit 2', async (_name, args) => {
+    const dir = await emptyDir()
+    const result = await run(args, dir)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toBe('')
+    const envelope = JSON.parse(result.stdout)
+    expect(envelope.error.code).toBe('INVALID_AGENT_OUTPUT_OPTIONS')
+  })
+
+  test('discovery touches nothing on disk and makes no database connection', async () => {
+    const dir = await emptyDir()
+    const before = await treeOf(dir)
+    const result = await run(['--agent-output', 'capabilities'], dir)
+    expect(result.code).toBe(0)
+    expect(await treeOf(dir)).toEqual(before)
   })
 })

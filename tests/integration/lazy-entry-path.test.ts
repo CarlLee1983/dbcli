@@ -55,7 +55,8 @@ function run(...args: string[]): string {
 function expectAgentFailure(
   result: ReturnType<typeof runResult>,
   code: string,
-  exitCode: number
+  exitCode: number,
+  operation = 'capabilities.check'
 ): void {
   expect(result.status).toBe(exitCode)
   expect(result.stderr).toBe('')
@@ -63,7 +64,7 @@ function expectAgentFailure(
   expect(JSON.parse(result.stdout)).toMatchObject({
     schemaVersion: 1,
     ok: false,
-    operation: 'capabilities.check',
+    operation,
     status: 'failed',
     context: null,
     data: null,
@@ -96,7 +97,19 @@ describe('lazy entry path', () => {
     }
     expect(help).toContain('--agent-output')
     expect(help).toContain('Operation Envelope v1')
-    expect(help).toContain('check only')
+    expect(help).toContain('capabilities')
+    expect(help).toContain('capabilities check only')
+    expect(help).toContain('--correlation-id')
+  })
+
+  test.each([
+    ['invalid value', ['--correlation-id', '../../PLAT006_PATH', 'capabilities']],
+    ['missing value', ['--correlation-id']],
+    ['after subcommand', ['capabilities', '--correlation-id', 'DBCLI-PLAT-006']],
+  ])('normal %s correlation input exits 2', (_name, args) => {
+    const result = runResult(...args)
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('--correlation-id')
   })
 
   test('a lazily dispatched command renders its own full help', () => {
@@ -151,13 +164,34 @@ describe('lazy entry agent-output failures', () => {
       'for-agent conflict',
       ['--agent-output', 'capabilities', 'check', '--require', 'schema.read', '--for-agent'],
     ],
+    [
+      'correlation after subcommand',
+      [
+        '--agent-output',
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read',
+        '--correlation-id',
+        'DBCLI-PLAT-006',
+      ],
+    ],
   ])('%s is an invalid option envelope', (_name, args) => {
     expectAgentFailure(runResult(...args), 'INVALID_AGENT_OUTPUT_OPTIONS', 2)
   })
 
+  test('list correlation after subcommand is an invalid option envelope', () => {
+    expectAgentFailure(
+      runResult('--agent-output', 'capabilities', '--correlation-id', 'DBCLI-PLAT-006'),
+      'INVALID_AGENT_OUTPUT_OPTIONS',
+      2,
+      'capabilities.list'
+    )
+  })
+
   test.each([
     ['ordinary command', ['--agent-output', 'query', 'SELECT 1']],
-    ['capability catalog', ['--agent-output', 'capabilities']],
+    ['capabilities unknown subcommand', ['--agent-output', 'capabilities', 'unknown']],
     ['shell', ['--agent-output', 'shell']],
     ['es-shell', ['--agent-output', 'es-shell']],
     ['proxy', ['--agent-output', 'proxy']],
@@ -189,6 +223,25 @@ describe('lazy entry agent-output failures', () => {
     )
     expectAgentFailure(runResult('--agent-output', '--config'), 'INVALID_AGENT_OUTPUT_OPTIONS', 2)
     expectAgentFailure(
+      runResult(
+        '--agent-output',
+        '--correlation-id',
+        '../../PLAT006_PATH',
+        'capabilities',
+        'check',
+        '--require',
+        'schema.read'
+      ),
+      'INVALID_CORRELATION_ID',
+      2
+    )
+    expectAgentFailure(
+      runResult('--agent-output', '--correlation-id=', 'capabilities'),
+      'INVALID_CORRELATION_ID',
+      2,
+      'capabilities.list'
+    )
+    expectAgentFailure(
       runResult('--agent-output', '--timeout', 'capabilities', 'check', '--require', 'schema.read'),
       'INVALID_AGENT_OUTPUT_OPTIONS',
       2
@@ -209,15 +262,39 @@ describe('lazy entry agent-output failures', () => {
     expect(JSON.parse(result.stdout).error.code).toBe('CAPABILITY_REQUIREMENTS_UNMET')
   })
 
-  test.each(['loader', 'action'])(
-    '%s failures redact the raw error and emit one envelope',
-    (kind) => {
-      const lazyUrl = pathToFileURL(resolve(import.meta.dir, '../../src/program-lazy.ts')).href
-      const runtimeUrl = pathToFileURL(resolve(import.meta.dir, '../../src/cli-runtime.ts')).href
-      const sentinel = 'driver body: PLAT004_RAW_ERROR_SENTINEL'
-      const replacement =
-        kind === 'loader'
-          ? `async () => { throw new Error(${JSON.stringify(sentinel)}) }`
+  test('lazy entry dispatches --agent-output capabilities as capabilities.list envelope', () => {
+    const result = runResult('--agent-output', 'capabilities')
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+    const envelope = JSON.parse(result.stdout)
+    expect(envelope.schemaVersion).toBe(1)
+    expect(envelope.operation).toBe('capabilities.list')
+    expect(envelope.ok).toBe(true)
+    expect(envelope.status).toBe('succeeded')
+    expect(Array.isArray(envelope.data.capabilities)).toBe(true)
+    expect(envelope.data.capabilities.length).toBeGreaterThan(0)
+  })
+
+  test.each([
+    ['loader', 'check'],
+    ['action', 'check'],
+    ['list action', 'list'],
+  ])('%s failures redact the raw error and emit one envelope', (kind, operation) => {
+    const lazyUrl = pathToFileURL(resolve(import.meta.dir, '../../src/program-lazy.ts')).href
+    const runtimeUrl = pathToFileURL(resolve(import.meta.dir, '../../src/cli-runtime.ts')).href
+    const sentinel = 'driver body: PLAT004_RAW_ERROR_SENTINEL'
+    const replacement =
+      kind === 'loader'
+        ? `async () => { throw new Error(${JSON.stringify(sentinel)}) }`
+        : operation === 'list'
+          ? `async () => {
+            const { Command } = await import('commander')
+            return (program) => {
+              const capabilities = new Command('capabilities')
+              capabilities.action(() => { throw new Error(${JSON.stringify(sentinel)}) })
+              program.addCommand(capabilities)
+            }
+          }`
           : `async () => {
             const { Command } = await import('commander')
             return (program) => {
@@ -228,29 +305,33 @@ describe('lazy entry agent-output failures', () => {
               program.addCommand(capabilities)
             }
           }`
-      const script = `
+    const script = `
       const { COMMAND_LOADERS } = await import(${JSON.stringify(lazyUrl)})
       COMMAND_LOADERS.capabilities = ${replacement}
-      process.argv = ['bun', 'dbcli', '--agent-output', 'capabilities', 'check', '--require', 'schema.read']
+        process.argv = ['bun', 'dbcli', '--agent-output', 'capabilities'${operation === 'check' ? ",'check', '--require', 'schema.read'" : ''}]
       await import(${JSON.stringify(runtimeUrl)})
     `
-      const cwd = mkdtempSync(join(tmpdir(), 'dbcli-plat004-failure-'))
-      try {
-        const result = spawnSync('bun', ['-e', script], {
-          cwd,
-          encoding: 'utf8',
-          timeout: 60_000,
-          env: { ...process.env, NODE_ENV: 'test', DBCLI_NO_UPDATE_CHECK: '1' },
-        })
+    const cwd = mkdtempSync(join(tmpdir(), 'dbcli-plat004-failure-'))
+    try {
+      const result = spawnSync('bun', ['-e', script], {
+        cwd,
+        encoding: 'utf8',
+        timeout: 60_000,
+        env: { ...process.env, NODE_ENV: 'test', DBCLI_NO_UPDATE_CHECK: '1' },
+      })
 
-        expectAgentFailure(result, 'AGENT_OUTPUT_INTERNAL_ERROR', 1)
-        expect(result.stdout).not.toContain(sentinel)
-        expect(result.stderr).not.toContain(sentinel)
-        expect(JSON.parse(result.stdout).error.message).toBe('Agent output failed safely.')
-        expect(readdirSync(cwd)).toEqual([])
-      } finally {
-        rmSync(cwd, { recursive: true, force: true })
-      }
+      expectAgentFailure(
+        result,
+        'AGENT_OUTPUT_INTERNAL_ERROR',
+        1,
+        operation === 'list' ? 'capabilities.list' : 'capabilities.check'
+      )
+      expect(result.stdout).not.toContain(sentinel)
+      expect(result.stderr).not.toContain(sentinel)
+      expect(JSON.parse(result.stdout).error.message).toBe('Agent output failed safely.')
+      expect(readdirSync(cwd)).toEqual([])
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
     }
-  )
+  })
 })

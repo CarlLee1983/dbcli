@@ -5,10 +5,10 @@
 採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
 沒有已知的產品缺口。
 
-之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013 已交付並合併進
-`main`（PR #152、#164、#163、#162）。DBCLI-PLAT-004 Operation Envelope v1 已在
-本機完成實作、測試、文件與完整 gate，現在仍是 current Story，等待人類 review；下一個明定為
-DBCLI-PLAT-005。
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013、004 已交付，
+其中 001、011、012、013、004 已合併進 `main`（PR #152、#164、#163、#162、#165）。
+DBCLI-PLAT-005 Opt-in Agent JSON Mode 與 DBCLI-PLAT-006 Cross-command Correlation ID
+已完成實作、測試、文件與完整 gate；下一個 Story 尚未選定。
 
 未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
 release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
@@ -316,8 +316,8 @@ JSON key，兩者都沒有為其他欄位放寬。
 
 ```yaml
 workflow:
-  current_story: DBCLI-PLAT-004
-  next_story: DBCLI-PLAT-005
+  current_story: pending
+  next_story: pending
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -333,15 +333,18 @@ workflow:
     - DBCLI-012
     - DBCLI-013
     - DBCLI-PLAT-001
+    - DBCLI-PLAT-004
+    - DBCLI-PLAT-005
+    - DBCLI-PLAT-006
     - DBCLI-PLAT-011
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
-  status: in_progress
+  status: done
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-004-operation-envelope-v1
-  commit: cc7427bedbd72215ccf370911bd262ba9f315717
+  branch: feat/dbcli-plat-005-agent-json-mode
+  commit: 8d3384d63b30cd2a9140d2708e9b0d33d1b152de
   dirty_worktree: false
   story_owned_paths:
     - .cursor/rules/dbcli.mdc
@@ -361,21 +364,24 @@ baseline:
     - src/cli-runtime.ts
     - src/cli.ts
     - src/commands/capabilities.ts
+    - src/core/capabilities/registry.ts
     - src/core/capabilities/schema.ts
+    - src/core/correlation-id.ts
     - src/core/operation-envelope.ts
     - src/core/public.ts
-    - src/core/recovery/envelope-schema.ts
     - src/program-root.ts
     - src/utils/agent-output.ts
-    - src/utils/cli-output.ts
-    - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/
+    - src/utils/redaction.ts
+    - specs/stories/DBCLI-PLAT-005-agent-json-mode/
+    - specs/stories/DBCLI-PLAT-006-correlation-id/
     - specs/handoff.md
-    - tests/fixtures/plat004/
+    - tests/contract/capability-contract.test.ts
     - tests/integration/capabilities-command.test.ts
     - tests/integration/lazy-entry-path.test.ts
     - tests/unit/core-public.test.ts
     - tests/unit/core/operation-envelope.test.ts
-    - tests/unit/core/recovery/envelope-schema.test.ts
+    - tests/unit/core/correlation-id.test.ts
+    - tests/unit/core/audit/integration-helper.test.ts
     - tests/unit/i18n/root-help-messages.test.ts
   known_unrelated_paths: []
 
@@ -383,10 +389,10 @@ verification:
   last_command: make verify
   result: pass
   detail: >-
-    On the completed PLAT-004 worktree, make verify passed: 6711 tests passed
-    across 567 files with 0 failures; performance checks passed 21 tests with 2
-    intentional SQL skips and 0 failures; the build was reproducible; and every
-    static gate passed. The focused PLAT-004 suite passed 99 of 99 tests.
-    git diff --check passed; graft check reported an in-sync 5519-node graph.
-    release:check was not run because no release was requested.
+    PLAT-005 and PLAT-006 make verify passed: 6732 tests across 568 files with 0
+    failures; performance checks passed 21 tests with 2 intentional SQL skips and 0
+    failures; the build was reproducible; and every static gate (skill, platform,
+    plugin, manifest, docs, contract, plan, forgeflow) passed. Focused PLAT-006
+    placement, agent-envelope, audit, and strict-envelope regression tests passed.
+    git diff --check passed. release:check was not run because no release was requested.
 ```

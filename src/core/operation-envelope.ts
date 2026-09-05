@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { DATABASE_SYSTEMS, type DatabaseSystem } from '@/adapters/types'
-import { CAPABILITY_ID_PATTERN } from '@/core/capabilities/schema'
+import { CAPABILITY_ID_PATTERN, CapabilityCatalogSchema } from '@/core/capabilities/schema'
+import type { CapabilityCatalog } from '@/core/capabilities/types'
 import { recoveryEnvelopeSchema } from '@/core/recovery/envelope-schema'
+import { CORRELATION_ID_PATTERN } from '@/core/correlation-id'
 import type { RecoveryEnvelope } from '@/core/recovery/types'
 import type { Permission } from '@/types'
 
@@ -18,6 +20,7 @@ const CODE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
 const EVIDENCE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/
 
+export type OperationEnvelopeOperation = 'capabilities.check' | 'capabilities.list'
 export type OperationEnvelopeStatus = 'succeeded' | 'failed'
 export type OperationEnvelopeEvidenceKind = 'receipt' | 'audit' | 'verification-artifact'
 
@@ -26,6 +29,7 @@ export interface OperationEnvelopeContext {
   readonly permission: Permission
   readonly connectionName: string | null
   readonly agentMode: boolean
+  readonly correlationId?: string
 }
 
 export interface OperationEnvelopeCapabilityResult {
@@ -65,10 +69,10 @@ export interface OperationEnvelopeError {
 export interface OperationEnvelope {
   readonly schemaVersion: typeof OPERATION_ENVELOPE_SCHEMA_VERSION
   readonly ok: boolean
-  readonly operation: 'capabilities.check'
+  readonly operation: OperationEnvelopeOperation
   readonly status: OperationEnvelopeStatus
   readonly context: OperationEnvelopeContext | null
-  readonly data: OperationEnvelopeCapabilitiesCheckData | null
+  readonly data: OperationEnvelopeCapabilitiesCheckData | CapabilityCatalog | null
   readonly warnings: readonly OperationEnvelopeWarning[]
   readonly evidence: readonly OperationEnvelopeEvidenceReference[]
   readonly recovery: RecoveryEnvelope | null
@@ -107,6 +111,7 @@ const contextSchema = z
     permission: z.enum(['query-only', 'read-write', 'data-admin', 'admin']),
     connectionName: identifierSchema.nullable(),
     agentMode: z.boolean(),
+    correlationId: z.string().regex(CORRELATION_ID_PATTERN, 'invalid correlation id').optional(),
   })
   .strict()
 
@@ -208,14 +213,14 @@ const operationEnvelopeFieldSchema = z
     schemaVersion: z.literal(OPERATION_ENVELOPE_SCHEMA_VERSION),
     ok: z.boolean(),
     operation: z
-      .literal('capabilities.check')
+      .enum(['capabilities.check', 'capabilities.list'])
       .refine(
         (value) =>
           value.length <= MAX_OPERATION_ENVELOPE_IDENTIFIER_LENGTH && OPERATION_ID.test(value)
       ),
     status: z.enum(['succeeded', 'failed']),
     context: contextSchema.nullable(),
-    data: capabilitiesCheckDataSchema.nullable(),
+    data: z.union([capabilitiesCheckDataSchema, CapabilityCatalogSchema]).nullable(),
     warnings: z.array(warningSchema).max(MAX_OPERATION_ENVELOPE_ITEMS),
     evidence: z.array(evidenceSchema).max(MAX_EVIDENCE_ITEMS),
     recovery: recoveryEnvelopeSchema.nullable(),
@@ -230,44 +235,111 @@ const operationEnvelopeFieldSchema = z
       })
     }
 
-    if (envelope.status === 'succeeded') {
-      if (envelope.error !== null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'successful envelopes require error null',
-        })
+    if (envelope.operation === 'capabilities.check') {
+      if (envelope.status === 'succeeded') {
+        if (envelope.error !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful envelopes require error null',
+          })
+        }
+        if (envelope.data === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.check envelopes require data',
+          })
+        } else if ('results' in envelope.data) {
+          if (envelope.data.results.some((result) => result.status !== 'available')) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'successful capabilities.check results must all be available',
+            })
+          }
+        } else {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'capabilities.check requires capabilitiesCheckDataSchema shape',
+          })
+        }
+      } else if (envelope.error === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'failed envelopes require an error' })
       }
-      if (envelope.data === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'successful capabilities.check envelopes require data',
-        })
-      } else if (envelope.data.results.some((result) => result.status !== 'available')) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'successful capabilities.check results must all be available',
-        })
-      }
-    } else if (envelope.error === null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'failed envelopes require an error' })
-    }
 
-    const completedNegative = envelope.error?.code === 'CAPABILITY_REQUIREMENTS_UNMET'
-    if (envelope.status === 'failed' && completedNegative !== (envelope.data !== null)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'only completed negative capability results retain data',
-      })
-    }
-    if (
-      completedNegative &&
-      envelope.data !== null &&
-      envelope.data.results.every((result) => result.status === 'available')
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'completed negative capability results require an unmet result',
-      })
+      const completedNegative = envelope.error?.code === 'CAPABILITY_REQUIREMENTS_UNMET'
+      if (envelope.status === 'failed' && completedNegative !== (envelope.data !== null)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'only completed negative capability results retain data',
+        })
+      }
+      if (
+        completedNegative &&
+        envelope.data !== null &&
+        'results' in envelope.data &&
+        envelope.data.results.every((result) => result.status === 'available')
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'completed negative capability results require an unmet result',
+        })
+      }
+    } else if (envelope.operation === 'capabilities.list') {
+      if (envelope.status === 'succeeded') {
+        if (envelope.context !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.list envelopes require context null',
+          })
+        }
+        if (envelope.warnings.length !== 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.list envelopes require warnings empty',
+          })
+        }
+        if (envelope.evidence.length !== 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.list envelopes require evidence empty',
+          })
+        }
+        if (envelope.recovery !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.list envelopes require recovery null',
+          })
+        }
+        if (envelope.error !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful envelopes require error null',
+          })
+        }
+        if (envelope.data === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful capabilities.list envelopes require data',
+          })
+        } else if (!('capabilities' in envelope.data)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'capabilities.list requires CapabilityCatalogSchema shape',
+          })
+        }
+      } else {
+        if (envelope.error === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'failed envelopes require an error',
+          })
+        }
+        if (envelope.data !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'failed capabilities.list envelopes require data null',
+          })
+        }
+      }
     }
 
     if (envelope.recovery !== null) {
@@ -336,7 +408,7 @@ export function serializeOperationEnvelope(input: unknown): SerializedOperationE
   const fallback: OperationEnvelope = {
     schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
     ok: false,
-    operation: 'capabilities.check',
+    operation: envelope.operation,
     status: 'failed',
     context: null,
     data: null,

@@ -1,6 +1,6 @@
 {
   "cli": {
-    "agent_output_option": "Emit one Operation Envelope v1 (capabilities check only)"
+    "agent_output_option": "Emit one Operation Envelope v1 (capabilities and capabilities check only)"
   },
   "init": {
     "description": "Initialize dbcli configuration with .env parsing and interactive prompts",

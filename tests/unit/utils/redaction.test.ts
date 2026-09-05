@@ -103,6 +103,12 @@ describe('redaction utils', () => {
       expect(redactArgv(argv)).toBe('node list --config <redacted> --use <redacted>')
     })
 
+    test('redacts correlation IDs from command summaries', () => {
+      expect(redactArgv(['dbcli', '--correlation-id', 'INC-2026.09.05', 'query', 'SELECT 1'])).toBe(
+        'dbcli --correlation-id <redacted> query <sql>'
+      )
+    })
+
     test('structurally redacts every lint SQL input with global options before the command', () => {
       expect(
         redactArgv([

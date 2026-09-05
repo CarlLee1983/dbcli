@@ -1,10 +1,16 @@
 import { describe, test, expect, spyOn, beforeEach, afterAll, mock } from 'bun:test'
 import { Command } from 'commander'
+import { join } from 'node:path'
 import { registerSkillTasksCommand } from '@/commands/skill-tasks'
 import { AdapterFactory } from '@/adapters'
 
 function makeRoot(): Command {
   const program = new Command().name('dbcli').exitOverride()
+  program.option(
+    '--config <path>',
+    'config path',
+    join(import.meta.dir, '..', '..', 'fixtures', 'agent-tasks', 'capability-context.json')
+  )
   const skill = program.command('skill').description('skill')
   registerSkillTasksCommand(skill)
   return program

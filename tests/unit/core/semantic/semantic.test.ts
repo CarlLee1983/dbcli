@@ -107,6 +107,46 @@ describe('semantic context', () => {
     })
   })
 
+  test('enforces the semantic context version boundary', async () => {
+    const root = workspace()
+
+    await writeSemantic(root, { ...valid, relationships: [] })
+    await expect(
+      loadSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: '$', message: 'contains an unknown property' }),
+      ]),
+    })
+
+    for (const context of [
+      { ...valid, version: 3 },
+      { ...valid, version: '2' },
+      { models: valid.models, metrics: valid.metrics },
+    ]) {
+      await writeSemantic(root, context)
+      await expect(
+        loadSemanticContext({ workspaceRoot: root, schema, snippets })
+      ).rejects.toMatchObject({
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: '$.version', message: 'must equal 1 or 2' }),
+        ]),
+      })
+    }
+
+    await writeSemantic(root, { ...valid, version: 2, relationships: [] })
+    await expect(
+      migrateSemanticContext({ workspaceRoot: root, schema, snippets })
+    ).rejects.toMatchObject({
+      issues: [
+        expect.objectContaining({
+          path: '$.version',
+          message: 'must equal 1 to migrate to version 2',
+        }),
+      ],
+    })
+  })
+
   test('rejects duplicate relationships and endpoints outside a declared model field', async () => {
     const root = workspace()
     await writeSemantic(root, {

@@ -5,14 +5,13 @@
 採用版本的對帳、發布前的盤點，以及把仍留在這份散文裡的風險移出去。那一批結束時
 沒有已知的產品缺口。
 
-之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、011、012、013、004 已交付，
-其中 001、011、012、013、004 已合併進 `main`（PR #152、#164、#163、#162、#165）。
-DBCLI-PLAT-005 Opt-in Agent JSON Mode 與 DBCLI-PLAT-006 Cross-command Correlation ID
-已完成實作、測試、文件與完整 gate；下一個 Story 尚未選定。
+之後開的是 Agent Platform 這條線：DBCLI-PLAT-001、004 到 010、011、012、013
+均已交付並合併進 `main`（PR #152、#162 到 #170）。其中 009、010 以 issue 驗收，
+沒有建立正式 ForgeFlow Story。
 
-未結的是發布：DBCLI-001 到 012 的成果全部未發布，建議版本 8.0.0，留給下一個獨立的
-release Story。bump 之前 `SECURITY.md` 的支援列必須從 `7.x` 改成 `8.x`，否則
-`manifest:check`（`scripts/check-plugin-manifests.ts:164-176`）會擋下 release。
+8.0.0 release diff 將 DBCLI-001 到 012 與 Agent Platform 成果定版，並把
+`SECURITY.md` 的支援線從 `7.x` 更新為 `8.x`。`bun run release:check` 已通過；
+合併、tag、GitHub Release 與 npm publish 依 release 流程執行。
 
 ## 已交付：DBCLI-PLAT-001
 
@@ -45,9 +44,6 @@ agent 以為完全讀不到 schema，反方向的錯更大。真正的修法是 
 top-level 指令。`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等 16 個
 不在 catalog 裡，問它們會得到 `unknown`。替它們寫 engine 支援度等於憑讀碼捏造未經
 稽核的宣稱，這正是這份契約要避免的事。擴充 matrix 是 DBCLI-PLAT-011。
-
-後續 backlog（DBCLI-PLAT-005 到 010）只寫進 spec，沒有實作。Task Pack 仍是
-`plan-only`，`safety.requires` 沒有動；PLAT-004 只新增顯式輸出投影，沒有改 Task Pack。
 
 ## 交付紀錄
 
@@ -321,6 +317,18 @@ example, and correlation/evidence guidance. Its integration test exercises
 catalog discovery plus successful and unsuccessful Operation Envelope
 preflight against the real CLI. `make verify` passed with 6,744 tests.
 
+## DBCLI-PLAT-007 與 issue #150 收尾
+
+DBCLI-PLAT-007 的既有實作已補齊七個 receipt 指令的失敗路徑；各指令會在原本的
+exit 或 throw 前完成要求的 failed receipt，並保留原輸出、exit code 與 schema
+early-exit 的 audit 行為。整合測試以實際 command rows、credential、connection URI、
+SQL、error、session ID、absolute path 與 stdout payload 驗證八個指定值都不會寫進
+receipt，也涵蓋無 correlation、非覆寫路徑與固定寫入失敗訊息。
+
+Issue #150 已以 `tests/unit/core/semantic/semantic.test.ts` 釘住 semantic context 的
+版本邊界：v1、v2 合法，v3、字串 `"2"`、缺版本與 v1 migration 以外的來源均拒絕。
+本次 `make verify` 通過 6,757 tests、0 failures。
+
 ## Lifecycle
 
 ```yaml
@@ -353,34 +361,28 @@ workflow:
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-plat-009-skill-author-integration-kit
-  commit: 27297aae786b01b22f3ea7f8e603cf8797067afd
+  branch: release/v8.0.0
+  commit: 8abf7c7fae90f02d70b3d525de5e8a00758743cb
   dirty_worktree: false
   story_owned_paths:
-    - .cursor/rules/dbcli.mdc
-    - .cursor/skills/dbcli/reference.md
-    - .github/skills/dbcli/
-    - .windsurfrules
-    - .windsurf/skills/dbcli/reference.md
-    - assets/SKILL.md
-    - assets/SKILL.zh-TW.md
-    - assets/reference.md
-    - assets/integration-kit/
-    - docs/specs/2026-09-04-agent-integration-contract-v1.md
-    - docs/user/en/
-    - docs/user/zh-TW/
-    - plugins/dbcli-agent/skills/dbcli/
-    - skills/dbcli/
+    - .claude-plugin/plugin.json
+    - .codex-plugin/plugin.json
+    - .cursor-plugin/plugin.json
+    - CHANGELOG.md
+    - SECURITY.md
+    - gemini-extension.json
+    - package.json
+    - plugins/dbcli-agent/.codex-plugin/plugin.json
     - specs/handoff.md
-    - tests/integration/skill-author-integration-kit.test.ts
+    - tests/fixtures/plat004/legacy-surface-baseline.json
+    - tests/integration/lazy-entry-path.test.ts
   known_unrelated_paths: []
 
 verification:
   last_command: make verify
   result: pass
   detail: >-
-    DBCLI-PLAT-009 issue implementation make verify passed with 6744 tests
-    across 570 files and 0 failures. Static gates, integration services,
-    performance checks, build, ForgeFlow checks, and git diff --check passed.
-    release:check was not run.
+    Full verification passed with 6757 tests across 571 files and 0 failures.
+    Audit, formatting, typecheck, lint, deterministic build, performance,
+    documentation, capability contracts, plugin manifests, and ForgeFlow passed.
 ```

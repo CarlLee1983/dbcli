@@ -4,7 +4,10 @@ import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { configModule } from '@/core/config'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
-import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
+import {
+  attachCommandEvidenceReceipt,
+  finalizeCommandEvidenceReceipt,
+} from '@/commands/command-evidence-receipt'
 import {
   ALLOWED_SECTIONS,
   collectReport,
@@ -102,6 +105,7 @@ export const reportCommand = new Command()
         })
       }
       console.error((err as Error).message)
+      await finalizeCommandEvidenceReceipt(command, 'report', 'failed', config)
       process.exit(1)
     }
   })

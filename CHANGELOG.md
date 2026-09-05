@@ -5,13 +5,13 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 建議版本 8.0.0
+## [8.0.0] - 2026-09-05
 
-ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`（`224ee59d`）
+ForgeFlow Story DBCLI-001 到 DBCLI-012 全數在 `v7.0.1`（`224ee59d`）之後交付；該 tag
 早於 Story 的合併點 `04a88a44`，因此以下每一條都在 `7.0.1` 之外。DBCLI-013 補上
 採用漂移的檢查與這份紀錄本身。
 
-版本建議 **8.0.0**。理由不是變更量，而是三處會拒絕先前被接受的輸入、以及一處會
+版本為 **8.0.0**。理由不是變更量，而是三處會拒絕先前被接受的輸入、以及一處會
 改變 JSON 判決值——SemVer 對這四項的答案都是 MAJOR，詳見下方 Breaking。
 
 ### Added
@@ -46,6 +46,20 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   （`explain`、`plan`、`impact`、`assert`、`verify`、`evidence` 等）不在其中，
   因為替它們寫 engine 支援度等於憑讀碼捏造未經稽核的宣稱。它們回 `unknown`，
   擴充 matrix 是後續 Story。（DBCLI-PLAT-001，ADR-0022）
+
+- **Agent output 成為可組合的穩定契約。** `--agent-output` 提供嚴格、限界且遮蔽過的
+  Operation Envelope；`--correlation-id` 能把跨命令結果與 audit metadata 串在一起，
+  同時保留原有 human 與 JSON 輸出。（DBCLI-PLAT-004、005、006）
+
+- **外部 agent workflow 能在執行前驗證能力並留下證據。** `inspect`、`report`、
+  `schema`、`plan`、`lint`、`explain` 與 `impact assess` 可選擇寫出 bounded receipt；
+  Task Pack 的 `safety.requires` 會對 catalog 與本機 context 做 fail-closed preflight。
+  （DBCLI-PLAT-007、008）
+
+- **套件新增 Skill Author Integration Kit 與外部 consumer contracts。** 可複製的
+  Bun/TypeScript fixture 只使用公開 package surface，示範 discovery、schema pin、
+  envelope、correlation 與 evidence；CRUD、CQRS、DBA contract tests 覆蓋成功 preflight
+  與 query-only permission refusal。（DBCLI-PLAT-009、010）
 
 ### Added
 
@@ -96,6 +110,12 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數交付但尚未發布：`v7.0.1`�
   （DBCLI-PLAT-011）
 
 ### Fixed
+
+- **要求 receipt 的失敗命令現在也會留下 `outcome: failed`。** `inspect`、`report`、
+  `schema`、`plan`、`lint` 與 `explain` 原本會在 Commander `postAction` 前 exit 或 throw，
+  因而跳過 receipt；`schema` 的既有快取／未加 `--force` 成功路徑也會提早 exit。
+  這些路徑現在保留原本的輸出與 exit code，再完成 bounded receipt；任何 receipt 寫入
+  失敗仍只回報 `Failed to write evidence receipt`。（DBCLI-PLAT-007、#157）
 
 - **Schema cache 的寫入不再是一次完整設定的重新發布。** `dbcli schema` 原本透過
   `configModule.write`（v1）與 `writeV2Config`（v2）存快取，兩者都在

@@ -37,6 +37,33 @@ export async function writeCommandEvidenceReceipt(input: {
   }
 }
 
+/** Finalizes an opted-in receipt without changing the command's result. */
+export async function finalizeCommandEvidenceReceipt(
+  command: Command,
+  operation: CommandEvidenceReceiptOperation,
+  outcome: 'succeeded' | 'failed',
+  config?: RuntimeDbcliConfig,
+  auditRef?: string | null
+): Promise<void> {
+  try {
+    const outputPath = command.opts<Record<string, unknown>>().evidenceReceipt
+    if (typeof outputPath !== 'string') return
+    const resolvedConfig = config ?? (await configModule.read(resolveConfigPath(command)))
+    const result = await writeCommandEvidenceReceipt({
+      workspaceRoot: process.cwd(),
+      outputPath,
+      config: resolvedConfig,
+      operation,
+      outcome,
+      auditRef,
+    })
+    if ('error' in result) console.error(result.error)
+    else console.error(`Evidence receipt: ${result.path}`)
+  } catch {
+    console.error('Failed to write evidence receipt')
+  }
+}
+
 /** Adds the shared opt-in receipt behavior to commands whose result is already complete. */
 export function attachCommandEvidenceReceipt(
   command: Command,
@@ -45,21 +72,10 @@ export function attachCommandEvidenceReceipt(
   command
     .option('--evidence-receipt <path>', 'Write a safe provenance receipt after the result')
     .hook('postAction', async (_thisCommand, actionCommand) => {
-      try {
-        const outputPath = actionCommand.opts<Record<string, unknown>>().evidenceReceipt
-        if (typeof outputPath !== 'string') return
-        const config = await configModule.read(resolveConfigPath(actionCommand))
-        const result = await writeCommandEvidenceReceipt({
-          workspaceRoot: process.cwd(),
-          outputPath,
-          config,
-          operation,
-          outcome: process.exitCode === 1 ? 'failed' : 'succeeded',
-        })
-        if ('error' in result) console.error(result.error)
-        else console.error(`Evidence receipt: ${result.path}`)
-      } catch {
-        console.error('Failed to write evidence receipt')
-      }
+      await finalizeCommandEvidenceReceipt(
+        actionCommand,
+        operation,
+        process.exitCode === 1 ? 'failed' : 'succeeded'
+      )
     })
 }

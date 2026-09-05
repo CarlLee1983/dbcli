@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import {
+  buildCommandEvidenceReceipt,
   buildEvidenceReceipt,
   canonicalizeEvidenceReceiptCommand,
   parseEvidenceReceipt,
@@ -18,6 +20,66 @@ const context = {
 }
 
 describe('evidence receipt', () => {
+  test('strictly parses every bounded command receipt operation', () => {
+    const operations = [
+      'inspect',
+      'report',
+      'schema',
+      'plan',
+      'lint',
+      'explain',
+      'impact.assess',
+    ] as const
+
+    for (const operation of operations) {
+      const receipt = buildCommandEvidenceReceipt({
+        operation,
+        outcome: 'succeeded',
+        context,
+        correlationId: 'plat007-correlation',
+      })
+      expect(parseEvidenceReceipt(receipt)).toEqual(receipt)
+      expect(() => parseEvidenceReceipt({ ...receipt, unexpected: true })).toThrow()
+      expect(() => parseEvidenceReceipt({ ...receipt, operation: 'unknown' })).toThrow()
+      expect(() =>
+        parseEvidenceReceipt({
+          ...receipt,
+          context: { ...receipt.context, engine: 'unsafe\nvalue' },
+        })
+      ).toThrow()
+    }
+  })
+
+  test('rejects malformed command receipt fields and version combinations', () => {
+    const receipt = buildCommandEvidenceReceipt({
+      operation: 'inspect',
+      outcome: 'succeeded',
+      context,
+      correlationId: 'plat007-correlation',
+    })
+    const invalid = [
+      { ...receipt, version: 2 },
+      { ...receipt, context: { ...receipt.context, schemaFingerprint: 'invalid' } },
+      {
+        ...receipt,
+        observation: { ...receipt.observation, capability: 'unexpected.capability' },
+      },
+      {
+        ...receipt,
+        observation: {
+          ...receipt.observation,
+          subject: { kind: 'command', name: 'report' },
+        },
+      },
+      {
+        ...receipt,
+        observation: { ...receipt.observation, correlationId: 'x'.repeat(161) },
+      },
+      { ...receipt, observation: { ...receipt.observation, unexpected: true } },
+    ]
+    for (const value of invalid) expect(() => parseEvidenceReceipt(value)).toThrow()
+  })
+
   test('strips absolute Bun executable and source paths before validating redacted provenance', () => {
     expect(
       canonicalizeEvidenceReceiptCommand(
@@ -99,6 +161,11 @@ describe('evidence receipt', () => {
       await expect(writeEvidenceReceipt(workspace, '../escape.json', receipt)).rejects.toThrow(
         'stay inside'
       )
+      const absolute = join(tmpdir(), `dbcli-plat007-absolute-${randomUUID()}.json`)
+      await expect(writeEvidenceReceipt(workspace, absolute, receipt)).rejects.toThrow(
+        'stay inside'
+      )
+      expect(await Bun.file(absolute).exists()).toBe(false)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }

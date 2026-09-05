@@ -722,7 +722,7 @@ Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/v
 
 `evidence compose` may reference that explicit workspace-contained receipt with `--receipt <path>`; provenance is not execution approval.
 
-`inspect`, `report`, `schema`, `plan`, `lint`, `explain`, and `impact assess` also accept `--evidence-receipt <workspace-relative-path>`. Their receipt records only the command capability, a fixed command subject, timestamp, safe context digests, and an optional correlation ID; it never copies command input, SQL, rows, paths, or raw errors. A receipt write failure is reported separately and does not change the command result.
+`inspect`, `report`, `schema`, `plan`, `lint`, `explain`, and `impact assess` also accept `--evidence-receipt <workspace-relative-path>`. Their receipt records only the command capability, a fixed command subject, timestamp, safe context digests, and an optional correlation ID; it never copies command input, SQL, rows, paths, or raw errors. Successful and failed command outcomes both produce a receipt when requested. A receipt write failure is reported separately and does not change the command result or exit code.
 
 **Output contract:**
 

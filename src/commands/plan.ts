@@ -6,7 +6,10 @@ import { validateFormat } from '@/utils/validation'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
 import { toSqlDialect } from '@/core/permission-guard'
-import { writeCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
+import {
+  finalizeCommandEvidenceReceipt,
+  writeCommandEvidenceReceipt,
+} from '@/commands/command-evidence-receipt'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -108,6 +111,7 @@ export async function planCommand(
       )
     }
     console.error((error as Error).message)
+    if (command) await finalizeCommandEvidenceReceipt(command, 'plan', 'failed', config)
     process.exit(1)
   }
 }

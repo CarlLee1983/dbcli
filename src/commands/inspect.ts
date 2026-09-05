@@ -6,7 +6,10 @@ import { validateFormat } from '@/utils/validation'
 import { collectInspect, renderJson, renderMarkdown } from '@/core/inspect'
 import { configModule } from '@/core/config'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
-import { attachCommandEvidenceReceipt } from '@/commands/command-evidence-receipt'
+import {
+  attachCommandEvidenceReceipt,
+  finalizeCommandEvidenceReceipt,
+} from '@/commands/command-evidence-receipt'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
 
@@ -91,6 +94,7 @@ export const inspectCommand = new Command()
       }
 
       if (envelopeId !== undefined) {
+        await finalizeCommandEvidenceReceipt(command, 'inspect', 'failed', config, auditId)
         const { emitRecoveryEnvelope } = await import('@/core/recovery')
         emitRecoveryEnvelope(
           err,
@@ -102,6 +106,7 @@ export const inspectCommand = new Command()
         )
       }
       console.error((err as Error).message)
+      await finalizeCommandEvidenceReceipt(command, 'inspect', 'failed', config, auditId)
       process.exit(1)
     }
   })

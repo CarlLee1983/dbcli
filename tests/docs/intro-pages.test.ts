@@ -170,6 +170,22 @@ test('locale pages expose the same section and component contract', async () => 
   expect(cssText(zh.document)).toBe(cssText(en.document))
 })
 
+test('GitHub Pages root redirects to the published landing page', async () => {
+  const { document } = await loadIntroPage('docs/index.html')
+  expect(document.querySelector('meta[http-equiv="refresh"]')?.getAttribute('content')).toBe(
+    '0; url=./dbcli-intro.html'
+  )
+  expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+    './dbcli-intro.html'
+  )
+  expect(document.querySelector('a[href="./dbcli-intro.html"]')).not.toBeNull()
+})
+
+test('the architecture snapshot avoids release-specific version branding', async () => {
+  const html = await Bun.file('docs/dbcli-architecture-eli5.html').text()
+  expect(html).not.toMatch(/\bdbcli v\d+\.\d+\.\d+\b/)
+})
+
 test('quickstart command extraction normalizes CRLF lines independently', () => {
   const window = new Window()
   window.document.write(

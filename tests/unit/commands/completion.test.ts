@@ -43,7 +43,7 @@ const ROOT: CompletionCommandNode = {
     {
       name: 'skill',
       description: 'skill',
-      options: [opt('--lang')],
+      options: [],
       children: [
         { name: 'context', description: 'context', options: [opt('--format')], children: [] },
       ],
@@ -157,18 +157,6 @@ describe('generateBashCompletion', () => {
   })
   test('keeps command option completion after positional args', async () => {
     const candidates = await runBashCompletion(script, ['dbcli', 'query', 'select 1', '--'])
-    expect(candidates).toContain('--format')
-    expect(candidates).not.toContain('--config')
-  })
-  test('keeps child command path after parent option value', async () => {
-    const candidates = await runBashCompletion(script, [
-      'dbcli',
-      'skill',
-      '--lang',
-      'zh-TW',
-      'context',
-      '--',
-    ])
     expect(candidates).toContain('--format')
     expect(candidates).not.toContain('--config')
   })

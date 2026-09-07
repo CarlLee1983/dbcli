@@ -3137,7 +3137,7 @@ dbcli skill --install codex                  # install to ~/.codex/skills/dbcli/
 **Options:**
 - `--install <platform>` — `claude` | `gemini` | `antigravity` | `copilot` | `cursor` | `codex` | `windsurf`. Writes `SKILL.md` plus `reference.md` next to it so the agent gets progressive disclosure.
 - `--output <path>` — write `SKILL.md` to a file instead of stdout. Does not install `reference.md`.
-- `--lang <en|zh-TW>` — source language for the emitted SKILL content (default `en`). It selects `assets/SKILL.md` vs `assets/SKILL.zh-TW.md`; the install/output filename stays `SKILL.md` regardless.
+- Skill content is always the canonical English `assets/SKILL.md`; the install/output filename is `SKILL.md`.
 
 **Notes:**
 - Both files come straight from `assets/SKILL.md` + `assets/reference.md` inside the dbcli package — no runtime rendering. Keep these in sync when shipping a release.

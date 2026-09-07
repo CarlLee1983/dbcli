@@ -39,7 +39,6 @@ function pipeList(src: string): string[] | null {
 
 const checks: Check[] = [
   { file: 'assets/SKILL.md', label: 'SKILL --install pipe list', extract: pipeList },
-  { file: 'assets/SKILL.zh-TW.md', label: 'SKILL.zh-TW --install pipe list', extract: pipeList },
   {
     file: 'README.md',
     label: 'README skill --install usage block',

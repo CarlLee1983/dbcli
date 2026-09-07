@@ -1357,8 +1357,7 @@ DML/DDL 指令上的部分覆蓋缺口已於 v1.20.1 結清，完整對照表見
 [`.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md`](./.planning/phases/25-recovery-envelope-bi-directional-linkage/25-J1-COVERAGE-MATRIX.md)。
 
 進階 agent 工作流程（session handoff、forensics walk-through）詳見
-[`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage（英文）或
-[`assets/SKILL.zh-TW.md`](./assets/SKILL.zh-TW.md) §Audit Log 使用。
+[`assets/SKILL.md`](./assets/SKILL.md) §Audit Log usage。
 
 ---
 

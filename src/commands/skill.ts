@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import { homedir } from 'node:os'
 import { t, t_vars } from '@/i18n/message-loader'
 import { packageAssetPath } from '@/utils/package-root'
-import { Command, Option } from 'commander'
+import { Command } from 'commander'
 import { gatherContext } from '@/core/context/context'
 import { serializeXml, serializeJson, serializeMarkdown } from '@/core/context/serializer'
 import { gatherContextV2 } from '@/core/context/context-v2'
@@ -40,20 +40,9 @@ function looksLikeDbcliSkill(content: string): boolean {
   return SKILL_SENTINELS.some((sentinel) => content.includes(sentinel))
 }
 
-/**
- * Resolve the SKILL source markdown file path based on the requested language.
- * `--lang` is a SOURCE-FILE SELECTOR, not a `DBCLI_LANG` integration (D-73).
- * Target install/output filename stays `SKILL.md` regardless of source (D-74).
- */
-function resolveSkillSource(lang: string): string {
-  if (lang === 'zh-TW') return packageAssetPath('SKILL.zh-TW.md')
-  return packageAssetPath('SKILL.md')
-}
-
 export interface SkillOptions {
   install?: string // platform: claude, gemini, antigravity, copilot, cursor, codex, windsurf
   output?: string // custom output file path
-  lang?: 'en' | 'zh-TW' // source language for SKILL content (default 'en', D-73)
 }
 
 /**
@@ -82,9 +71,8 @@ export type Platform = (typeof SUPPORTED_PLATFORMS)[number]
  */
 export async function skillCommand(program: Command, options: SkillOptions): Promise<void> {
   try {
-    // 1. Read static SKILL.<lang>.md (single source of truth; D-73 source selector)
-    const lang = options.lang ?? 'en' // defensive: commander supplies default, but unit tests bypass commander
-    const skillSourcePath = resolveSkillSource(lang)
+    // 1. Read the canonical English SKILL.md.
+    const skillSourcePath = packageAssetPath('SKILL.md')
     const skillFile = Bun.file(skillSourcePath)
     if (!(await skillFile.exists())) {
       throw new Error(`Skill source not found: ${skillSourcePath}`)
@@ -146,16 +134,9 @@ export async function checkSkillUpdates(): Promise<string[]> {
   const outdated: string[] = []
 
   try {
-    // A skill may be installed from any supported source language (D-73), and
-    // every language ships the same version. An install is current if it matches
-    // ANY current source. Comparing only against English falsely flagged every
-    // `--lang zh-TW` install as outdated forever (fired on each command).
-    const sourceContents: string[] = []
-    for (const lang of ['en', 'zh-TW'] as const) {
-      const sourceFile = Bun.file(resolveSkillSource(lang))
-      if (await sourceFile.exists()) sourceContents.push(await sourceFile.text())
-    }
-    if (sourceContents.length === 0) return []
+    const sourceFile = Bun.file(packageAssetPath('SKILL.md'))
+    if (!(await sourceFile.exists())) return []
+    const sourceContent = await sourceFile.text()
 
     for (const platform of SUPPORTED_PLATFORMS) {
       try {
@@ -167,7 +148,7 @@ export async function checkSkillUpdates(): Promise<string[]> {
           // Only a real dbcli skill can be "outdated". A shared-path file that
           // isn't ours (e.g. a user's own `.windsurfrules`) must be left alone,
           // not flagged — flagging it nags the user to reinstall and clobber it.
-          if (looksLikeDbcliSkill(installedContent) && !sourceContents.includes(installedContent)) {
+          if (looksLikeDbcliSkill(installedContent) && installedContent !== sourceContent) {
             outdated.push(platform)
           }
         }
@@ -315,11 +296,6 @@ export function registerSkillCommand(program: Command): Command {
       'Install to platform directory (claude, gemini, antigravity, copilot, cursor, codex, windsurf)'
     )
     .option('--output <path>', 'Write skill to file instead of stdout')
-    .addOption(
-      new Option('--lang <lang>', 'Source language for SKILL content')
-        .choices(['en', 'zh-TW'])
-        .default('en')
-    )
     .action(async (options: Record<string, unknown>) => {
       try {
         await skillCommand(program, options)

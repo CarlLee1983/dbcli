@@ -28,7 +28,7 @@ step '5/9 lint'
 bun run lint
 
 step '6/9 test'
-bun test
+bun run test
 
 step '7/9 build'
 bun run build
@@ -37,7 +37,6 @@ step '8/9 dist smoke'
 bun test tests/integration/dist-smoke.test.ts
 
 step '9/9 doc & manifest presence'
-bun run skill:check
 bun run platform:check
 bun run plugin:check
 bun run manifest:check

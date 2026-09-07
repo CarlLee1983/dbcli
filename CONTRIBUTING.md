@@ -317,7 +317,7 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full 9-step gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging.
+The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging.
 
 ### Pre-Release Checklist
 
@@ -325,15 +325,24 @@ Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 
 - [ ] `bun run typecheck` — `tsc --noEmit` 無錯誤
 - [ ] `bun run typecheck:tests` — 測試檔同樣無型別錯誤（#97）
-- [ ] `bun test` — 單元 + 整合測試（含 `tests/integration/dist-smoke.test.ts` 守護 packaged assets path）綠燈
+- [ ] `bun run test` — 單元 + 整合測試（含 `tests/integration/dist-smoke.test.ts` 守護 packaged assets path）綠燈
 - [ ] `bun run lint` — `--max-warnings=0`，任何新 ESLint warning 都會擋下 release
 - [ ] `bun run build` — `dist/cli.mjs` 與 `dist/assets/` 產出成功
 - [ ] `./dist/cli.mjs --help` / `./dist/cli.mjs --version` 可執行（dist smoke）
 - [ ] `bun run agent-core:check` — 公開 agent-core 不含資料庫專屬詞彙或內部／CLI framework 相依
-- [ ] `bash scripts/release-check.sh` 第 9/9 步 doc-presence — `docs/feature-matrix.md` 含 `audit` row、`CHANGELOG.md` 含 `## [<version>]` heading（D-78）
+- [ ] `bun run release:check` — 包含文件／manifest 檢查、`docs/feature-matrix.md` 的 `audit` row、`CHANGELOG.md` 的 `## [<version>]` heading，以及 GitHub Pages 文件測試（D-78）
 - [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
 - [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major`）
 - [ ] Benchmark（`bun run test:perf`）— blocking CI gate；確認所有預算與實測輸出皆通過
+
+### GitHub Pages
+
+GitHub Pages is configured in the repository settings to publish the `main` branch's `/docs` directory (legacy source); there is no Pages deployment workflow in this repository. Keep every published page under `docs/` in the release review. After the release commit reaches `main`, verify that the Pages root and English landing page resolve:
+
+```bash
+curl -fsSL https://carllee1983.github.io/dbcli/ | grep -F 'dbcli-intro.html'
+curl -fsS https://carllee1983.github.io/dbcli/dbcli-intro.en.html >/dev/null
+```
 
 ### Version Bumping
 

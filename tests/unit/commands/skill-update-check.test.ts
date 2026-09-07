@@ -3,10 +3,8 @@
  *
  * checkSkillUpdates() powers the "Skill updates available" reminder that fires
  * after every non-quiet command (cli.ts postAction) and inside `dbcli upgrade`.
- * A skill installed with `--lang zh-TW` must NOT be flagged as outdated just
- * because it differs from the English SKILL.md source — otherwise zh-TW users
- * get a permanent, un-clearable reminder. Runs against a throwaway HOME + cwd so
- * nothing touches the developer's real config.
+ * Runs against a throwaway HOME + cwd so nothing touches the developer's real
+ * config.
  */
 
 import { test, expect, describe, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test'
@@ -39,16 +37,8 @@ describe('checkSkillUpdates', () => {
     if (sandbox && existsSync(sandbox)) rmSync(sandbox, { recursive: true, force: true })
   })
 
-  test('a freshly installed zh-TW skill is NOT reported outdated', async () => {
-    await skillCommand({} as any, { install: 'claude', lang: 'zh-TW' })
-    expect(existsSync(getInstallPath('claude'))).toBe(true)
-
-    const outdated = await checkSkillUpdates()
-    expect(outdated).not.toContain('claude')
-  })
-
-  test('a freshly installed en skill is NOT reported outdated', async () => {
-    await skillCommand({} as any, { install: 'claude', lang: 'en' })
+  test('a freshly installed skill is NOT reported outdated', async () => {
+    await skillCommand({} as any, { install: 'claude' })
     expect(existsSync(getInstallPath('claude'))).toBe(true)
 
     const outdated = await checkSkillUpdates()
@@ -56,7 +46,7 @@ describe('checkSkillUpdates', () => {
   })
 
   test('a modified/stale install IS reported outdated', async () => {
-    await skillCommand({} as any, { install: 'claude', lang: 'en' })
+    await skillCommand({} as any, { install: 'claude' })
     // Simulate an older skill version left on disk. Keep the `name: dbcli`
     // frontmatter — a real stale skill still carries it; that marker is how we
     // tell an actual (outdated) dbcli skill apart from an unrelated file.

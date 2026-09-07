@@ -329,6 +329,42 @@ Issue #150 已以 `tests/unit/core/semantic/semantic.test.ts` 釘住 semantic co
 版本邊界：v1、v2 合法，v3、字串 `"2"`、缺版本與 v1 migration 以外的來源均拒絕。
 本次 `make verify` 通過 6,757 tests、0 failures。
 
+## DBCLI-014：ForgePilot 第一次真的駕駛這個 repository
+
+這個 Story 最值得留下的一句：**`make verify` 從來沒有在乾淨 checkout 上跑過，
+而那正是它宣稱自己在說的事。**
+
+ForgePilot 在 `.forgepilot/worktrees/` 建立確切 commit 的 detached worktree，
+在裡面執行這個 repository 自己的 `make verify`。第一次動手之前先量了一次：
+那個 checkout 沒有 `node_modules`，`format:check` 得到
+`prettier: command not found`，`typecheck` 解析到一個從 PATH 來的 `tsc`，
+回報的是一個跟這個 repository 無關的 TS5101。
+
+CI 每個 job 前面都有 `bun install --frozen-lockfile`，Makefile 沒有。所以
+`make verify` 一直是「在一台已經裝好東西的機器上會通過」，不是「這個 commit
+會通過」。差別在 ForgePilot 之前沒有東西會撞到——每個人都在自己的工作樹裡跑它。
+補的是 install，不是把哪一步放寬：既有 23 步一步沒刪、順序沒換，並由
+`tests/contract/forgepilot-boundary.test.ts` 以名冊釘住。名冊而不是從 Makefile
+重算，理由跟 `check-forgeflow-adoption` 一樣——會自己重算清單的檢查對任何清單
+都通過。
+
+`--frozen-lockfile` 而不是 `bun install`：解析出一份 `bun.lock` 沒有釘住的
+依賴集合，跟找不到 prettier 是同一類錯誤，只是它不會出聲。
+
+整合服務不是問題，這一點事前猜錯過：detached worktree 走的是 host port，
+`docker-compose.test.yml` 起的六個服務照樣連得到，`services:check` 在沒有
+`node_modules` 的 checkout 裡就通過了——它只用 Bun 內建。
+
+**ForgePilot 是操作工具，不是相依。** 契約測試同時釘住三件事：install 是第一步、
+`package.json` 與 `src/` 任何檔案都不提 ForgePilot、`.gitignore` 匹配
+`.forgepilot/`。沒裝 ForgePilot 的人 clone 下來 `make verify` 照跑。
+
+順帶在 ForgePilot 自己那邊修掉兩個 install-path 缺陷（記錄在該 repository 的
+`0e7030e`、`884144e`）：`go.mod` 宣告的 module path 指向一個不存在的
+repository，README 照抄的 `go install` 從來沒成功過；`forgepilot --help` 在
+還沒 init 的地方回「run forgepilot init first」，而問有哪些指令的人正是還沒
+決定要不要 init 的人。
+
 ## Lifecycle
 
 ```yaml
@@ -357,7 +393,7 @@ workflow:
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
     - DBCLI-PLAT-007
-  status: implementing
+  status: review
 
 baseline:
   repository: CarlLee1983/dbcli
@@ -376,11 +412,13 @@ baseline:
   known_unrelated_paths: []
 
 verification:
-  last_command: forgepilot verify WI-001
-  result: not_run
+  last_command: make verify
+  result: pass
   detail: >-
-    DBCLI-014 is in progress. The verification of record for this Story is
-    ForgePilot's, which runs this repository's make verify in a detached
-    worktree of the exact commit; a make verify run on a developer machine is
-    diagnostic only.
+    Run by ForgePilot as `forgepilot verify WI-001`, which executed this
+    repository's `make verify` inside a detached worktree of
+    aab45382ed1757b2c7a0cb6027db16a7e81f36fb under
+    `.forgepilot/worktrees/`. That checkout carried no `node_modules`; the new
+    install step bootstrapped the set pinned by `bun.lock`. Recorded as
+    evidence EV-001, PASS, bound to that commit.
 ```

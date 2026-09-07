@@ -365,12 +365,33 @@ repository，README 照抄的 `go install` 從來沒成功過；`forgepilot --he
 還沒 init 的地方回「run forgepilot init first」，而問有哪些指令的人正是還沒
 決定要不要 init 的人。
 
+## DBCLI-015 起草中：同一個 commit 給出兩種答案
+
+DBCLI-014 的驗證跑了三次：EV-001 PASS 在 `aab45382`，EV-002 FAIL 與 EV-003
+PASS 都在 `d618f196`。兩次之間 repository 一個字沒改，差別只有機器當下的負載。
+
+失敗的是 `tests/unit/core/blacklist-manager.test.ts` 的
+`performance > completes 1000 table lookups in < 10ms`：整套 6,700 支測試一起
+跑時量到 21.43 ms，單獨跑那個檔案三次全過。
+
+這比一支慢測試嚴重，因為 `make verify` 是這個 repository 的驗證契約，而
+ForgePilot 把它的結果綁在確切 commit 上。一個判決取決於機器的斷言，會讓那個綁定
+宣稱它撐不住的事；而且它訓練讀的人重跑而不是細看，真的回歸就是這樣被揮過去的。
+
+怎麼修是人的決定，記在 GATE-002，不在這裡選。兩個選項是搬進 `bun run test:perf`
+（那裡的預算依 runner 實測設定並印出量到的值，理由寫在 CI workflow 裡那段四個月
+沒人發現的 benchmark 失敗），或改成斷言複雜度而非絕對時間。**放寬常數刻意不是
+選項**：它留下同一個 load-dependent 的判決，正是缺陷本身。Story 的 Constraints
+把這句話寫死，免得下一個人重新爭論。
+
+Story 已起草但尚未 READY——GATE-002 未解除之前 `forgepilot next` 不會選到它。
+
 ## Lifecycle
 
 ```yaml
 workflow:
   current_story: DBCLI-014
-  next_story: pending
+  next_story: DBCLI-015
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -405,6 +426,9 @@ baseline:
     - AGENTS.md
     - Makefile
     - specs/handoff.md
+    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/acceptance.md
+    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/story.md
+    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/task.md
     - specs/stories/DBCLI-014-forgepilot-dogfood/acceptance.md
     - specs/stories/DBCLI-014-forgepilot-dogfood/story.md
     - specs/stories/DBCLI-014-forgepilot-dogfood/task.md

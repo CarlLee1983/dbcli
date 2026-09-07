@@ -60,26 +60,18 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The release gate is 9 shell steps encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`platform:check`, `plugin:check`, `docs:check`, `contract:check`, `plan:check`, plus the `reference.md` command-coverage test in `bun test`) run in CI on every push/PR via the `docs-parity` job; the full 9-step gate must pass locally via `bun run release:check` before tagging a release:
+The release gate is `bun run release:check`, encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`platform:check`, `plugin:check`, `manifest:check`, `docs:check`, `contract:check`, and `plan:check`, plus the `reference.md` command-coverage test in `bun run test`) run in CI on every push/PR via the `docs-parity` job. The same release gate runs the published-page tests, including the `main` branch's legacy GitHub Pages `/docs` source, before tagging:
 
 ```bash
-bun audit                                                              # 1/9
-bunx prettier --check "src/**/*.ts" "tests/**/*.ts" "scripts/**/*.ts" # 2/9
-bun run agent-core:check                                               # 3/9
-bun run typecheck                                                      # 4/9
-bun run lint                                                           # 5/9
-bun test                                                               # 6/9
-bun run build                                                          # 7/9
-bun test tests/integration/dist-smoke.test.ts                          # 8/9
-bash scripts/release-check.sh   # 9/9 doc-presence (audit row + CHANGELOG version)
+bun run release:check
 ```
 
-- Step 3/9 (`bun run agent-core:check`) rejects database-specific terms and dependencies outside the stable agent-core boundary.
-- Step 5/9 (`bun run lint`) enforces `--max-warnings=0` — any new ESLint warning blocks release.
-- Step 8/9 (dist smoke) guards the packaged `assets/` path used by `dbcli skill --install`.
-- Step 9/9 (doc-presence) is a shell-grep gate: confirms `docs/feature-matrix.md` has the `audit` row and `CHANGELOG.md` has a `## [<package.json version>]` heading. Catches doc-vs-version drift before tagging.
+- The `bun run agent-core:check` gate rejects database-specific terms and dependencies outside the stable agent-core boundary.
+- The `bun run lint` gate enforces `--max-warnings=0` — any new ESLint warning blocks release.
+- The release gate's dist smoke guards the packaged `assets/` path used by `dbcli skill --install`.
+- Its documentation checks confirm the `audit` row, matching `CHANGELOG.md` heading, managed manifest versions, user-doc parity, and the published Pages entrypoint. This catches doc drift before tagging.
 - Benchmark (`bun run test:perf`) is a blocking CI gate across the supported OS/Bun matrix; each budget is based on runner measurements and prints its observed value.
-- Step 6/9 (`bun test`) runs with `SKIP_INTEGRATION_TESTS=true` in the matrix job, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.
+- The CI test matrix runs with `SKIP_INTEGRATION_TESTS=true`, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.
 
 See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
 

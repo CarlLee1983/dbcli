@@ -361,9 +361,9 @@ workflow:
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: release/v8.0.0
-  commit: 8abf7c7fae90f02d70b3d525de5e8a00758743cb
-  dirty_worktree: false
+  branch: release/v9.0.0
+  commit: 9383f82226cd20194564b632d459ea2686b45285
+  dirty_worktree: true
   story_owned_paths:
     - .claude-plugin/plugin.json
     - .codex-plugin/plugin.json
@@ -376,13 +376,19 @@ baseline:
     - specs/handoff.md
     - tests/fixtures/plat004/legacy-surface-baseline.json
     - tests/integration/lazy-entry-path.test.ts
-  known_unrelated_paths: []
+  known_unrelated_paths:
+    - CONTRIBUTING.md
+    - docs/dbcli-architecture-eli5.html
+    - docs/feature-matrix.md
+    - docs/index.html
+    - scripts/release-check.sh
+    - tests/docs/intro-pages.test.ts
 
 verification:
-  last_command: make verify
+  last_command: bun run release:check
   result: pass
   detail: >-
-    Full verification passed with 6757 tests across 571 files and 0 failures.
-    Audit, formatting, typecheck, lint, deterministic build, performance,
-    documentation, capability contracts, plugin manifests, and ForgeFlow passed.
+    Release verification passed with 6746 tests across 570 files and 0 failures.
+    Audit, formatting, typecheck, lint, build, dist smoke, documentation,
+    capability contracts, and plugin manifests passed.
 ```

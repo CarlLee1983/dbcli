@@ -53,3 +53,6 @@ docs/superpowers/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+
+# ForgePilot local work-queue state — operational, not source (`forgepilot init`).
+.forgepilot/

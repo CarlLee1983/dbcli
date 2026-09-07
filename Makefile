@@ -1,6 +1,12 @@
 .PHONY: verify
 
+# Verification must describe a checkout, not a machine. CI installs before every
+# job, so `make verify` on its own assumed dependencies someone else had already
+# put there: a fresh checkout got `prettier: command not found` and a `tsc`
+# resolved from PATH. `--frozen-lockfile` fails rather than resolving a set that
+# `bun.lock` does not pin.
 verify:
+	bun install --frozen-lockfile
 	bun run services:check
 	bun run audit
 	bun run format:check

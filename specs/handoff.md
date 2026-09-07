@@ -333,7 +333,7 @@ Issue #150 已以 `tests/unit/core/semantic/semantic.test.ts` 釘住 semantic co
 
 ```yaml
 workflow:
-  current_story: pending
+  current_story: DBCLI-014
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -357,38 +357,30 @@ workflow:
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
     - DBCLI-PLAT-007
-  status: done
+  status: implementing
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: release/v9.0.0
-  commit: 9383f82226cd20194564b632d459ea2686b45285
+  branch: main
+  commit: 64f2831eb708b3687ca990151aba8ba982f23545
   dirty_worktree: true
   story_owned_paths:
-    - .claude-plugin/plugin.json
-    - .codex-plugin/plugin.json
-    - .cursor-plugin/plugin.json
-    - CHANGELOG.md
-    - SECURITY.md
-    - gemini-extension.json
-    - package.json
-    - plugins/dbcli-agent/.codex-plugin/plugin.json
+    - .gitignore
+    - AGENTS.md
+    - Makefile
     - specs/handoff.md
-    - tests/fixtures/plat004/legacy-surface-baseline.json
-    - tests/integration/lazy-entry-path.test.ts
-  known_unrelated_paths:
-    - CONTRIBUTING.md
-    - docs/dbcli-architecture-eli5.html
-    - docs/feature-matrix.md
-    - docs/index.html
-    - scripts/release-check.sh
-    - tests/docs/intro-pages.test.ts
+    - specs/stories/DBCLI-014-forgepilot-dogfood/acceptance.md
+    - specs/stories/DBCLI-014-forgepilot-dogfood/story.md
+    - specs/stories/DBCLI-014-forgepilot-dogfood/task.md
+    - tests/contract/forgepilot-boundary.test.ts
+  known_unrelated_paths: []
 
 verification:
-  last_command: bun run release:check
-  result: pass
+  last_command: forgepilot verify WI-001
+  result: not_run
   detail: >-
-    Release verification passed with 6746 tests across 570 files and 0 failures.
-    Audit, formatting, typecheck, lint, build, dist smoke, documentation,
-    capability contracts, and plugin manifests passed.
+    DBCLI-014 is in progress. The verification of record for this Story is
+    ForgePilot's, which runs this repository's make verify in a detached
+    worktree of the exact commit; a make verify run on a developer machine is
+    diagnostic only.
 ```

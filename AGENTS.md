@@ -120,6 +120,26 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 - **Multi-language Parity**: Ensure updates are applied to all supported language directories (e.g., `docs/user/en/` and `docs/user/zh-TW/`).
 - **Format Parity**: Both `index.md` (Markdown) and `index.html` (Polished UI) must be kept in sync.
 
+## ForgePilot Work Control Plane
+
+ForgePilot decides what is actionable next and holds the evidence; ForgeFlowV2
+defines how work is specified and reviewed; this repository's `make verify` is
+the canonical verification. ForgePilot is an operator tool — dbcli neither
+imports nor requires it, and `.forgepilot/` is local state, not source.
+
+Before starting engineering work:
+
+1. `forgepilot status`
+2. `forgepilot next`
+3. `forgepilot start <work-id>`
+4. Read that Work Item's ForgeFlow Story
+5. Implement only that Story
+6. Commit; the worktree must be clean
+7. `forgepilot verify <work-id>` — it runs `make verify` against the exact commit
+8. Do not claim DONE before Human Review; ForgePilot has no completion command
+
+ForgePilot's own documentation lives in its repository; do not restate it here.
+
 ## ForgeFlow Story Development
 
 When implementation is assigned by Story ID or from `specs/stories/`, use the

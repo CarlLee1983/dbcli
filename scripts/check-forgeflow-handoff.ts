@@ -8,6 +8,10 @@
  * against fixtures instead of against a repository whose answers change every
  * time a Story is delivered.
  *
+ * Since DBCLI-016 it also refuses a handoff that names a current or next Story:
+ * ForgePilot owns that state, and a second copy here is what drifted before
+ * anyone noticed nothing was reading it. See `lib/forgeflow-handoff.ts`.
+ *
  * The sibling gate `check-forgeflow-adoption.ts` reconciles the process version
  * those Stories were written against. The two are deliberately disjoint: one
  * checks delivery claims, the other checks which ForgeFlow this repository says
@@ -16,8 +20,11 @@
 
 import { $ } from 'bun'
 import {
+  collectLifecycleViolations,
   collectStoryIds,
   formatFailures,
+  formatViolations,
+  lifecycleBlock,
   parseLifecycle,
   reconcile,
   shallowCloneRefusal,
@@ -84,7 +91,18 @@ if (refusal !== null) {
   process.exit(1)
 }
 
-const lifecycle = parseLifecycle(await Bun.file(handoffPath).text())
+const body = lifecycleBlock(await Bun.file(handoffPath).text())
+
+// The contract first, the claims second. A block making a statement it is not
+// allowed to make is not a block whose delivery list is worth reconciling, and
+// reporting both at once would bury the one the reader has to fix first.
+const violations = collectLifecycleViolations(body)
+if (violations.length > 0) {
+  console.error(formatViolations(violations))
+  process.exit(1)
+}
+
+const lifecycle = parseLifecycle(body)
 
 const failures = await reconcile({
   lifecycle,

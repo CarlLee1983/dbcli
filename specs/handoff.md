@@ -509,12 +509,43 @@ Lifecycle 區塊，它們擋的是可查證的東西，成本也只有一次 CI�
 這條失效條件刻意不涵蓋 `specs/stories/*/acceptance.md`，也不涵蓋 `docs/adr/`。前者
 的成效已經量到，不需要再賭；後者早於這套流程存在，用它來評 ForgeFlow 會把因果記
 錯。
+## DBCLI-016：handoff 不再保存工作佇列
+
+這份檔案從此不說「現在做哪個 Story、下一個是哪個」。那兩個問題由 ForgePilot 回答，
+`specs/handoff.md` 留下的是 ForgePilot 結構上拿不走的東西：為什麼這樣決定、剩下哪些
+風險與假設、repository baseline，以及 `completed_stories`——由 `Story:` commit trailer
+逐條對帳的交付紀錄。理由寫在 ADR-0025，gate 在 `scripts/lib/forgeflow-handoff.ts`。
+
+促成這件事的不是潔癖，是量到的漂移。動工前在 `141cf4c3` 拿上游 `handoff-check` 跑這份
+檔案，採用中的 `v0.3.2` 與當前的 `v0.6.0` 都 FAIL：`current_story: pending` 不是契約
+承認的「沒有 Story」拼法（那是 `none`），`pending` 同時出現在 current 與 next 被判為
+自相矛盾，`verification.detail` 是契約沒有的 key，它底下六行折疊散文則是不受支援的縮排。
+`make verify` 一次都沒看見，因為上游 checker 住在 CI 沒有的 ForgeFlow checkout 裡。
+**block 裡沒人讀的那半，就是已經漂掉的那半**——`next_story` 與 `status` 在整個
+repository 沒有任何讀者。
+
+所以 gate 現在直接拒絕：具名的 current／next Story 不合法，契約沒定義的 key 也不合法。
+慣例會被下一個打開 ForgeFlow handoff 樣板、看到空欄位就想填的 agent 重新爭論一次；
+拒絕只回答一次。三個 section 都留著，用契約自己的 sentinel——宣稱採用了 ForgeFlow，
+就不能偷刪它要求的欄位。
+
+被搬出 block 的那段話留在這裡，它本來就是散文：DBCLI-015 的實作 commit 由 ForgePilot
+在確切 commit 的 detached worktree 連跑兩次 `make verify`，兩次都 PASS，那正是它的驗收
+要的決定性；同樣的形狀在那個 Story 之前給過一次 FAIL 一次 PASS。Evidence ID 與 revision
+刻意不抄在這裡——抄一次就要一個 commit，而那個 commit 會讓被抄的 evidence 立刻 stale。
+這個限制正是 DBCLI-017 要處理的題目。
+
+0.3.2 下還剩八條 `completed Story is not a Story ID: DBCLI-PLAT-*`，那是 0.3.2 的 Story
+ID 文法早於 `DBCLI-PLAT-*` 命名，0.6.0 已經放寬。不在這個 Story 的範圍，DBCLI-018 收。
 
 ## Lifecycle
 
+`current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
+`forgepilot next`，不要問這個區塊。
+
 ```yaml
 workflow:
-  current_story: pending
+  current_story: none
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -540,32 +571,26 @@ workflow:
     - DBCLI-PLAT-007
     - DBCLI-014
     - DBCLI-015
+    - DBCLI-016
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: dbf2c5d74cac2d834b417d9212a5284a8dfb1280
+  commit: 141cf4c3ebc019b9693430bfaa1a9c1b2559ff90
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
-    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/task.md
-    - tests/perf/blacklist-performance.bench.ts
-    - tests/unit/core/blacklist-manager.test.ts
-    - specs/stories/DBCLI-014-forgepilot-dogfood/acceptance.md
-    - specs/stories/DBCLI-014-forgepilot-dogfood/story.md
-    - specs/stories/DBCLI-014-forgepilot-dogfood/task.md
-    - tests/contract/forgepilot-boundary.test.ts
+    - specs/stories/DBCLI-016-forgepilot-lifecycle-authority/story.md
+    - specs/stories/DBCLI-016-forgepilot-lifecycle-authority/acceptance.md
+    - docs/adr/0025-the-handoff-records-delivery-not-a-work-queue.md
+    - scripts/lib/forgeflow-handoff.ts
+    - scripts/check-forgeflow-handoff.ts
+    - tests/unit/scripts/forgeflow-handoff.test.ts
+    - AGENTS.md
   known_unrelated_paths: []
 
 verification:
   last_command: make verify
   result: pass
-  detail: >-
-    Run by ForgePilot in a detached worktree of the exact commit. DBCLI-015's
-    implementation commit was verified twice in a row and passed both times,
-    which is the determinism its acceptance asks for; the same shape produced
-    one FAIL and one PASS before this Story. Evidence IDs and revisions live in
-    ForgePilot's state, deliberately not restated here — restating them needs a
-    commit, and that commit invalidates the evidence being restated.
 ```

@@ -167,11 +167,17 @@ explicit human instruction.
 The completion report must list changed files, implementation and test changes,
 the exact verification result, assumptions, and remaining risks.
 
-When work changes hands, record the handoff lifecycle block in
-`specs/handoff.md`: exactly one current Story, exactly one next Story or
-`pending`, completed Story IDs, the repository baseline commit and worktree
-state, and the last verification command and result. Never leave the next Story
-to be inferred from list order.
+When work changes hands, `specs/handoff.md` records why: context, decisions,
+findings, remaining risks and assumptions, plus the repository baseline commit
+and worktree state, the completed Story IDs, and the last verification command
+and result.
+
+It does not record what to do next. `forgepilot next` answers that, and
+`forgepilot status` answers what is in progress or blocked. The handoff's
+`current_story` and `next_story` are pinned to the handoff contract's `none` and
+`pending`, and `bun run forgeflow:check` fails if either names a Story — two
+places recording one work queue is what ADR-0025 removed. Never restate
+ForgePilot's queue here, and never infer the next Story from list order either.
 
 ## dbcli Usage Guidelines
 

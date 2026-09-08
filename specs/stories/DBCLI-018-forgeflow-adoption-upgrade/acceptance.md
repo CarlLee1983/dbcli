@@ -77,6 +77,20 @@ that counts as passing.
       Evidence: with `specs/handoff.md` emptied, upstream exits 2 with no `FAIL`
       lines and the gate exits non-zero — the states the handoff contract exists
       to prevent used to be reported as passing.
+* [ ] A checkout with uncommitted changes is refused.
+      Evidence: edit `scripts/story-check` in the checkout to suppress a finding
+      and the gate exits non-zero quoting the dirty path — `rev-parse HEAD` is
+      unchanged by such an edit, so revision alone would have gone on asserting
+      the adopted rules while running somebody's local ones.
+* [ ] A path git cannot read is refused as that, not as an unset variable.
+      Evidence: `FORGEFLOW_ROOT=/nonexistent` names the path and says it is not
+      a readable git checkout, rather than telling the reader to set a variable
+      they already set.
+* [ ] A Story directory upstream cannot read is not invisible.
+      Evidence: a directory holding only `acceptance.md` makes upstream exit 2;
+      the gate refuses. Discovery is upstream's — one no-argument run from the
+      repository root — so a directory this gate would not have globbed is still
+      seen.
 * [ ] A checkout at the adopted revision that cannot run the checker is refused.
       Evidence: with `scripts/` removed from the checkout, the gate exits
       non-zero naming the missing `story-check`, rather than reading zero

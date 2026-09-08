@@ -20,9 +20,9 @@ import {
   checkoutRefusal,
   formatContractFailures,
   PREDATING_FINDINGS,
+  parseStoryCheck,
   readCheckerRun,
   reconcileFindings,
-  type StoryResult,
 } from './lib/forgeflow-contract'
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -39,14 +39,23 @@ if (adopted === undefined) {
 }
 
 const forgeflowRoot = process.env.FORGEFLOW_ROOT
-const checkout = forgeflowRoot === undefined ? undefined : forgeflowRoot
 
-const revision =
-  checkout === undefined
-    ? undefined
-    : (await $`git -C ${checkout} rev-parse HEAD`.nothrow().quiet()).text().trim() || undefined
+/** Ask git a question of the checkout, or report that it could not answer. */
+async function ask(root: string, ...argv: string[]): Promise<string | undefined> {
+  const answered = await $`git -C ${root} ${argv}`.nothrow().quiet()
+  return answered.exitCode === 0 ? answered.text() : undefined
+}
 
-const refusal = checkoutRefusal(adopted, revision)
+const refusal = checkoutRefusal(adopted, {
+  root: forgeflowRoot,
+  revision:
+    forgeflowRoot === undefined
+      ? undefined
+      : (await ask(forgeflowRoot, 'rev-parse', 'HEAD'))?.trim(),
+  status:
+    forgeflowRoot === undefined ? undefined : await ask(forgeflowRoot, 'status', '--porcelain'),
+})
+
 if (refusal !== null) {
   console.error(refusal)
   process.exit(1)
@@ -58,36 +67,23 @@ function refuse(reason: string): never {
   process.exit(1)
 }
 
-// A checkout at the right revision can still be unusable — a partial clone, a
-// non-executable script. Bun's `.nothrow()` swallows the spawn failure and
-// hands back zero findings for every Story, which reads exactly like a clean
-// repository.
-const storyCheck = join(checkout as string, 'scripts/story-check')
+const checkout = forgeflowRoot as string
+const storyCheck = join(checkout, 'scripts/story-check')
 if (!(await Bun.file(storyCheck).exists())) refuse(`${storyCheck} does not exist`)
 
-const storiesRoot = join(repoRoot, 'specs/stories')
-const directories = (await Array.fromAsync(new Bun.Glob('*/story.md').scan({ cwd: storiesRoot })))
-  .map((entry) => entry.replace(/[/\\]story\.md$/, ''))
-  .filter((directory) => !directory.startsWith('_'))
-  .sort()
+// One run, with no arguments, from the repository root: upstream discovers the
+// Story directories itself. Globbing for them here was directory selection
+// reimplemented, and it hid a directory holding an `acceptance.md` and no
+// `story.md` — upstream ERRORs on that; the glob simply did not see it.
+const checked = await $`${storyCheck}`.cwd(repoRoot).nothrow().quiet()
+const read = readCheckerRun('specs/stories', {
+  exitCode: checked.exitCode,
+  output: `${checked.stdout.toString()}${checked.stderr.toString()}`,
+})
 
-const results: StoryResult[] = []
-for (const directory of directories) {
-  const path = join(storiesRoot, directory)
-  const checked = await $`${storyCheck} ${path}`.nothrow().quiet()
+if (typeof read === 'string') refuse(read)
 
-  const read = readCheckerRun(directory, {
-    exitCode: checked.exitCode,
-    output: `${checked.stdout.toString()}${checked.stderr.toString()}`,
-  })
-
-  if (typeof read === 'string') refuse(read)
-
-  results.push({
-    story: directory,
-    findings: read.map((line) => line.replace(`FAIL  ${path}: `, '').trim()),
-  })
-}
+const results = parseStoryCheck(`${checked.stdout.toString()}${checked.stderr.toString()}`)
 
 const failures = reconcileFindings(results, PREDATING_FINDINGS)
 
@@ -95,7 +91,7 @@ const failures = reconcileFindings(results, PREDATING_FINDINGS)
 // give: it reconciles delivery claims against git, this checks the block's
 // shape against the protocol.
 const handoff =
-  await $`${join(checkout as string, 'scripts/handoff-check')} ${join(repoRoot, 'specs/handoff.md')}`
+  await $`${join(checkout, 'scripts/handoff-check')} ${join(repoRoot, 'specs/handoff.md')}`
     .nothrow()
     .quiet()
 
@@ -121,5 +117,5 @@ if (failures.length > 0) {
 const admitted = [...PREDATING_FINDINGS.values()].reduce((total, list) => total + list.length, 0)
 console.log(
   `forgeflow contract check passed against ${adopted.slice(0, 8)}: ` +
-    `${directories.length} Stories, ${admitted} admitted pre-existing finding(s), handoff contract OK`
+    `${results.length} Stories, ${admitted} admitted pre-existing finding(s), handoff contract OK`
 )

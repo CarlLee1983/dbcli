@@ -204,6 +204,10 @@ jobs:
           revision="$(sed -n 's/^revision=//p' specs/.forgeflow-adoption)"
           git clone --quiet https://github.com/CarlLee1983/ForgeFlowV2.git "$RUNNER_TEMP/forgeflow"
           git -C "$RUNNER_TEMP/forgeflow" checkout --quiet "$revision"
+      # No `bun install` on purpose, and it is an invariant rather than an
+      # omission: the gate imports only `bun`, `node:path` and `node:url`. Give
+      # it a dependency and this job starts failing with a module resolution
+      # error that looks nothing like its cause.
       - name: ForgeFlow contract
         run: FORGEFLOW_ROOT="$RUNNER_TEMP/forgeflow" bun run forgeflow:contract
 

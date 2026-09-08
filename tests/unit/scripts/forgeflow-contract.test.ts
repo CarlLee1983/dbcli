@@ -12,6 +12,7 @@ import {
   ADMITTED_STORIES,
   checkoutRefusal,
   formatContractFailures,
+  parseStoryCheck,
   PREDATING_FINDINGS,
   reconcileFindings,
   type Exemptions,
@@ -22,28 +23,81 @@ const PROSE = 'every trust-boundary field must name an exact field, not prose'
 
 const exemptions = (entries: [string, string[]][]): Exemptions => new Map(entries)
 
+const clean = { root: '/tmp/forgeflow', revision: ADOPTED, status: '' }
+
 describe('checkoutRefusal', () => {
-  test('the adopted revision is accepted', () => {
-    expect(checkoutRefusal(ADOPTED, ADOPTED)).toBeNull()
+  test('a clean checkout at the adopted revision is accepted', () => {
+    expect(checkoutRefusal(ADOPTED, clean)).toBeNull()
   })
 
   test('another revision is refused, naming both', () => {
-    const refusal = checkoutRefusal(ADOPTED, 'b'.repeat(40))
-
     // A checkout of some other ForgeFlow enforces some other contract, and an
     // upgrade that moved the marker without moving the rules would otherwise
     // look complete.
+    const refusal = checkoutRefusal(ADOPTED, { ...clean, revision: 'b'.repeat(40) })
+
     expect(refusal).toContain(ADOPTED)
     expect(refusal).toContain('b'.repeat(40))
   })
 
-  test('an absent checkout is refused, not skipped', () => {
+  test('an unset FORGEFLOW_ROOT is refused, not skipped', () => {
     // A gate that passes wherever its evidence is missing passes in CI and
     // nowhere else.
-    const refusal = checkoutRefusal(ADOPTED, undefined)
+    const refusal = checkoutRefusal(ADOPTED, {
+      root: undefined,
+      revision: undefined,
+      status: undefined,
+    })
 
-    expect(refusal).toContain('FORGEFLOW_ROOT')
-    expect(refusal).toContain(ADOPTED)
+    expect(refusal).toContain('FORGEFLOW_ROOT is not set')
+  })
+
+  test('a path git cannot read is refused as that, not as an unset variable', () => {
+    // Both used to print the same sentence, so a typo in the path sent the
+    // reader to set a variable they had already set.
+    const refusal = checkoutRefusal(ADOPTED, {
+      root: '/nonexistent',
+      revision: undefined,
+      status: undefined,
+    })
+
+    expect(refusal).toContain('/nonexistent')
+    expect(refusal).toContain('not a readable git checkout')
+  })
+
+  test('a dirty checkout is refused, because it is not at any revision', () => {
+    // Editing `scripts/story-check` to stop emitting a finding leaves
+    // `rev-parse HEAD` untouched, so the banner would go on asserting the
+    // adopted revision while the rules being run were somebody's local edit.
+    const refusal = checkoutRefusal(ADOPTED, { ...clean, status: ' M scripts/story-check\n' })
+
+    expect(refusal).toContain('uncommitted changes')
+    expect(refusal).toContain('scripts/story-check')
+  })
+})
+
+describe('parseStoryCheck', () => {
+  const OUTPUT = [
+    'ForgeFlow Story Contract Check',
+    '',
+    'INFO  specs/stories/DBCLI-016-a: Story ID DBCLI-016',
+    'PASS  specs/stories/DBCLI-016-a: classification security=no baseline=no',
+    'INFO  specs/stories/DBCLI-PLAT-004-b: Story ID DBCLI-PLAT-004',
+    `FAIL  specs/stories/DBCLI-PLAT-004-b: ${PROSE}`,
+    '',
+  ].join('\n')
+
+  test('every Story upstream saw is reported, clean or not', () => {
+    // Upstream discovers the directories; globbing for them here was directory
+    // selection reimplemented, and it hid a directory with no `story.md`.
+    expect(parseStoryCheck(OUTPUT)).toEqual([
+      { story: 'DBCLI-016-a', findings: [] },
+      { story: 'DBCLI-PLAT-004-b', findings: [PROSE] },
+    ])
+  })
+
+  test('lines that are neither INFO nor FAIL are ignored', () => {
+    expect(parseStoryCheck('Result: STORY_CONTRACT_OK\nStories checked: 2\n')).toEqual([])
   })
 })
 
@@ -171,5 +225,29 @@ describe('readCheckerRun', () => {
 
   test('findings without a failing exit are refused too', () => {
     expect(typeof readCheckerRun('DBCLI-016', { exitCode: 0, output: 'FAIL  x\n' })).toBe('string')
+  })
+})
+
+describe('findings are compared as multisets', () => {
+  test('two identical findings do not match one exemption entry', () => {
+    // With `includes` in both directions the count would agree while one real
+    // finding went unadmitted.
+    const failures = reconcileFindings(
+      [{ story: 'DBCLI-PLAT-004', findings: [PROSE, PROSE] }],
+      exemptions([['DBCLI-PLAT-004', [PROSE]]])
+    )
+
+    expect(failures).toHaveLength(1)
+    expect(failures[0]!.reason).toMatch(/this finding is new/)
+  })
+
+  test('a duplicated exemption entry is reported stale', () => {
+    const failures = reconcileFindings(
+      [{ story: 'DBCLI-PLAT-004', findings: [PROSE] }],
+      exemptions([['DBCLI-PLAT-004', [PROSE, PROSE]]])
+    )
+
+    expect(failures).toHaveLength(1)
+    expect(failures[0]!.reason).toMatch(/delete the exemption entry/)
   })
 })

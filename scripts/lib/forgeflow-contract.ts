@@ -125,30 +125,87 @@ export type Exemptions = ReadonlyMap<string, readonly Finding[]>
  * and an absent checkout is refused rather than skipped, because a gate that
  * passes wherever its evidence is missing passes in CI and nowhere else.
  */
-export function checkoutRefusal(
-  adoptedRevision: string,
-  checkoutRevision: string | undefined
-): string | null {
-  if (checkoutRevision === undefined) {
+export interface Checkout {
+  /** `undefined` when FORGEFLOW_ROOT was not set at all. */
+  readonly root: string | undefined
+  /** `undefined` when `git rev-parse HEAD` could not answer. */
+  readonly revision: string | undefined
+  /** `git status --porcelain`, or `undefined` when it could not answer. */
+  readonly status: string | undefined
+}
+
+export function checkoutRefusal(adoptedRevision: string, checkout: Checkout): string | null {
+  const instructions =
+    '  Set FORGEFLOW_ROOT to a checkout of the adopted revision:\n\n' +
+    '    git clone https://github.com/CarlLee1983/ForgeFlowV2 forgeflow\n' +
+    `    git -C forgeflow checkout ${adoptedRevision}\n` +
+    '    FORGEFLOW_ROOT=forgeflow bun run forgeflow:contract\n'
+
+  if (checkout.root === undefined) {
+    return `ForgeFlow contract check cannot run: FORGEFLOW_ROOT is not set.\n\n${instructions}`
+  }
+
+  // Distinguished from "not set" on purpose: both used to print the same
+  // sentence, so a path that was a typo, or a directory that is not a git
+  // repository, sent the reader to set a variable they had already set.
+  if (checkout.revision === undefined || checkout.status === undefined) {
     return (
-      'ForgeFlow contract check cannot run: no ForgeFlow checkout was provided.\n\n' +
-      '  Set FORGEFLOW_ROOT to a checkout of the adopted revision:\n\n' +
-      `    git clone https://github.com/CarlLee1983/ForgeFlowV2 forgeflow\n` +
-      `    git -C forgeflow checkout ${adoptedRevision}\n` +
-      '    FORGEFLOW_ROOT=forgeflow bun run forgeflow:contract\n'
+      `ForgeFlow contract check cannot run: ${checkout.root} is not a readable git ` +
+      `checkout — git could not report its revision or its status.\n\n${instructions}`
     )
   }
 
-  if (checkoutRevision !== adoptedRevision) {
+  if (checkout.revision !== adoptedRevision) {
     return (
-      `ForgeFlow contract check cannot run: the checkout is at ${checkoutRevision}, ` +
+      `ForgeFlow contract check cannot run: the checkout is at ${checkout.revision}, ` +
       `but specs/.forgeflow-adoption records ${adoptedRevision}.\n\n` +
       '  A checkout of some other ForgeFlow enforces some other contract. Check\n' +
       '  out the adopted revision, or upgrade the adoption first.\n'
     )
   }
 
+  // A dirty tree is not at any revision. Editing `scripts/story-check` to stop
+  // emitting a finding leaves `rev-parse HEAD` untouched, so the banner would go
+  // on asserting "passed against 51ab1f20" while the rules being run were
+  // somebody's local edit.
+  if (checkout.status.trim() !== '') {
+    return (
+      `ForgeFlow contract check cannot run: the checkout at ${checkout.root} has ` +
+      `uncommitted changes, so the rules it would run are not the ones ` +
+      `${adoptedRevision} defines:\n\n${checkout.status.trim()}\n`
+    )
+  }
+
   return null
+}
+
+/**
+ * Read one no-argument `story-check` run into findings per Story.
+ *
+ * Upstream discovers Story directories itself — `specs/stories/*`, skipping
+ * `_template`, erroring on a directory with no `story.md`. This gate used to
+ * glob for them instead, which is directory selection reimplemented, and a
+ * directory holding an `acceptance.md` and no `story.md` was invisible to it:
+ * not checked, not counted, not reported. ADR-0027's whole claim is that
+ * upstream's rules are run rather than rewritten, and discovery is one of them.
+ *
+ * `INFO` names every Story upstream saw; `FAIL` names what it found. A Story
+ * with an INFO line and no FAIL lines is clean.
+ */
+export function parseStoryCheck(output: string): StoryResult[] {
+  const findings = new Map<string, Finding[]>()
+
+  for (const line of output.split('\n')) {
+    const match = line.match(/^(INFO|FAIL)\s+specs\/stories\/([^/:]+):\s*(.*)$/)
+    if (!match) continue
+
+    const [, kind, story, detail] = match as unknown as [string, string, string, string]
+    const list = findings.get(story) ?? []
+    if (kind === 'FAIL') list.push(detail.trim())
+    findings.set(story, list)
+  }
+
+  return [...findings.entries()].map(([story, list]) => ({ story, findings: list }))
 }
 
 /**
@@ -175,19 +232,26 @@ export function reconcileFindings(
       continue
     }
 
+    // Compared as multisets, not sets. With `includes` in both directions, two
+    // identical findings in one Story matched a single exemption entry, and a
+    // duplicated entry was never reported stale — the count would agree while
+    // one real finding went unadmitted.
+    const remaining = [...admitted]
+
     for (const finding of findings) {
-      if (!admitted.includes(finding)) {
+      const at = remaining.indexOf(finding)
+      if (at === -1) {
         failures.push({ subject: story, reason: `${finding} — this finding is new` })
+        continue
       }
+      remaining.splice(at, 1)
     }
 
-    for (const finding of admitted) {
-      if (!findings.includes(finding)) {
-        failures.push({
-          subject: story,
-          reason: `no longer reports "${finding}" — delete the exemption entry`,
-        })
-      }
+    for (const finding of remaining) {
+      failures.push({
+        subject: story,
+        reason: `no longer reports "${finding}" — delete the exemption entry`,
+      })
     }
   }
 

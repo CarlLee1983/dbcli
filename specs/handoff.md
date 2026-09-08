@@ -428,11 +428,28 @@ DBCLI-014 這次一併進 `completed_stories`。它交付、驗證、Human Revie
 留在清單外只會讓紀錄同時說不出它是進行中還是完成——`status` 仍是 `review`，因為
 ForgeFlow 的 DONE 還要求 merge policy，而這條分支尚未合併。
 
+## 收尾：PR #172 合併，以及 R3 的真實 runner 數字
+
+PR #172 於 `dbf2c5d7` 合併進 main，CI 十一個 job 全綠（三個 OS × 兩個 Bun 版本，
+外加 format、audit、integration、build-determinism、docs-parity）。DBCLI-014 與
+DBCLI-015 進 `completed_stories`，`status` 推到 `done`——ForgeFlow 的 DONE 這下
+merge policy 也滿足了。
+
+順帶補掉審查留下的最後一個缺口。DBCLI-015 的 R3 要求預算「在它會跑的那台 runner
+上量」，而合併前那些常數旁邊寫的是「這台機器 0.14ms，乘三倍推估 runner」——推估
+不是量測。現在 CI 真的跑過了，數字直接抄回註解：100-table 預算在 ubuntu 0.08ms、
+macos 0.07ms、windows 0.27ms，最慢的一台離 2ms 還有 7.4 倍；1000-table 是
+0.10 / 0.07 / 0.20ms，跟 100-table 分不出來，這正是 set 查表該有的樣子。
+
+比值那對測試也拿到了跨平台的數字：set 查表 1.03–1.15，線性掃描 8.33–9.49，門檻 3
+在兩者中間，兩側都有餘裕。三個 OS 的絕對速度差了快四倍，比值卻幾乎不動——這就是
+當初選比值而不選毫秒數的理由，現在有量測撐著，不只是論證。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: DBCLI-015
+  current_story: pending
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -457,13 +474,14 @@ workflow:
     - DBCLI-PLAT-013
     - DBCLI-PLAT-007
     - DBCLI-014
-  status: review
+    - DBCLI-015
+  status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 64f2831eb708b3687ca990151aba8ba982f23545
-  dirty_worktree: true
+  commit: dbf2c5d74cac2d834b417d9212a5284a8dfb1280
+  dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
     - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/task.md

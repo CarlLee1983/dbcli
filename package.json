@@ -86,6 +86,7 @@
     "core-stdout:check": "bun run scripts/check-core-no-stdout.ts",
     "plan:check": "bun run scripts/check-plan-acceptance.ts",
     "forgeflow:check": "bun run scripts/check-forgeflow-adoption.ts && bun run scripts/check-forgeflow-handoff.ts",
+    "forgeflow:contract": "bun run scripts/check-forgeflow-contract.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "typecheck:tests": "tsc --noEmit --pretty false -p tsconfig.tests.json",
     "test:perf": "bun test ./tests/perf/*.bench.ts",

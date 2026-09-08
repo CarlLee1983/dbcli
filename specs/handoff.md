@@ -64,7 +64,7 @@ DBCLI-001 的交付狀態已驗證並結案。它跨十份交接紀錄被記為�
 
 ## 流程版本
 
-採用 ForgeFlow 0.3.2。權威記錄是 `specs/.forgeflow-adoption`，這裡只是複述，
+採用 ForgeFlow 0.6.0。權威記錄是 `specs/.forgeflow-adoption`，這裡只是複述，
 而複述正是 DBCLI-013 要修的東西：這段話在 marker 與 `specs/stories/README.md`
 都已經推進到 0.3.2 之後，還原樣說著 0.3.1，跨兩個已合併的 PR 沒有人看。
 
@@ -634,6 +634,73 @@ timeout 是 20 分鐘而這輪大約 15 分鐘。一旦逾時或被取消，`fin
 把 step 清單搬進 `scripts/` runner 的那個選項沒有被否決，只是延後：DBCLI-019 要的
 per-step 時間與失敗步驟幾乎是免費的，該由那個 Story 重新評估，而不是在這裡先猜。
 
+## DBCLI-018：升級到 0.6.0，並且讓那份契約真的被檢查
+
+採用版本從 0.3.2 推到 0.6.0，走的是上游自己的 `./scripts/bootstrap --upgrade`，
+不是手改版本號。動工前量到的三件事決定了這個 Story 的形狀：
+
+**升級不弄壞任何東西。** 25 個 Story 在 v0.3.2 與 v0.6.0 的 `story-check` 下失敗
+清單完全相同——21 條、集中在 5 個 Story，0.6.0 沒有新增任何一條。
+
+**升級修好一件事。** `handoff-check` 從 `HANDOFF_CONTRACT_INCOMPLETE` 變成
+`HANDOFF_CONTRACT_OK`：那八條 `completed Story is not a Story ID: DBCLI-PLAT-*`
+是 0.3.2 的 Story ID 文法早於這個命名，0.6.0 放寬了。`docs/releases/0.6.0.md`
+點名這個 repo 就是促成那次調查的對象。
+
+**升級只有四個檔。** dry-run 列出的就是三個 `_template/` 與 marker；`AGENTS.md`
+與 guidance 在首次安裝後就是 repository-owned，不在 managed 清單裡。三個 template
+與 v0.3.2 原版逐字相同，沒有本地客製被蓋掉。
+
+marker 釘的是 `v0.6.0` tag（`51ab1f20`），不是 bootstrap 當時所在的 checkout——
+那個位置在 tag 之後兩個文件 commit，marker 指著未上 tag 的 revision 會讓「這是哪一版」
+有兩個答案。
+
+### 為什麼不只是改個數字
+
+Authority、Risk、Task mode、Acceptance Evidence 在 0.6.0 全是 optional，而且**只由
+上游 checker 執行**，那些 checker 住在這個 repo 沒有的 checkout 裡。只推版本號會改變
+「一個 Story 被允許說什麼」，卻不會改變「什麼被檢查」——那正是 DBCLI-013 與 DBCLI-016
+事後各自要收拾的形狀。
+
+沒有選擇在 `scripts/` 裡重寫那些規則。`forgeflow-handoff.ts` 的檔頭明寫著它「刻意不與
+上游 story-check 重疊」，而一份自己不擁有的契約寫兩份實作，兩邊會以沒人控制的節奏分岔，
+副本會是沒人更新的那一份。所以 CI 新增一個 job，clone marker 指定的那個 revision，跑
+上游自己的 `story-check` 與 `handoff-check`。
+
+revision 是檢查的一部分：checkout 在別的 revision 會被拒絕（不同的 ForgeFlow 執行不同的
+契約），沒有 checkout 也會被拒絕而不是跳過。它是 CI job 不是 `make verify` 的 step——
+canonical gate 必須能從這個 repo 單獨一份 clone、離線跑完。
+
+### 21 條舊債：列出來，不是修掉
+
+5 個已交付的 Story 在上游 `story-check` 下有 21 條 FAIL，0.3.2 下就一模一樣，升級沒有
+造成任何一條。從來沒人知道，因為 `make verify` 跑的是自家的 TypeScript 對帳，從來沒跑過
+上游的 checker。
+
+三類措辭問題：trust-boundary 欄位寫成散文、security fixture 儲存格寫成散文而非 backtick
+精確值、一個 Story 的 Classification 與自己的 Superseded Behavior 互相矛盾。
+
+| Story | 條數 | 類型 |
+| --- | --- | --- |
+| DBCLI-PLAT-004 | 1 | trust-boundary |
+| DBCLI-PLAT-005 | 2 | trust-boundary；classification 與 superseded 矛盾 |
+| DBCLI-PLAT-006 | 6 | fixture matrix 第 1–6 列 verification 欄 |
+| DBCLI-PLAT-007 | 9 | fixture matrix 第 1–8 列 source field；trust-boundary |
+| DBCLI-PLAT-012 | 3 | row 10 兩欄；trust-boundary |
+
+沒有在這個 Story 裡修，是人的決定：其中 16 條是矩陣儲存格，真實的值要回到程式碼重新推導，
+而且全部都是在改一份人已經接受過的驗收文本——那是改紀錄，不是排版。它是自己的一個 Story。
+
+在那之前這 21 條被逐條列進 `PREDATING_FINDINGS`，是棘輪不是特赦：exempt 的 Story 多一條
+新的會 fail，修好了卻沒刪 entry 也會 fail，沒有 entry 的 Story 必須全乾淨。清單只准縮短。
+
+### 沒有採用的東西
+
+`story-check --ready` 要求每個 Story 都有 Acceptance Evidence map，現在會回報 71 條。
+那是對「未來每一個 Story」的決定，不是升級的副作用，所以沒有一起打開。上游的
+`templates/story/verification.md` 也沒裝——bootstrap 不管它，而 verification result
+contract 在這裡還沒有消費者。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -669,26 +736,29 @@ workflow:
     - DBCLI-015
     - DBCLI-016
     - DBCLI-017
+    - DBCLI-018
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 980cc078b850f799615dce51b2993141b85c40c7
+  commit: 284b5211a19fa8d0d8dcc85995c3692d429f7809
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
-    - specs/stories/DBCLI-017-portable-verification-attestation/story.md
-    - specs/stories/DBCLI-017-portable-verification-attestation/acceptance.md
-    - docs/adr/0026-a-verification-attestation-is-not-an-evidence-receipt.md
-    - scripts/lib/verification-attestation.ts
-    - scripts/write-attestation.ts
-    - tests/unit/scripts/verification-attestation.test.ts
-    - tests/contract/forgepilot-boundary.test.ts
-    - Makefile
-    - .gitignore
+    - specs/.forgeflow-adoption
+    - specs/stories/README.md
+    - specs/stories/_template/story.md
+    - specs/stories/_template/acceptance.md
+    - specs/stories/DBCLI-018-forgeflow-adoption-upgrade/story.md
+    - specs/stories/DBCLI-018-forgeflow-adoption-upgrade/acceptance.md
+    - docs/adr/0027-upstream-forgeflow-checkers-are-run-not-reimplemented.md
+    - scripts/lib/forgeflow-contract.ts
+    - scripts/check-forgeflow-contract.ts
+    - tests/unit/scripts/forgeflow-contract.test.ts
     - .github/workflows/ci.yml
-    - CONTEXT.md
+    - package.json
+    - AGENTS.md
   known_unrelated_paths: []
 
 verification:

@@ -26,13 +26,13 @@ import {
   serialiseAttestation,
 } from './lib/verification-attestation'
 
-const REPOSITORY = 'CarlLee1983/dbcli'
-
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const outputDirectory = join(repoRoot, '.verification')
 const attestationPath = join(outputDirectory, 'attestation.json')
 
-const instant = () => new Date().toISOString().replace(/\.(\d{3})\d*Z$/, '.$1Z')
+// `toISOString` is specified to emit exactly three fractional digits for every
+// in-range date, so there is nothing here to normalise.
+const instant = () => new Date().toISOString()
 
 const environment = () =>
   readEnvironment({
@@ -96,7 +96,6 @@ async function finish(
   }
 
   const attestation = buildAttestation({
-    repository: REPOSITORY,
     revision,
     dirtyWorktree: worktree === 'dirty',
     command: 'make verify',

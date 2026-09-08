@@ -20,6 +20,14 @@
 # It passed locally only because macOS `/bin/sh` is bash. Nothing here pipes
 # anything, so `pipefail` was a fatal no-op.
 #
+# One thing was lost and is not being quietly accepted: each step used to be its
+# own recipe line, so make echoed it and a CI log showed which of the 24 checks
+# was running and which one failed. Joined and prefixed with `@`, it does not.
+# Debugging now leans on the failing tool's own output, which is fine for
+# `bun run test` and thin for `docs:check`. Restoring it properly means echoing
+# each step with its own timing, which is DBCLI-019's subject; it is recorded
+# here so that Story inherits a known cost rather than rediscovering it.
+#
 # Neither attestation phase can decide the verdict, which is the point of the
 # `|| run=''` and the `|| true`: `begin` failing leaves `run` empty so `finish`
 # refuses and says so, and neither failure is allowed to stand between a

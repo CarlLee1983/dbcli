@@ -149,6 +149,10 @@ mandatory.
 * `make verify` must keep working with no ForgePilot installed and no CI.
 * The schema must leave room for DBCLI-019's per-step detail to be added under a
   new `schema_version` without restating anything this Story defines.
+* Every field must be something `make verify` observed. A value that is only
+  ever handed to the producer records what the caller claimed, whether the
+  handing happens at call time or at authoring time — which is why this Story
+  carries no `work_item`, no `story`, and no `repository`.
 
 ## Trust Boundary Fields
 
@@ -179,6 +183,15 @@ Required when `Baseline conformance: yes`.
   argument is R2 and R3: every step stays, in order, still blocking; what
   changes is that the recipe no longer stops without recording that it stopped.
 * `Makefile` — the `verify` recipe as a bare list of steps.
+
+## Known Cost
+
+Joining the steps into one subshell loses make's per-step echo, so a CI log no
+longer names the check that was running when the gate failed. Diagnosis leans on
+the failing tool's own output instead. Restoring it properly means echoing each
+step with its own timing, which is DBCLI-019's subject; it is recorded here and
+in the `Makefile` so that Story inherits a known cost rather than rediscovering
+it.
 
 ## Recorded Decisions
 

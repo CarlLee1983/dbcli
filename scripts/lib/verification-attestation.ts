@@ -18,6 +18,14 @@
  * already and can bind this the same way. ADR-0026 carries the reopening
  * condition.
  *
+ * There is no repository name either, for the same reason one level quieter.
+ * It was a hardcoded constant: validated, never observed, and therefore a
+ * record of what the author typed rather than of where the run happened — the
+ * exact thing this schema excludes `work_item` for. Deriving it from `git
+ * remote get-url origin` would have been worse: a remote URL can carry
+ * credentials, and R4 forbids exactly that. A commit SHA identifies its subject
+ * without help, so the field is gone rather than fixed.
+ *
  * There is no staleness either. The document states a revision; whether that
  * revision is still HEAD has a different answer every time it is asked, and an
  * artifact that answers it is wrong immediately after being written.
@@ -55,7 +63,6 @@ export interface AttestationEnvironment {
 
 export interface Attestation {
   readonly schema_version: number
-  readonly repository: string
   readonly revision: string
   readonly dirty_worktree: boolean
   readonly command: string
@@ -76,7 +83,6 @@ export interface Attestation {
 }
 
 export interface AttestationInput {
-  readonly repository: string
   readonly revision: string
   readonly dirtyWorktree: boolean
   readonly command: string
@@ -89,7 +95,6 @@ export interface AttestationInput {
 /** Key order is part of the format: two serialisations of one run must match. */
 const FIELDS = [
   'schema_version',
-  'repository',
   'revision',
   'dirty_worktree',
   'command',
@@ -105,10 +110,12 @@ const FIELDS = [
 const ENVIRONMENT_FIELDS = ['os', 'arch', 'bun', 'ci'] as const
 
 const REVISION = /^[0-9a-f]{40}$/
-const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 const SAFE_TEXT = /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,63}$/
 const COMMAND = /^[a-z][a-z0-9 :-]{0,63}$/
+
+/** One day. Long enough for any real gate, short enough to catch a bad clock. */
+const MAX_DURATION_MS = 24 * 60 * 60 * 1000
 
 function refuse(field: string, reason: string): never {
   throw new Error(`${field} ${reason}`)
@@ -199,7 +206,6 @@ export function readEnvironment(source: {
  * no document, because it will be believed.
  */
 export function buildAttestation(input: AttestationInput): Attestation {
-  const repository = requireMatch(input.repository, REPOSITORY, 'repository')
   const revision = requireMatch(input.revision, REVISION, 'revision')
   const command = requireMatch(input.command, COMMAND, 'command')
   const startedAt = requireMatch(input.startedAt, INSTANT, 'started_at')
@@ -212,9 +218,17 @@ export function buildAttestation(input: AttestationInput): Attestation {
   const duration = Date.parse(finishedAt) - Date.parse(startedAt)
   if (duration < 0) refuse('finished_at', `is before started_at, so the run has no duration`)
 
+  // A verification that took longer than a day did not take longer than a day.
+  // The realistic causes are a clock that jumped and arguments that shifted, and
+  // both produce a document that is internally consistent and plainly absurd,
+  // with nothing else in this file willing to say so. Refusing costs a record,
+  // never a verdict.
+  if (duration > MAX_DURATION_MS) {
+    refuse('finished_at', `is ${duration}ms after started_at, longer than a verification can run`)
+  }
+
   const body = {
     schema_version: ATTESTATION_SCHEMA_VERSION,
-    repository,
     revision,
     dirty_worktree: input.dirtyWorktree === true,
     command,
@@ -287,7 +301,6 @@ export function parseAttestation(text: string): Attestation {
   }
 
   const attestation = buildAttestation({
-    repository: record.repository as string,
     revision: record.revision as string,
     dirtyWorktree: record.dirty_worktree as boolean,
     command: record.command as string,

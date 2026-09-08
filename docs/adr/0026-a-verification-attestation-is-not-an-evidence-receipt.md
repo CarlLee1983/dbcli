@@ -55,13 +55,20 @@ decision, not a permanent refusal: it reopens if a consumer appears that needs
 the link and cannot compute it from the revision, and the shape it would take is
 a caller-supplied `context` object marked explicitly as unattested.
 
+It carries no repository name, for the same reason one level quieter. That field
+was a hardcoded constant — validated against a pattern, never observed — so it
+recorded what the author typed rather than where the run happened. Deriving it
+from `git remote get-url origin` would have been worse than leaving it: a remote
+URL can carry credentials, and keeping secrets out of the document is a rule this
+Story states outright. A commit SHA identifies its subject without help.
+
 It carries no staleness. The document states a revision; whether that revision
 is still HEAD is a question with a different answer every time it is asked, and
 an artifact that answers it is wrong immediately after being written.
 
-**Falsified if:** a second producer starts writing this document — anything
-other than `scripts/`'s writer invoked by `make verify` — or the attestation
-gains a field that `make verify` cannot verify for itself. Either means the
-artifact has stopped being a statement the repository can make about its own
-run, and the reason for keeping it out of `src/core/evidence-receipt` no longer
-holds.
+**Falsified if:** the attestation gains a field the producer did not observe —
+handed at call time, or fixed at authoring time as `repository` was — or a
+second producer starts writing the document, anything other than `scripts/`'s
+writer invoked by `make verify`. Either means the artifact has stopped being a
+statement the repository can make about its own run, and the reason for keeping
+it out of `src/core/evidence-receipt` no longer holds.

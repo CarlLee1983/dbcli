@@ -20,7 +20,6 @@ import {
 const REVISION = '980cc078b850f799615dce51b2993141b85c40c7'
 
 const INPUT: AttestationInput = {
-  repository: 'CarlLee1983/dbcli',
   revision: REVISION,
   dirtyWorktree: false,
   command: 'make verify',
@@ -72,7 +71,6 @@ describe('buildAttestation', () => {
 
     expect(keys).toEqual([
       'schema_version',
-      'repository',
       'revision',
       'dirty_worktree',
       'command',
@@ -107,9 +105,6 @@ describe('buildAttestation', () => {
         environment: { ...INPUT.environment, bun: '1.3.10; rm -rf /' },
       })
     ).toThrow(/environment.bun/)
-    expect(() => buildAttestation({ ...INPUT, repository: '../../etc/passwd' })).toThrow(
-      /repository/
-    )
   })
 })
 

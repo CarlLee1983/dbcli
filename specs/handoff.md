@@ -386,12 +386,39 @@ ForgePilot 把它的結果綁在確切 commit 上。一個判決取決於機器�
 
 Story 已起草但尚未 READY——GATE-002 未解除之前 `forgepilot next` 不會選到它。
 
+## 已交付：DBCLI-015——把載重敏感的判決搬離 unit suite
+
+GATE-002 選的是「搬進 `bun run test:perf`，預算依 runner 實測設定並印出量到的
+值」。動手之後那個「搬」揭露了兩件 Story 沒預料到的事。
+
+**目的地早就有一份更大的同一個量測。** `Table lookup (1000 tables)` 一直在
+`tests/perf/blacklist-performance.bench.ts` 裡，用 `medianElapsed` 取九次中位數
+並印出數字。unit suite 那份是它嚴格較弱的複本：100 張表、單次 `performance.now()`、
+不印任何東西。
+
+**典型規模的預算擋不住那個回歸。** 這台機器上，set-backed 查表在 100 張表下
+中位數 0.14 ms，而它取代掉的形狀——逐次 case folding 的線性掃描——中位數
+0.98 ms。這個檔案把 dev 量測乘以三倍當作 runner 成本，任何寬到不會變成擲硬幣的
+預算都落在 0.98 ms 之上。所以典型規模那一條記錄成本，不防守成本。
+
+**大規模那一條的舊預算也擋不住。** 1000 張表量到 0.099 ms，預算 10 ms——量測值的
+一百倍——而線性掃描回歸量到 7.67 ms，在這台機器上**低於**舊預算。它只有在慢的
+runner 把時間乘三倍之後才會紅。收緊到 2 ms 才讓 R2 成立：離真實量測 6.7 倍，
+而回歸在哪裡都會失敗。
+
+兩個規模都留著，斷言數沒有減少。unit suite 原地留一段註解說明預算去哪了，以及
+為什麼不要再放一份回來——不然下一個人只會看到一個少掉的測試。
+
+這個 Story 最值得留下的一句：**一個一百倍寬的預算跟沒有預算的差別，只有在你去量
+它要擋的那個回歸時才看得出來。** 舊的 10 ms 兩頭落空——它擋不住回歸，卻擋得住
+一台忙碌的機器。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: DBCLI-014
-  next_story: DBCLI-015
+  current_story: DBCLI-015
+  next_story: pending
   completed_stories:
     - DBCLI-001
     - DBCLI-002
@@ -422,13 +449,10 @@ baseline:
   commit: 64f2831eb708b3687ca990151aba8ba982f23545
   dirty_worktree: true
   story_owned_paths:
-    - .gitignore
-    - AGENTS.md
-    - Makefile
     - specs/handoff.md
-    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/acceptance.md
-    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/story.md
     - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/task.md
+    - tests/perf/blacklist-performance.bench.ts
+    - tests/unit/core/blacklist-manager.test.ts
     - specs/stories/DBCLI-014-forgepilot-dogfood/acceptance.md
     - specs/stories/DBCLI-014-forgepilot-dogfood/story.md
     - specs/stories/DBCLI-014-forgepilot-dogfood/task.md
@@ -437,12 +461,10 @@ baseline:
 
 verification:
   last_command: make verify
-  result: pass
+  result: not_run
   detail: >-
-    Run by ForgePilot as `forgepilot verify WI-001`, which executed this
-    repository's `make verify` inside a detached worktree of
-    aab45382ed1757b2c7a0cb6027db16a7e81f36fb under
-    `.forgepilot/worktrees/`. That checkout carried no `node_modules`; the new
-    install step bootstrapped the set pinned by `bun.lock`. Recorded as
-    evidence EV-001, PASS, bound to that commit.
+    DBCLI-015's implementation is committed but not yet verified at this
+    revision. The verification of record is ForgePilot's, which runs this
+    repository's `make verify` in a detached worktree of the exact commit;
+    DBCLI-014's evidence chain lives in ForgePilot's state, not restated here.
 ```

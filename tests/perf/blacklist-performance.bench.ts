@@ -70,7 +70,39 @@ const typicalRows = Array.from({ length: 1000 }, (_, i) => ({
 const typicalColumnList = Object.keys(typicalRows[0] ?? {})
 
 describe('Blacklist Performance Benchmarks', () => {
-  it('Table lookup (1000 tables): 1000 lookups in < 10ms', () => {
+  it('Table lookup (100 tables, typical config): 1000 lookups in < 2ms', () => {
+    // The typical-scale half of the pair below, and the case DBCLI-015 moved out
+    // of `tests/unit/core/blacklist-manager.test.ts`. There it was a single
+    // `performance.now()` around one loop, run alongside 6,700 other tests: it
+    // read 21.43ms against a 10ms budget under load and passed three times in a
+    // row when the file was run alone, which made two verifications of the same
+    // commit disagree. Here it is the median of nine samples and the number is
+    // printed.
+    const tables = Array.from({ length: 100 }, (_, i) => `table_${i}`)
+    const manager = new BlacklistManager({
+      ...baseConfig,
+      blacklist: { tables, columns: {} },
+    } as any)
+
+    const elapsed = medianElapsed(() => {
+      let hits = 0
+      for (let i = 0; i < 1000; i++) {
+        if (manager.isTableBlacklisted(`table_${i % 100}`)) hits++
+      }
+      return hits
+    })
+
+    // 0.14ms on this machine across five runs. Scaled the same way as the rest of
+    // this file — a CI runner costs about 3x here — that is ~0.42ms, so 2ms keeps
+    // a 4.7x margin. This case does not guard the linear-scan regression on its
+    // own: at 100 tables that shape measures 0.98ms here, under any budget loose
+    // enough not to be a coin flip. The 1000-table case below is what fails on it,
+    // which is why both scales are kept.
+    report('Table lookup (100 tables, typical)', elapsed, 2)
+    expect(elapsed).toBeLessThan(2)
+  })
+
+  it('Table lookup (1000 tables): 1000 lookups in < 2ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
 
     const elapsed = medianElapsed(() => {
@@ -81,8 +113,16 @@ describe('Blacklist Performance Benchmarks', () => {
       return hits
     })
 
-    report('Table lookup (1000 tables)', elapsed, 10)
-    expect(elapsed).toBeLessThan(10)
+    // Budget tightened from 10ms to 2ms by DBCLI-015. The lookup is set-backed, so
+    // it does not care that the blacklist is ten times larger: 0.099ms here,
+    // ~0.3ms on a runner at this file's 3x scaling. The old 10ms was 100x the
+    // measurement, and the regression it exists to catch — a linear scan with
+    // per-lookup case folding, which is what this replaced — measures 7.67ms here,
+    // i.e. it passed the old budget on this machine and only failed once a slow
+    // runner tripled it. At 2ms it fails everywhere, and still clears the real
+    // measurement by 6.7x.
+    report('Table lookup (1000 tables)', elapsed, 2)
+    expect(elapsed).toBeLessThan(2)
   })
 
   it('Column lookup (100 cols blacklisted): 1000 lookups in < 10ms', () => {

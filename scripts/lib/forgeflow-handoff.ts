@@ -16,6 +16,24 @@
 // unbacked claim is not necessarily false, it is unchecked, and an unchecked
 // claim survives by inertia until someone finally looks.
 //
+// ## The handoff records delivery, not a work queue
+//
+// DBCLI-016 removed the second half of what this block used to say. Which Story
+// is in progress, and which is next, are ForgePilot's answers: they are a
+// function of dependency edges, gates and evidence that change between commits,
+// so a copy in a committed file is stale the moment it is written — and was.
+// Measured at `141cf4c3`, the block held `current_story: pending` and
+// `next_story: pending`, which upstream's own checker rejects under both the
+// adopted 0.3.2 and the current 0.6.0, and nothing here looked at either field.
+//
+// So the fields are not merely unread now: naming a Story in them is refused,
+// and so is any key the adopted contract does not define. A convention would
+// have to be re-argued by every agent that opens the ForgeFlow handoff template
+// and finds blanks to fill; a refusal answers once. The sections themselves
+// stay, holding the contract's own spellings for "no Story is stated" — this
+// repository declares it adopted ForgeFlow, and deleting required keys would
+// make that declaration false. The reasoning is ADR-0025.
+//
 // It deliberately does not overlap upstream ForgeFlow's `story-check` and
 // `handoff-check`. Those are static structure checks over text a human wrote,
 // their own documentation is explicit that they never decide whether a
@@ -43,9 +61,14 @@
 
 /** The `workflow:` block's delivery claims. */
 export interface Lifecycle {
-  /** The Story in progress, or `null` when none is declared. */
-  readonly currentStory: string | null
   readonly completedStories: readonly string[]
+}
+
+/** One lifecycle statement the adopted handoff contract does not permit. */
+export interface Violation {
+  /** `section.key`, or the section alone when the section itself is unknown. */
+  readonly location: string
+  readonly reason: string
 }
 
 /** A Story delivered before commits carried `Story:` trailers. */
@@ -76,40 +99,282 @@ export interface ReconcileInput {
   readonly commitExists: (commit: string) => Promise<boolean>
 }
 
-const LIFECYCLE_BLOCK = /```yaml\n([\s\S]*?)```/
-const COMPLETED_LIST = /completed_stories:\n((?:[ \t]+-[ \t]+\S+\n)+)/
-const LIST_ITEM = /-\s+(\S+)/g
-const CURRENT_STORY = /^\s*current_story:\s*(\S+)\s*$/m
+const LIFECYCLE_FENCE = /```yaml\n([\s\S]*?)```/g
 const STORY_HEADING = /^#\s*Story:\s*(\S+)/m
 
-/** Values `current_story` may hold that name no Story. */
-const NO_CURRENT_STORY = new Set(['pending', 'none', 'null', '~'])
+const SECTION_LINE = /^([a-z_]+):$/
+const KEY_LINE = /^ {2}([a-z_]+):(?:[ \t]+(.*))?$/
+const LIST_LINE = /^ {3,}-[ \t]+(\S+)[ \t]*$/
 
 /**
- * Read the lifecycle block's delivery claims.
+ * The lifecycle keys the adopted ForgeFlow handoff contract defines.
  *
- * A missing block, or one recording no `completed_stories`, throws rather than
- * returning an empty result: reconciling nothing would pass, and a gate that
- * passes wherever its input has gone missing is a gate that passes everywhere
- * eventually.
+ * Presence is upstream `handoff-check`'s business and is not duplicated here;
+ * what this gate owns is that nothing outside the contract appears. The
+ * exceptions are `current_story` and `next_story`, which are required *and*
+ * pinned to one value each, because their absence and their being filled in are
+ * the same failure seen from two sides, and `completed_stories`, which this
+ * gate reads and so must insist on being able to read.
  */
-export function parseLifecycle(handoff: string): Lifecycle {
-  const block = handoff.match(LIFECYCLE_BLOCK)
-  if (!block) throw new Error('specs/handoff.md has no lifecycle block')
+const CONTRACT_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['workflow', new Set(['current_story', 'next_story', 'completed_stories', 'status'])],
+  [
+    'baseline',
+    new Set([
+      'repository',
+      'branch',
+      'commit',
+      'dirty_worktree',
+      'story_owned_paths',
+      'known_unrelated_paths',
+    ]),
+  ],
+  ['verification', new Set(['last_command', 'result'])],
+])
 
-  const body = block[1] ?? ''
-  const list = body.match(COMPLETED_LIST)
-  if (!list) throw new Error('the lifecycle block records no completed_stories')
+/** The only value each work-queue field may hold. ForgePilot holds the rest. */
+const PINNED_WORKFLOW_VALUES: ReadonlyMap<string, string> = new Map([
+  ['current_story', 'none'],
+  ['next_story', 'pending'],
+])
 
-  const completedStories = [...(list[1] ?? '').matchAll(LIST_ITEM)].map(([, id]) => id as string)
+const COMPLETED = 'workflow.completed_stories'
 
-  // `current_story` is optional in a way `completed_stories` is not: between
-  // Stories there is genuinely none, and the protocol spells that state.
-  const declared = body.match(CURRENT_STORY)?.[1]
-  const currentStory =
-    declared === undefined || NO_CURRENT_STORY.has(declared.toLowerCase()) ? null : declared
+/**
+ * The keys the contract writes as a list of `- item` lines.
+ *
+ * A list item under a scalar key is neither read nor reported without this: a
+ * `- DBCLI-999` slipped under `status:` was silently nothing, which is the one
+ * outcome the scan promises never to produce.
+ */
+const LIST_KEYS: ReadonlySet<string> = new Set([
+  COMPLETED,
+  'baseline.story_owned_paths',
+  'baseline.known_unrelated_paths',
+])
 
-  return { currentStory, completedStories }
+/**
+ * Return the body of the one fenced `yaml` block.
+ *
+ * Exactly one, not the first one. The handoff is five hundred lines of prose
+ * that quotes this block's own contents, and a non-greedy match for the first
+ * fence would read whichever example a later narrative section happened to put
+ * above the real block — a gate reconciling a quotation of itself, passing
+ * whatever the block below actually says. Nothing else in `specs/handoff.md`
+ * may be fenced as `yaml`; other examples are fenced as `text`.
+ *
+ * A missing block throws rather than yielding an empty body: checking nothing
+ * would pass, and a gate that passes wherever its input has gone missing is a
+ * gate that passes everywhere eventually.
+ */
+export function lifecycleBlock(handoff: string): string {
+  const blocks = [...handoff.matchAll(LIFECYCLE_FENCE)]
+
+  if (blocks.length === 0) throw new Error('specs/handoff.md has no lifecycle block')
+  if (blocks.length > 1) {
+    throw new Error(
+      `specs/handoff.md has ${blocks.length} fenced yaml blocks, so which one is the lifecycle ` +
+        'block is ambiguous — fence narrative examples as `text`'
+    )
+  }
+
+  return blocks[0]?.[1] ?? ''
+}
+
+/**
+ * The value a lifecycle line states, with YAML's decoration removed.
+ *
+ * `"none"` and `none # ForgePilot owns this` say what `none` says. Comparing
+ * the raw text told a reader who had quoted or annotated the value that
+ * ForgePilot owns the state they had just deferred to ForgePilot — a refusal
+ * whose message is about the wrong thing is worse than no refusal, because it
+ * sends the reader to change something that was already right.
+ */
+function bareValue(value: string): string {
+  const uncommented = value.replace(/\s+#.*$/, '').trim()
+  return uncommented.replace(/^(['"])([\s\S]*)\1$/, '$2').trim()
+}
+
+/**
+ * Name the place a line the scanner cannot read belongs to.
+ *
+ * Indentation decides, not whichever key happened to be seen last: four spaces
+ * or more continues the key above it, less than that does not, and a line at
+ * the margin belongs to the block rather than to any section. A `---` after the
+ * block's final key used to be reported against that key, which named a
+ * statement the writer never made.
+ */
+function locate(section: string | null, key: string | null, line: string): string {
+  const indent = line.length - line.trimStart().length
+  if (indent >= 4 && section !== null && key !== null) return `${section}.${key}`
+  if (indent >= 1 && section !== null) return section
+  return 'lifecycle block'
+}
+
+const unreadable = (line: string) =>
+  `carries an unsupported lifecycle indentation: ${JSON.stringify(line)}`
+
+/** What one pass over a lifecycle block body found. */
+export interface Reading {
+  readonly lifecycle: Lifecycle
+  readonly violations: readonly Violation[]
+}
+
+/**
+ * Read a lifecycle block body once: what it claims, and what it may not claim.
+ *
+ * One reader, deliberately. The delivery list and the contract check used to be
+ * two independent regexes over the same text, and they disagreed: a blank line
+ * inside `completed_stories` ended the list for one and meant nothing to the
+ * other, so a Story recorded below the gap was never reconciled against
+ * anything and never reported missing either. Two readers of one document is
+ * the same failure this gate exists to catch, one level down.
+ *
+ * The scan is literal rather than a YAML parse because this file imports
+ * nothing, which is what makes "the gate does not reach the network" a property
+ * of the file instead of a promise in its header. It accepts the shapes the
+ * contract's own example uses — a section, a two-space key, a list item — and
+ * reports anything else rather than interpreting it, because a line this gate
+ * cannot read is a line whose meaning nobody has checked.
+ */
+export function readLifecycle(body: string): Reading {
+  const violations: Violation[] = []
+  const values = new Map<string, string>()
+  const completedStories: string[] = []
+  const sections = new Set<string>()
+
+  let section: string | null = null
+  let known = false
+  let key: string | null = null
+
+  for (const line of body.split('\n')) {
+    if (line.trim().length === 0) continue
+
+    const sectionLine = line.match(SECTION_LINE)
+    if (sectionLine) {
+      section = sectionLine[1] as string
+      known = CONTRACT_KEYS.has(section)
+      key = null
+
+      if (!known) {
+        violations.push({
+          location: section,
+          reason: 'is not a section the adopted ForgeFlow handoff contract defines',
+        })
+      } else if (sections.has(section)) {
+        violations.push({ location: section, reason: 'is declared twice' })
+      }
+
+      sections.add(section)
+      continue
+    }
+
+    const keyLine = line.match(KEY_LINE)
+    const listLine = line.match(LIST_LINE)
+
+    // An unrecognised section is reported once, not once per line beneath it;
+    // one mistake deserves one message. Lines that parse as nothing at all are
+    // still reported, because that is a different mistake — a capitalised
+    // `Workflow:` used to be swallowed here and surfaced three rules later as
+    // `workflow.current_story is not stated`, sending the reader to add a key
+    // that was already in front of them.
+    if (!known) {
+      if (keyLine || listLine) continue
+      violations.push({ location: locate(section, key, line), reason: unreadable(line) })
+      continue
+    }
+
+    if (keyLine) {
+      key = keyLine[1] as string
+      const location = `${section}.${key}`
+      const value = (keyLine[2] ?? '').trim()
+
+      if (!CONTRACT_KEYS.get(section as string)?.has(key)) {
+        violations.push({
+          location,
+          reason: 'is not a key the adopted ForgeFlow handoff contract defines',
+        })
+        // The key is not one this gate knows, so nothing below it continues
+        // anything it can name: attributing those lines here would report one
+        // mistake twice under a location that does not exist in the contract.
+        key = null
+        continue
+      }
+
+      // Last-wins would make the verdict depend on line order: the same two
+      // lines in the other order refuse the handoff, and neither order says
+      // which value the writer meant.
+      if (values.has(location)) {
+        violations.push({ location, reason: 'is stated twice' })
+        continue
+      }
+
+      if (location === COMPLETED && value.length > 0) {
+        violations.push({
+          location,
+          reason: `is written inline as ${JSON.stringify(value)}; this gate reads it as a list of \`- <Story ID>\` items`,
+        })
+        continue
+      }
+
+      values.set(location, value)
+      continue
+    }
+
+    if (listLine) {
+      const location = `${section}.${key}`
+
+      if (!LIST_KEYS.has(location)) {
+        violations.push({
+          location: locate(section, key, line),
+          reason: `is a list item under a key the contract does not write as a list: ${JSON.stringify(line)}`,
+        })
+        continue
+      }
+
+      if (location === COMPLETED) completedStories.push(listLine[1] as string)
+      continue
+    }
+
+    violations.push({ location: locate(section, key, line), reason: unreadable(line) })
+  }
+
+  for (const [field, pinned] of PINNED_WORKFLOW_VALUES) {
+    const location = `workflow.${field}`
+    const stated = values.get(location)
+    const value = stated === undefined ? undefined : bareValue(stated)
+
+    // `current_story:` with nothing after it states no Story either. Reporting
+    // it as the wrong value printed an empty pair of backticks at the reader.
+    if (value === undefined || value.length === 0) {
+      if (!violations.some((violation) => violation.location === location)) {
+        violations.push({
+          location,
+          reason: `is not stated; the handoff contract requires the key, and this repository requires the value \`${pinned}\``,
+        })
+      }
+      continue
+    }
+
+    if (value !== pinned) {
+      violations.push({
+        location,
+        reason:
+          `is \`${stated}\`, but ForgePilot decides which Story is in progress and which is next — ` +
+          `record it there and leave this \`${pinned}\``,
+      })
+    }
+  }
+
+  // The delivery list is what this gate reconciles; an empty one would
+  // reconcile nothing and pass.
+  if (completedStories.length === 0 && !violations.some((v) => v.location === COMPLETED)) {
+    violations.push({ location: COMPLETED, reason: 'records no Story' })
+  }
+
+  // Found order first, then the pinned fields in contract order, then the
+  // delivery list: two runs over one handoff read the same way.
+  return { lifecycle: { completedStories }, violations }
 }
 
 /**
@@ -208,24 +473,7 @@ export async function reconcile({
   commitExists,
 }: ReconcileInput): Promise<Failure[]> {
   const failures: Failure[] = []
-  const { currentStory, completedStories } = lifecycle
-
-  // A Story cannot be both in progress and delivered. Whichever is true, the
-  // other is a stale line nobody deleted, and the two together say nothing.
-  if (currentStory !== null && completedStories.includes(currentStory)) {
-    failures.push({
-      story: currentStory,
-      reason:
-        'is recorded in both current_story and completed_stories — a Story is in progress or delivered, not both',
-    })
-  }
-
-  if (currentStory !== null && !directories.has(currentStory)) {
-    failures.push({
-      story: currentStory,
-      reason: 'is recorded as the current Story but has no specs/stories directory',
-    })
-  }
+  const { completedStories } = lifecycle
 
   for (const story of completedStories) {
     if (!directories.has(story)) {
@@ -276,6 +524,18 @@ export async function reconcile({
   }
 
   return failures
+}
+
+/** Render the violations as a report a reader can act on without opening a diff. */
+export function formatViolations(violations: readonly Violation[]): string {
+  const lines = violations.map(({ location, reason }) => `  ${location} ${reason}`)
+  return [
+    'ForgeFlow handoff contract violations in specs/handoff.md:',
+    '',
+    ...lines,
+    '',
+    `${violations.length} lifecycle statement(s) the adopted contract does not permit.`,
+  ].join('\n')
 }
 
 /** Render the failures as a report a reader can act on without opening a diff. */

@@ -1,6 +1,10 @@
 /**
  * The delivery gate reads Story IDs from Stories, not from directory names.
  *
+ * Since DBCLI-016 it reads only delivery claims. Which Story is in progress and
+ * which is next are ForgePilot's answers, and the gate's job around them is to
+ * refuse a handoff that gives a second one.
+ *
  * The old gate derived an ID with `/^(DBCLI-\d+).*$/` over the directory name.
  * `DBCLI-PLAT-001-capability-contract` does not match it, `String.replace`
  * hands back the input unchanged, and the Story ends up keyed under its own
@@ -22,23 +26,39 @@ import { describe, test, expect } from 'bun:test'
 import {
   collectStoryIds,
   formatFailures,
-  parseLifecycle,
+  formatViolations,
+  lifecycleBlock,
+  readLifecycle,
   readStoryId,
   reconcile,
   shallowCloneRefusal,
   type Exemption,
 } from '../../../scripts/lib/forgeflow-handoff'
 
-const lifecycleBlock = (body: string) => `# Handoff\n\nprose\n\n\`\`\`yaml\n${body}\`\`\`\n`
+const handoffFile = (body: string) => `# Handoff\n\nprose\n\n\`\`\`yaml\n${body}\`\`\`\n`
 
-const HANDOFF = lifecycleBlock(`workflow:
-  current_story: DBCLI-PLAT-013
-  next_story: DBCLI-PLAT-012
+const BODY = `workflow:
+  current_story: none
+  next_story: pending
   completed_stories:
     - DBCLI-001
     - DBCLI-PLAT-001
-  status: in_progress
-`)
+  status: done
+
+baseline:
+  repository: CarlLee1983/dbcli
+  branch: main
+  commit: 0000000000000000000000000000000000000000
+  dirty_worktree: false
+  story_owned_paths: []
+  known_unrelated_paths: []
+
+verification:
+  last_command: make verify
+  result: pass
+`
+
+const HANDOFF = handoffFile(BODY)
 
 const DIRECTORIES = new Map([
   ['DBCLI-001', 'DBCLI-001-contract-absence-and-invalid-drift'],
@@ -54,7 +74,7 @@ const absent = async () => false
 /** The default reconciliation: everything backed, nothing exempt. */
 function inputs(overrides: Partial<Parameters<typeof reconcile>[0]> = {}) {
   return {
-    lifecycle: parseLifecycle(HANDOFF),
+    lifecycle: readLifecycle(BODY).lifecycle,
     directories: DIRECTORIES,
     trailers: new Set(['DBCLI-001', 'DBCLI-PLAT-001', 'DBCLI-PLAT-013']),
     exemptions: NO_EXEMPTIONS,
@@ -63,31 +83,179 @@ function inputs(overrides: Partial<Parameters<typeof reconcile>[0]> = {}) {
   }
 }
 
-describe('parseLifecycle', () => {
-  test('reads the current Story and the completed list', () => {
-    expect(parseLifecycle(HANDOFF)).toEqual({
-      currentStory: 'DBCLI-PLAT-013',
+describe('lifecycleBlock', () => {
+  test('returns the body of the one fenced yaml block', () => {
+    expect(lifecycleBlock(HANDOFF)).toBe(BODY)
+  })
+
+  test('a handoff with no lifecycle block is refused', () => {
+    expect(() => lifecycleBlock('# Handoff\n\njust prose\n')).toThrow(/lifecycle block/)
+  })
+
+  test('a second fenced yaml block is refused rather than shadowing the real one', () => {
+    // The handoff is five hundred lines of prose that quotes this block. Taking
+    // the first fence would let a narrative example become the gate's input,
+    // and the block below it — the one a human reads and edits — would go
+    // unchecked entirely.
+    const quoted = `# Handoff\n\n\`\`\`yaml\nworkflow:\n  current_story: none\n\`\`\`\n\n${HANDOFF}`
+    expect(() => lifecycleBlock(quoted)).toThrow(/2 fenced yaml blocks/)
+  })
+})
+
+describe('readLifecycle', () => {
+  const body = (workflow: string) => `workflow:\n${workflow}  completed_stories:\n    - DBCLI-001\n`
+  const violations = (source: string) => readLifecycle(source).violations
+  const locations = (source: string) => violations(source).map((violation) => violation.location)
+
+  test('reads the completed list, and nothing about work in progress', () => {
+    // The delivery record is the whole of what this gate parses. Current and
+    // next are ForgePilot's, and a second copy here is the drift DBCLI-016
+    // removed.
+    expect(readLifecycle(BODY).lifecycle).toEqual({
       completedStories: ['DBCLI-001', 'DBCLI-PLAT-001'],
     })
   })
 
-  test('a handoff with no lifecycle block is refused', () => {
-    expect(() => parseLifecycle('# Handoff\n\njust prose\n')).toThrow(/lifecycle block/)
+  test('a block that names no live Story has nothing to report', () => {
+    expect(violations(BODY)).toEqual([])
   })
 
-  test('a lifecycle block recording no completed_stories is refused', () => {
-    expect(() => parseLifecycle(lifecycleBlock('workflow:\n  current_story: DBCLI-001\n'))).toThrow(
-      /completed_stories/
-    )
+  test('a named current Story is refused, pointing at ForgePilot', () => {
+    const found = violations(body('  current_story: DBCLI-016\n  next_story: pending\n'))
+    expect(found).toHaveLength(1)
+    expect(found[0]!.location).toBe('workflow.current_story')
+    expect(found[0]!.reason).toMatch(/ForgePilot/)
+    expect(found[0]!.reason).toMatch(/none/)
   })
 
-  test('an absent current_story is null rather than a failure to parse', () => {
-    // `current_story` may legitimately be unset between Stories; the list is
-    // what this gate reconciles, and it is what must be present.
-    const lifecycle = parseLifecycle(
-      lifecycleBlock('workflow:\n  completed_stories:\n    - DBCLI-001\n')
+  test('a named next Story is refused the same way', () => {
+    const found = violations(body('  current_story: none\n  next_story: DBCLI-017\n'))
+    expect(found.map((violation) => violation.location)).toEqual(['workflow.next_story'])
+    expect(found[0]!.reason).toMatch(/ForgePilot/)
+  })
+
+  test('the value that shipped before DBCLI-016 is refused too', () => {
+    // `current_story: pending` is not the contract's spelling of "no Story",
+    // and it is what the handoff actually held while nothing was reading it.
+    expect(locations(body('  current_story: pending\n  next_story: pending\n'))).toEqual([
+      'workflow.current_story',
+    ])
+  })
+
+  test('an absent current or next Story is refused, because the contract requires both keys', () => {
+    const found = violations(body(''))
+    expect(found.map((violation) => violation.location)).toEqual([
+      'workflow.current_story',
+      'workflow.next_story',
+    ])
+    expect(found[0]!.reason).toMatch(/is not stated/)
+  })
+
+  test('a key stated twice is refused rather than resolved by line order', () => {
+    // Last-wins let a named Story be laundered past the refusal by writing the
+    // sentinel underneath it; the same two lines reversed were refused, and
+    // neither order says which value the writer meant.
+    const laundered = body(
+      '  current_story: DBCLI-016\n  next_story: pending\n  current_story: none\n'
     )
-    expect(lifecycle.currentStory).toBeNull()
+    expect(locations(laundered)).toEqual(['workflow.current_story', 'workflow.current_story'])
+    // Both statements are true and both are reported: the key is stated twice,
+    // and the value the writer put first names a Story.
+    expect(violations(laundered)[0]!.reason).toMatch(/twice/)
+    expect(violations(laundered)[1]!.reason).toMatch(/ForgePilot/)
+  })
+
+  test('a section declared twice is refused', () => {
+    expect(locations(`${BODY}\nworkflow:\n  status: done\n`)).toContain('workflow')
+  })
+
+  test('a key the adopted contract does not define is refused, naming it', () => {
+    const found = violations(`${BODY}  detail: something the contract has no field for\n`)
+    expect(found.map((violation) => violation.location)).toEqual(['verification.detail'])
+    expect(found[0]!.reason).toMatch(/handoff contract/)
+  })
+
+  test('a section the contract does not define is refused', () => {
+    expect(locations(`${BODY}\nnotes:\n  anything: here\n`)).toEqual(['notes'])
+  })
+
+  test('a folded prose continuation is refused as unsupported indentation', () => {
+    // The block held six lines of one, under a `detail:` key, and upstream's
+    // own checker is the only thing that ever objected.
+    const found = violations(
+      `${BODY}  result_note: >-\n    a sentence continued\n    over two lines\n`
+    )
+    expect(found.map((violation) => violation.location)).toContain('verification.result_note')
+    expect(found.some((violation) => /indentation/.test(violation.reason))).toBe(true)
+  })
+
+  test('a quoted or annotated sentinel says what the bare one says', () => {
+    // Both are idiomatic YAML the contract permits. Refusing them told a reader
+    // who had deferred to ForgePilot that they had not.
+    expect(violations(body('  current_story: "none"\n  next_story: \'pending\'\n'))).toEqual([])
+    expect(
+      violations(body('  current_story: none # ForgePilot owns this\n  next_story: pending\n'))
+    ).toEqual([])
+  })
+
+  test('a key with no value states no Story, rather than the wrong one', () => {
+    const found = violations(body('  current_story:\n  next_story: pending\n'))
+    expect(found.map((violation) => violation.location)).toEqual(['workflow.current_story'])
+    expect(found[0]!.reason).toMatch(/is not stated/)
+  })
+
+  test('an unreadable line is attributed by its indentation, not by the last key seen', () => {
+    // A `---` after the block's final key used to be reported against that key,
+    // naming a statement the writer never made.
+    const found = violations(`${BODY}---\n`)
+    expect(found.map((violation) => violation.location)).toEqual(['lifecycle block'])
+  })
+
+  test('an unknown key does not also claim the lines beneath it', () => {
+    const found = violations(`${BODY}  detail: >-\n    a continuation\n`)
+    expect(found.map((violation) => violation.location)).toEqual([
+      'verification.detail',
+      'verification',
+    ])
+  })
+
+  test('a mis-capitalised section is reported, not swallowed', () => {
+    // `Workflow:` used to be skipped in silence and surface three rules later
+    // as `workflow.current_story is not stated`, sending the reader to add a
+    // key that was already in front of them.
+    const found = violations('Workflow:\n  current_story: none\n  next_story: pending\n')
+    expect(found[0]!.location).toBe('lifecycle block')
+    expect(found[0]!.reason).toMatch(/Workflow:/)
+  })
+
+  test('a list item under a scalar key is reported rather than silently ignored', () => {
+    // Neither read nor reported is the one outcome the scan promises never to
+    // produce: a `- DBCLI-999` under `status:` was simply nothing.
+    const found = violations(`${BODY}    - DBCLI-999\n`)
+    expect(found.map((violation) => violation.location)).toEqual(['verification.result'])
+    expect(found[0]!.reason).toMatch(/does not write as a list/)
+  })
+
+  test('a blank line inside the delivery list does not truncate it', () => {
+    // Two readers of one list disagreed here: the list regex stopped at the
+    // gap, the contract scan did not care, and a Story recorded below it was
+    // reconciled against nothing and reported by nobody.
+    const gapped =
+      'workflow:\n  current_story: none\n  next_story: pending\n  completed_stories:\n    - DBCLI-001\n\n    - DBCLI-999\n  status: done\n'
+    expect(readLifecycle(gapped).lifecycle.completedStories).toEqual(['DBCLI-001', 'DBCLI-999'])
+  })
+
+  test('a delivery list written inline is refused rather than read as empty', () => {
+    const inline =
+      'workflow:\n  current_story: none\n  next_story: pending\n  completed_stories: [DBCLI-001]\n'
+    const found = violations(inline)
+    expect(found.map((violation) => violation.location)).toEqual(['workflow.completed_stories'])
+    expect(found[0]!.reason).toMatch(/inline/)
+  })
+
+  test('a block recording no completed Story is refused, not reconciled as empty', () => {
+    const empty = 'workflow:\n  current_story: none\n  next_story: pending\n  status: done\n'
+    expect(locations(empty)).toEqual(['workflow.completed_stories'])
   })
 })
 
@@ -145,7 +313,7 @@ describe('reconcile', () => {
   test('a numeric Story backed by a trailer and a directory passes', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-001'] },
+        lifecycle: { completedStories: ['DBCLI-001'] },
       })
     )
     expect(failures).toEqual([])
@@ -154,19 +322,19 @@ describe('reconcile', () => {
   test('a PLAT Story backed by a trailer and a directory passes', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-PLAT-001'] },
+        lifecycle: { completedStories: ['DBCLI-PLAT-001'] },
       })
     )
     expect(failures).toEqual([])
   })
 
-  test('both families reconcile together, alongside a current Story', async () => {
+  test('both families reconcile together', async () => {
     expect(await reconcile(inputs())).toEqual([])
   })
 
   test('a completed Story with no directory fails closed', async () => {
     const failures = await reconcile(
-      inputs({ lifecycle: { currentStory: null, completedStories: ['DBCLI-PLAT-004'] } })
+      inputs({ lifecycle: { completedStories: ['DBCLI-PLAT-004'] } })
     )
     expect(failures).toHaveLength(1)
     expect(failures[0]!.story).toBe('DBCLI-PLAT-004')
@@ -179,28 +347,10 @@ describe('reconcile', () => {
     expect(failures[0]!.reason).toMatch(/`Story:` trailer/)
   })
 
-  test('a Story recorded as both current and completed fails closed', async () => {
-    const failures = await reconcile(
-      inputs({
-        lifecycle: { currentStory: 'DBCLI-PLAT-001', completedStories: ['DBCLI-PLAT-001'] },
-      })
-    )
-    expect(failures.map((failure) => failure.story)).toEqual(['DBCLI-PLAT-001'])
-    expect(failures[0]!.reason).toMatch(/current_story and completed_stories/)
-  })
-
-  test('a current Story with no directory fails closed', async () => {
-    const failures = await reconcile(
-      inputs({ lifecycle: { currentStory: 'DBCLI-PLAT-099', completedStories: ['DBCLI-001'] } })
-    )
-    expect(failures.map((failure) => failure.story)).toEqual(['DBCLI-PLAT-099'])
-    expect(failures[0]!.reason).toMatch(/no specs\/stories directory/)
-  })
-
   test('an exemption backs a Story delivered before trailers existed', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-001'] },
+        lifecycle: { completedStories: ['DBCLI-001'] },
         trailers: new Set<string>(),
         exemptions: new Map([['DBCLI-001', { commit: 'abc123', evidence: 'two named tests' }]]),
       })
@@ -211,7 +361,7 @@ describe('reconcile', () => {
   test('an exemption naming a commit this repository lacks fails', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-001'] },
+        lifecycle: { completedStories: ['DBCLI-001'] },
         trailers: new Set<string>(),
         exemptions: new Map([['DBCLI-001', { commit: 'abc123', evidence: 'two named tests' }]]),
         commitExists: absent,
@@ -223,7 +373,7 @@ describe('reconcile', () => {
   test('an exemption for a Story that has since acquired a trailer is stale', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-001'] },
+        lifecycle: { completedStories: ['DBCLI-001'] },
         exemptions: new Map([['DBCLI-001', { commit: 'abc123', evidence: 'two named tests' }]]),
       })
     )
@@ -233,7 +383,7 @@ describe('reconcile', () => {
   test('an exemption for a Story not recorded as completed fails', async () => {
     const failures = await reconcile(
       inputs({
-        lifecycle: { currentStory: null, completedStories: ['DBCLI-001'] },
+        lifecycle: { completedStories: ['DBCLI-001'] },
         exemptions: new Map([['DBCLI-777', { commit: 'abc123', evidence: 'x' }]]),
       })
     )
@@ -266,6 +416,17 @@ describe('formatFailures', () => {
     expect(report).toContain('DBCLI-777')
     expect(report).toContain('is not backed')
     expect(report).toContain('1 unbacked claim')
+  })
+})
+
+describe('formatViolations', () => {
+  test('every violation is named with its reason', () => {
+    const report = formatViolations([
+      { location: 'workflow.next_story', reason: 'is not the contract value' },
+    ])
+    expect(report).toContain('workflow.next_story')
+    expect(report).toContain('is not the contract value')
+    expect(report).toContain('1 lifecycle statement')
   })
 })
 

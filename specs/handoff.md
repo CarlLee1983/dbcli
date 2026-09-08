@@ -461,10 +461,12 @@ baseline:
 
 verification:
   last_command: make verify
-  result: not_run
+  result: pass
   detail: >-
-    DBCLI-015's implementation is committed but not yet verified at this
-    revision. The verification of record is ForgePilot's, which runs this
-    repository's `make verify` in a detached worktree of the exact commit;
-    DBCLI-014's evidence chain lives in ForgePilot's state, not restated here.
+    Run by ForgePilot in a detached worktree of the exact commit. DBCLI-015's
+    implementation commit was verified twice in a row and passed both times,
+    which is the determinism its acceptance asks for; the same shape produced
+    one FAIL and one PASS before this Story. Evidence IDs and revisions live in
+    ForgePilot's state, deliberately not restated here — restating them needs a
+    commit, and that commit invalidates the evidence being restated.
 ```

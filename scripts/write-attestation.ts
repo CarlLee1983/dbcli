@@ -57,6 +57,13 @@ const environment = () =>
  * believed anyway.
  */
 async function begin(): Promise<void> {
+  // First, before anything that can fail. Any attestation still lying here
+  // belongs to an earlier run, and deleting it is right whether or not git
+  // answers: a `begin` that failed used to leave the previous run's verdict in
+  // place for `if: always()` to upload as this one's — the very case the delete
+  // was added to prevent.
+  await rm(attestationPath, { force: true })
+
   const resolved = await $`git rev-parse HEAD`.cwd(repoRoot).nothrow().quiet()
   if (resolved.exitCode !== 0) {
     throw new Error(
@@ -67,12 +74,6 @@ async function begin(): Promise<void> {
 
   const status = await $`git status --porcelain`.cwd(repoRoot).nothrow().quiet()
   if (status.exitCode !== 0) throw new Error('git status --porcelain failed')
-
-  // Any attestation still lying here belongs to an earlier run. Left in place,
-  // a run killed before `finish` — a CI timeout, a cancelled job — would let
-  // `if: always()` publish the previous run's verdict as this one's. No file is
-  // the honest answer to "was this revision verified"; a stale file is not.
-  await rm(attestationPath, { force: true })
 
   const worktree = status.text().trim().length > 0 ? 'dirty' : 'clean'
   console.log(`${resolved.text().trim()} ${worktree} ${instant()}`)

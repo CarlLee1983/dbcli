@@ -1,28 +1,44 @@
 /**
  * CLI Startup Performance
  *
- * Budgets are checked against the FASTEST of several runs, not the median.
- * Startup noise is one-sided — a descheduled process is slower, never faster —
- * so the minimum estimates the real cost and the median mostly reports how
- * busy the runner was. Measured on `main`, the same workload has reported
- * anywhere from 84ms to 283ms against a 200ms budget, failing CI on commits
- * that touched nothing related.
- * Set SKIP_PERF_TESTS=1 to skip (e.g. on noisy CI runners).
+ * What `--help` costs is the bytes it has to parse and execute, and that is what
+ * this file gates. `dist/cli.mjs` answers `--version` by itself and dynamically
+ * imports `./cli-runtime` for everything else, so every other invocation loads
+ * exactly those two files; the database drivers stay behind their own dynamic
+ * imports and are not part of startup. Their combined size is a property of the
+ * build, identical on every machine and under any load.
  *
- *   --help    < 200ms on macOS/Linux
- *   --version < 100ms on macOS/Linux
+ * The wall-clock number is still measured and printed — it is what a user feels,
+ * and a tightening margin should be visible — but it is not asserted. It was,
+ * against 200ms, and on one unchanged commit it read 171–187ms idle and
+ * 248–337ms with eight CPU-bound processes running, failing five runs out of
+ * five. The file's own header used to record the same thing on `main`: 84ms to
+ * 283ms against that budget, "failing CI on commits that touched nothing
+ * related". Load inflates process startup one-sidedly and no denominator
+ * cancels it: a bare interpreter measured 6.5–7.6ms whether the machine was
+ * idle or loaded, so every ratio built on it drifts further than the absolute
+ * number did. See DBCLI-019, GATE-003 and GATE-004.
+ *
+ * Set SKIP_PERF_TESTS=1 to skip (e.g. on noisy CI runners).
  *
  * Skipped when the built binary is missing so this can run locally pre-build.
  */
 import { describe, it, expect } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 const cliPath = path.resolve(process.cwd(), 'dist/cli.mjs')
 const enabled = existsSync(cliPath) && !process.env.SKIP_PERF_TESTS
 const STARTUP_BUDGETS =
   process.platform === 'win32' ? { help: 5000, version: 5000 } : { help: 200, version: 100 }
+
+// The two files `--help` loads. Measured 2,156,743 bytes at the time this gate was
+// written (4,928 + 2,151,815), so the budget is 2.6MB: ~20% of head-room for
+// ordinary growth, while anything that pulls a driver or a UI bundle onto the
+// startup path — the shapes that put hundreds of KB in at once — turns it red.
+const STARTUP_BYTES_BUDGET = 2_600_000
+const runtimePath = path.resolve(process.cwd(), 'dist/cli-runtime.mjs')
 
 const SAMPLE_COUNT = 9
 
@@ -53,10 +69,20 @@ function report(label: string, elapsed: number, budget: number): void {
 }
 
 describe.if(enabled)('Performance: CLI Startup', () => {
-  it('--help renders within budget', () => {
+  it('--help loads no more than the startup budget of bytes', () => {
+    const bytes = statSync(cliPath).size + statSync(runtimePath).size
+    console.log(
+      `CLI startup bytes = ${bytes} (budget ${STARTUP_BYTES_BUDGET}), ` +
+        `cli.mjs ${statSync(cliPath).size} + cli-runtime.mjs ${statSync(runtimePath).size}`
+    )
+    expect(bytes).toBeLessThan(STARTUP_BYTES_BUDGET)
+  })
+
+  it('--help reports what it cost', () => {
     const elapsed = fastestStartupMs('--help')
+    // Printed, not asserted. See the file header.
     report('CLI startup (--help)', elapsed, STARTUP_BUDGETS.help)
-    expect(elapsed).toBeLessThan(STARTUP_BUDGETS.help)
+    expect(elapsed).toBeGreaterThan(0)
   })
 
   it('--version renders within budget', () => {

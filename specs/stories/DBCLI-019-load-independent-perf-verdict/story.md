@@ -27,19 +27,31 @@ that touched nothing related".
 
 Which assertion produced EV-018 and EV-019 is not recorded. ForgePilot's
 Evidence keeps the exit status, and the output it surfaced ended at bun's
-script-level `error: script "test:perf" exited with code 1`. Naming the case
-from a reproduction is therefore the first piece of work, not an assumption this
-Story makes: the startup budget is the documented suspect, not a proven one.
+script-level `error: script "test:perf" exited with code 1`. A reproduction was
+therefore run before this Story's scope was fixed: `bun run test:perf` five
+times with eight CPU-bound processes on a ten-core machine, full output kept.
+Three assertions fail there, and every one of them compares an absolute elapsed
+time to a constant:
+
+| Assertion | Budget | Under load | Failed |
+| --- | --- | --- | --- |
+| `tests/perf/startup.bench.ts:60` `--help` | 200 ms | 248–337 ms | 5 of 5 |
+| `tests/perf/contiguous-section-matcher.bench.ts:66` `redactFields` | 350 ms | 408 ms | 5 of 5 |
+| `tests/perf/blacklist-performance.bench.ts:306` flattened docs | 12 ms | 12.65–15.96 ms | 2 of 5 |
+
+Which of the three produced EV-018 and EV-019 stays unknown. That is not a gap
+this Story can close after the fact — it is what R5 exists to prevent from
+recurring.
 
 The shape of the fix already exists in this repository.
-`tests/perf/blacklist-performance.bench.ts` pairs each wall-clock ceiling with a
-scaling-ratio assertion — the ratio between a small and a large input, which
-load inflates on both sides and therefore cannot flip. `tests/helpers/bench.ts`
-supplies median-of-N sampling and prints every measurement, passing or failing.
-The spawn-based budgets have neither counterpart: `startup.bench.ts` takes the
-fastest of nine samples and `query.bench.ts` compares a single elapsed time to
-`QUERY_BUDGET_MS`, and in both the entire quantity being measured is process
-startup, which load inflates one-sidedly.
+`tests/perf/blacklist-performance.bench.ts:174` asserts a ratio between a small
+and a large input: load inflates both sides, so no amount of it flips the
+verdict, while an algorithm that stopped scaling still fails.
+`tests/helpers/bench.ts` supplies median-of-N sampling and prints every
+measurement, passing or failing. The three cases named above have the sampling
+and the printing but no ratio — each is one absolute number compared to a
+constant, and `startup.bench.ts` measures process spawn, which load inflates
+one-sidedly no matter how many samples the minimum is taken over.
 
 This matters beyond a slow test. `make verify` is this repository's verification
 contract and ForgePilot binds its result to an exact commit; an assertion whose
@@ -79,10 +91,17 @@ passes it.
 
 ### In Scope
 
-* Reproducing EV-018 / EV-019 and naming the assertion that failed.
-* The spawn-based wall-clock budgets in `tests/perf/startup.bench.ts` and
-  `tests/perf/query.bench.ts` — the assertions in `bun run test:perf` whose
-  verdict is an absolute elapsed time with no load-independent counterpart.
+* The three assertions the reproduction named: `startup.bench.ts:60`,
+  `contiguous-section-matcher.bench.ts:66`, and
+  `blacklist-performance.bench.ts:306`, plus the two more that surfaced when the
+  loaded procedure was repeated: the `deep < 500ms` half of
+  `contiguous-section-matcher.bench.ts:55` and its
+  `findProtectedFieldReference` case.
+* The per-test timeout `test:perf` runs under. A benchmark killed at five
+  seconds is a verdict flipped by load in the same way, and it reports no
+  numbers at all.
+* Disclosing every absolute wall-clock assertion that remains, so the ones this
+  Story does not fix cannot grow in number or be forgotten.
 * Whatever `test:perf` must print for a FAIL to identify itself without a
   reproduction.
 
@@ -90,10 +109,13 @@ passes it.
 
 * The startup cost of the CLI itself. Nothing here claims 171 ms is too slow;
   the measurement is not the complaint.
-* The budgets in `tests/perf/blacklist-performance.bench.ts` and
-  `tests/perf/contiguous-section-matcher.bench.ts`. DBCLI-015 already gave them
-  the paired shape; if one of them turns out to be the case that failed, it
-  comes into scope by name and the rest stay out.
+* Converting the nineteen absolute assertions that remain in
+  `tests/perf/blacklist-performance.bench.ts` and `tests/perf/query.bench.ts`.
+  They are a population rather than stragglers — two ten-run loaded samples
+  after the change failed 3 and 6 times, naming a different subset each time —
+  and several of them guard constant-factor regressions, which no ratio can
+  catch. Closing them needs a quantity that is neither time nor a ratio, and
+  that is its own Story. This one leaves them counted rather than fixed.
 * Any change to `make verify`'s step list or ordering.
 * ForgePilot's Evidence format. That FAIL evidence keeps only an exit status is
   a real gap, and it belongs to ForgePilot, not to this repository.
@@ -110,8 +132,9 @@ passes it.
 
 ## Rules
 
-* R1: The verdict of every assertion in `bun run test:perf` does not depend on
-  concurrent load on the machine running it.
+* R1: The verdict of every assertion this Story names does not depend on
+  concurrent load on the machine running it. Every absolute wall-clock
+  assertion left behind is counted, and the count can only go down.
 * R2: A real startup regression still turns the build red. A change that makes
   the CLI meaningfully slower to start must fail the replacement assertion.
 * R3: Every retained wall-clock budget prints the value it measured, passing or
@@ -145,8 +168,23 @@ passes it.
 
 ## Superseded Behavior
 
-* `tests/perf/startup.bench.ts` — the `--help` and `--version` cases. Their
-  verdicts are load-dependent, which is the defect; changing them is the point
-  of this Story, not a regression.
-* `tests/perf/query.bench.ts` — the four cases asserting against
-  `QUERY_BUDGET_MS`, for the same reason.
+* `tests/perf/startup.bench.ts` — the `--help` case, `expect(elapsed)
+  .toBeLessThan(STARTUP_BUDGETS.help)`. Its verdict is load-dependent, which is
+  the defect; changing it is the point of this Story, not a regression. What
+  replaces it is not a ratio: process startup has no denominator that load
+  moves as well (GATE-004), so the gate becomes the bytes `--help` must load,
+  which is a property of the build.
+* `tests/perf/contiguous-section-matcher.bench.ts` — the `deep < 500ms` half of
+  the `namesProtectedField` case, deleted outright. The ratio in the same test
+  guards the same regression; the absolute was a duplicate that load flipped.
+* `tests/perf/contiguous-section-matcher.bench.ts` — the
+  `findProtectedFieldReference` case, which had only an absolute budget.
+* `tests/perf/contiguous-section-matcher.bench.ts` — the `redactFields walks a
+  large response without a per-key rescan` case. Its own comment already states
+  that the guard against algorithmic regression is the ratio assertion in
+  `tests/unit/core/contiguous-section-matcher.test.ts`, which makes the 350 ms
+  ceiling a duplicate whose only observed effect is a flipped verdict.
+* `tests/perf/blacklist-performance.bench.ts` — the `Column filtering (1000
+  flattened docs, 3 parent rules)` case, for the same reason. Unlike the two
+  above, its budget is the only thing guarding the per-row recursion decision,
+  so what replaces it must still reject that regression.

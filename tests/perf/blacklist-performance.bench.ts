@@ -264,23 +264,29 @@ describe('Blacklist Performance Benchmarks', () => {
     expect(elapsed).toBeLessThan(10)
   })
 
-  it('Column filtering (1000 flattened docs, 3 parent rules): < 8ms per call', () => {
+  it('Column filtering (1000 flattened docs): one nested row does not slow the other 999', () => {
     // The shape the Elasticsearch adapter actually produces: `_source` flattened
     // into dotted top-level keys with no nested records anywhere. Nothing here
     // covered it, which is how a 70x masking regression on real ES results passed
     // CI once — the other cases mask by plain column name and never exercise the
     // dotted branch on a wide result set.
-    const docs = Array.from({ length: 1000 }, (_, i) => {
-      const row: Record<string, unknown> = { id: i }
-      for (let j = 0; j < 16; j++) row[`f${j}`] = j
-      row['profile.email'] = `e${i}`
-      row['profile.ssn'] = `s${i}`
-      row['payment.card'] = `c${i}`
-      row['payment.cvv'] = '123'
-      row['meta.a'] = 1
-      row['meta.b'] = 2
-      return row
-    })
+    const flatDocs = () =>
+      Array.from({ length: 1000 }, (_, i) => {
+        const row: Record<string, unknown> = { id: i }
+        for (let j = 0; j < 16; j++) row[`f${j}`] = j
+        row['profile.email'] = `e${i}`
+        row['profile.ssn'] = `s${i}`
+        row['payment.card'] = `c${i}`
+        row['payment.cvv'] = '123'
+        row['meta.a'] = 1
+        row['meta.b'] = 2
+        return row
+      })
+    const docs = flatDocs()
+    // The same thousand rows with no nested document anywhere. It is the ratio's
+    // denominator, not a gate: both sides are the same work on the same machine,
+    // so load inflates them together and cancels.
+    const allFlat = flatDocs()
     // Elasticsearch does not flatten arrays, so one document out of a thousand can
     // legitimately carry a nested `profile`. When the recursion decision was made
     // once for the whole result set instead of per row, this single document put the
@@ -297,13 +303,24 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('logs', docs, columnList).filteredRows
     )
 
-    // Budget set from CI, not from a dev machine: measured 2.59–5.53ms across the
-    // six matrix jobs (worst windows-latest, bun 1.3.3), against 1.83ms locally — so
-    // a runner costs about 3x here. The regression this guards against measures
-    // 8.7ms locally, i.e. roughly 26ms on that runner, so 12ms both clears the worst
-    // real measurement by 2.2x and fails loudly if the per-row decision is undone.
+    const flat = medianElapsed(
+      () => validator.filterColumns('logs', allFlat, columnList).filteredRows
+    )
+
+    // What this gate has to reject is the per-row decision being made once for the
+    // whole result set: that puts the 999 flat rows on the nested path, so the run
+    // with one nested document costs several times the run without it. The ratio
+    // says exactly that, and says it in a quantity load cannot move — measured
+    // 0.77–0.94 idle and 0.50–1.25 under eight CPU-bound processes on this
+    // ten-core machine, against a threshold of 3.
+    //
+    // The absolute number is printed, not asserted. Its 12ms ceiling came from CI
+    // (2.59–5.53ms across the six matrix jobs) and held there, but on a loaded
+    // machine the same commit measured 12.65–15.96ms and failed 2 runs in 5 while
+    // nothing about the code had changed — DBCLI-019, EV-018 to EV-020.
     report('Column filtering (1000 flattened docs)', elapsed, 12)
-    expect(elapsed).toBeLessThan(12)
+    report('Column filtering (1000 flattened docs, none nested) [ratio denominator]', flat, 12)
+    expect(elapsed / Math.max(flat, 0.001)).toBeLessThan(3)
   })
 
   it('Column filtering (1000 rows, 60 dotted rules that match nothing): < 6ms per call', () => {

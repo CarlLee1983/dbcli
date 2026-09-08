@@ -5,15 +5,22 @@ that counts as passing.
 
 ## Happy Path
 
-* [ ] The same commit gets the same verdict under load.
-      Evidence: at one commit, `bun run test:perf` run ten times while eight
-      CPU-bound processes are running gives ten identical verdicts, all exit
-      `0`. The pre-change baseline for the same procedure is recorded in
-      `task.md`; if it does not reproduce a failure, the load level is raised
-      until it does before the change is made, and both numbers are recorded.
-* [ ] The assertion that produced EV-018 and EV-019 is named.
-      Evidence: `task.md` names the case, quotes the numbers it compared, and
-      states how it was reproduced.
+* [ ] The cases this Story names get the same verdict under load.
+      Evidence: `bun run test:perf` run ten times while eight CPU-bound
+      processes are running, and not one of the five named cases fails in any
+      of the ten. The pre-change baseline for the same procedure is recorded in
+      `task.md`: 10 of 10 runs failed.
+* [ ] Every absolute wall-clock assertion still in `tests/perf/` is disclosed,
+      and the list can only shrink.
+      Evidence: `tests/unit/build/perf-absolute-time-budgets.test.ts` counts
+      them per file, fails when a new one is added, and fails just as loudly
+      when one is fixed without lowering the recorded number. Nineteen remain,
+      and until they are gone a loaded `test:perf` can still fail — which is
+      why the criterion above is about the named cases and not about the run.
+* [ ] The load-sensitive assertions are named from a reproduction.
+      Evidence: `task.md` names each case, quotes the numbers it compared and
+      how often it failed, and states the procedure. Which of them produced
+      EV-018 and EV-019 is not recoverable and is not claimed.
 * [ ] `make verify` passes.
       Evidence: `make verify` → exit `0`, and the attestation it writes to
       `.verification/attestation.json` reads `PASS` at the delivered revision.
@@ -25,23 +32,22 @@ that counts as passing.
       form `<label> = <value>ms (budget <n>ms)`, and a failing one prints the
       same line for the case that failed.
 * [ ] Every retained budget says where its number came from.
-      Evidence: each budget constant in `tests/perf/startup.bench.ts` and
-      `tests/perf/query.bench.ts` carries a comment naming the measurement it
-      was derived from, matching the convention in
+      Evidence: each threshold this Story adds or changes carries a comment
+      naming the measurement it was derived from, matching the convention in
       `tests/perf/blacklist-performance.bench.ts:364`.
 * [ ] No assertion is lost.
-      Evidence: the count of `expect(` calls in `tests/perf/startup.bench.ts`
-      and `tests/perf/query.bench.ts` is not lower than at `c3230d79`, and the
-      `test:perf` summary reports at least the 24 passing cases it reported
-      there.
+      Evidence: the count of `expect(` calls across `tests/perf/` is not lower
+      than at `c3230d79`, and the `test:perf` summary reports at least the 24
+      passing cases it reported there.
 
 ## Failure Cases
 
-* [ ] A real startup regression is still rejected.
-      Evidence: a case in `tests/perf/startup.bench.ts` that measures a
-      deliberately slowed startup and asserts it exceeds the threshold — the
-      shape `tests/perf/blacklist-performance.bench.ts:196` already uses to
-      prove its own gate rejects the regression it is there to catch.
+* [ ] Each replaced gate still rejects the regression it was there to catch.
+      Evidence: for every case this Story changes, a companion case feeds it the
+      regression it guards against and asserts the new threshold rejects it —
+      the shape `tests/perf/blacklist-performance.bench.ts:196` already uses.
+      For `blacklist-performance.bench.ts:306` the regression is the per-row
+      recursion decision made once for the whole result set.
 * [ ] A `test:perf` failure identifies itself.
       Evidence: with a budget temporarily set to `0`, the output a caller sees
       when the step fails names the case and both numbers, not only
@@ -68,6 +74,13 @@ that counts as passing.
 * Ten runs under load is a sampling procedure, not a proof. It is the same
   standard DBCLI-015 was accepted under, and it is enough to distinguish a gate
   from a coin flip; it cannot certify that no load level ever flips a verdict.
+* The nineteen remaining absolute assertions are a population, not stragglers.
+  Two ten-run samples after the change failed 3 and 6 times, naming a different
+  subset each time. Several of them guard constant-factor regressions — the
+  per-row path re-split in `blacklist-performance.bench.ts:354` is the clearest
+  — and no ratio can catch a constant factor: only absolute time can. Closing
+  them needs a quantity that is neither time nor a ratio, such as a count of
+  operations, and that is a different piece of work from this Story.
 * The named cause for EV-018 and EV-019 rests on a reproduction, not on a
   recorded log. The original failing output no longer exists.
 

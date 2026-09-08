@@ -82,9 +82,10 @@ interface Recipe {
  * line that is neither prologue, step, nor epilogue has nowhere to hide, which
  * is the property the earlier version lacked.
  */
-const verifyRecipe = async (): Promise<Recipe> => {
-  const makefile = await readRoot('Makefile')
-  const lines = makefile.split('\n')
+const parseVerifyRecipe = (makefile: string): Recipe => {
+  // Line endings are the checkout's, not the recipe's. A CRLF checkout makes
+  // every literal comparison below compare against a trailing `\r`.
+  const lines = makefile.replace(/\r\n/g, '\n').split('\n')
 
   // Make runs the *last* definition of a target; this check would otherwise
   // read the first and report on a recipe that never executes.
@@ -120,6 +121,8 @@ const verifyRecipe = async (): Promise<Recipe> => {
   return { prologue: recipe.slice(0, opening + 1), steps, epilogue: recipe.slice(closing) }
 }
 
+const verifyRecipe = async (): Promise<Recipe> => parseVerifyRecipe(await readRoot('Makefile'))
+
 describe('make verify runs from a clean checkout', () => {
   test('installs the pinned dependency set before any step that consumes it', async () => {
     const { steps } = await verifyRecipe()
@@ -140,6 +143,21 @@ describe('make verify runs from a clean checkout', () => {
 
     expect(prologue).toEqual([...PROLOGUE])
     expect(epilogue).toEqual([...EPILOGUE])
+  })
+
+  test('reads the same recipe however the checkout terminated its lines', async () => {
+    // GitHub's windows runner checks out with core.autocrlf=true and this
+    // repository pins no .gitattributes, so the Makefile arrives as CRLF. Every
+    // comparison in the parser is literal, and `verify:\r` starts with
+    // `verify:` without being equal to it: three tests here failed on
+    // windows-latest and on no other runner. The recipe's contract is its
+    // lines, never how a checkout chose to end them — asserted here because the
+    // platform that breaks it is the one nobody runs locally.
+    const makefile = await readRoot('Makefile')
+
+    expect(parseVerifyRecipe(makefile.replace(/\r?\n/g, '\r\n'))).toEqual(
+      parseVerifyRecipe(makefile)
+    )
   })
 
   test('stays POSIX, because make runs /bin/sh and CI runs dash', async () => {

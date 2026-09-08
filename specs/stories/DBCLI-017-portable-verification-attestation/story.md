@@ -106,8 +106,9 @@ mandatory.
   dirty worktree produces an attestation that says so, never one that implies
   the commit was what was tested.
 * R2: The attestation is written on FAIL as well as on PASS, and `make verify`
-  still exits non-zero on FAIL. Writing the attestation never changes the exit
-  status, and a failure to write it never turns a FAIL into a PASS.
+  still exits non-zero on FAIL. Neither attestation phase can change the exit
+  status in either direction: a failure to write never turns a FAIL into a PASS,
+  and never turns a PASS — or a run that has not started yet — into a failure.
 * R3: Every step of `make verify` present before this Story is still present
   after it, in the same order, and still blocking.
 * R4: The document contains no secret, credential, environment dump, absolute
@@ -129,7 +130,9 @@ mandatory.
   fails, refuses to write an attestation rather than writing one with an unknown
   revision.
 * An unwritable output path is reported, and the verification result stands
-  unchanged — the attestation records the run, it does not decide it.
+  unchanged — the attestation records the run, it does not decide it. This holds
+  for the phase that runs before the first step as much as for the one that runs
+  after the last.
 * A reader given an attestation whose `schema_version` it does not know refuses
   it rather than reading the fields it recognises.
 

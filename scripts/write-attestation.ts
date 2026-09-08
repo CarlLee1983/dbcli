@@ -16,7 +16,7 @@
  * PASS.
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { $ } from 'bun'
@@ -30,16 +30,7 @@ const REPOSITORY = 'CarlLee1983/dbcli'
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const outputDirectory = join(repoRoot, '.verification')
-const runPath = join(outputDirectory, 'run.json')
 const attestationPath = join(outputDirectory, 'attestation.json')
-
-/** What `begin` recorded, for `finish` to complete. */
-interface Run {
-  readonly repository: string
-  readonly revision: string
-  readonly dirtyWorktree: boolean
-  readonly startedAt: string
-}
 
 const instant = () => new Date().toISOString().replace(/\.(\d{3})\d*Z$/, '.$1Z')
 
@@ -53,13 +44,20 @@ const environment = (): AttestationEnvironment => ({
 })
 
 /**
- * Resolve the commit under verification.
+ * Print what the run started as, for `finish` to be handed back.
+ *
+ * Through the recipe's own shell rather than a file on purpose. A `run.json`
+ * left behind by a killed run would be picked up by the next `finish` and
+ * produce one document describing two runs — a revision from one and a result
+ * from another, with nothing in the file admitting it. Passing the values along
+ * the one shell that owns both phases makes that impossible rather than
+ * unlikely.
  *
  * A repository that cannot answer is refused rather than recorded as unknown:
  * an attestation whose revision is a guess attests nothing, and it would be
  * believed anyway.
  */
-async function resolveRun(): Promise<Run> {
+async function begin(): Promise<void> {
   const resolved = await $`git rev-parse HEAD`.cwd(repoRoot).nothrow().quiet()
   if (resolved.exitCode !== 0) {
     throw new Error(
@@ -71,31 +69,38 @@ async function resolveRun(): Promise<Run> {
   const status = await $`git status --porcelain`.cwd(repoRoot).nothrow().quiet()
   if (status.exitCode !== 0) throw new Error('git status --porcelain failed')
 
-  return {
-    repository: REPOSITORY,
-    revision: resolved.text().trim(),
-    dirtyWorktree: status.text().trim().length > 0,
-    startedAt: instant(),
+  const worktree = status.text().trim().length > 0 ? 'dirty' : 'clean'
+  console.log(`${resolved.text().trim()} ${worktree} ${instant()}`)
+}
+
+async function finish(
+  exitCode: number,
+  revision: string | undefined,
+  worktree: string | undefined,
+  startedAt: string | undefined
+): Promise<void> {
+  if (revision === undefined || worktree === undefined || startedAt === undefined) {
+    throw new Error(
+      'finish was not given what begin resolved, so this run has no revision to attest — ' +
+        'the verification result stands and no attestation is written'
+    )
   }
-}
-
-async function begin(): Promise<void> {
-  const run = await resolveRun()
-  await mkdir(outputDirectory, { recursive: true })
-  await writeFile(runPath, `${JSON.stringify(run, null, 2)}\n`, 'utf8')
-}
-
-async function finish(exitCode: number): Promise<void> {
-  const run = JSON.parse(await readFile(runPath, 'utf8')) as Run
+  if (worktree !== 'clean' && worktree !== 'dirty') {
+    throw new Error(`worktree state must be clean or dirty, got ${JSON.stringify(worktree)}`)
+  }
 
   const attestation = buildAttestation({
-    ...run,
+    repository: REPOSITORY,
+    revision,
+    dirtyWorktree: worktree === 'dirty',
     command: 'make verify',
     exitCode,
+    startedAt,
     finishedAt: instant(),
     environment: environment(),
   })
 
+  await mkdir(outputDirectory, { recursive: true })
   await writeFile(attestationPath, serialiseAttestation(attestation), 'utf8')
   console.log(
     `verification attestation: ${attestation.result} at ${attestation.revision} ` +
@@ -103,24 +108,27 @@ async function finish(exitCode: number): Promise<void> {
   )
 }
 
-const [phase, status] = process.argv.slice(2)
+const [phase, ...rest] = process.argv.slice(2)
 
 try {
   if (phase === 'begin') {
     await begin()
   } else if (phase === 'finish') {
+    const [status, revision, worktree, startedAt] = rest
     const exitCode = Number.parseInt(status ?? '', 10)
     if (!Number.isInteger(exitCode)) {
       throw new Error(`finish needs the run's exit status, got ${JSON.stringify(status)}`)
     }
-    await finish(exitCode)
+    await finish(exitCode, revision, worktree, startedAt)
   } else {
-    throw new Error(`unknown phase ${JSON.stringify(phase)}; expected 'begin' or 'finish <status>'`)
+    throw new Error(
+      `unknown phase ${JSON.stringify(phase)}; expected 'begin' or 'finish <status> <revision> <clean|dirty> <started-at>'`
+    )
   }
 } catch (cause) {
-  // The verification's own result is authoritative. This failure is reported and
-  // the Makefile re-exits with the status it captured, so a broken attestation
-  // costs a record, never a verdict.
+  // The verification's own result is authoritative, in both directions. This
+  // failure is reported and nothing else: the recipe neither stops for it nor
+  // re-exits with it, so a broken attestation costs a record, never a verdict.
   console.error(`Failed to write verification attestation: ${(cause as Error).message}`)
   process.exitCode = 1
 }

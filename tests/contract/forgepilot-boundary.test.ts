@@ -101,6 +101,18 @@ describe('make verify runs from a clean checkout', () => {
     expect(makefile).toContain('exit $$status')
   })
 
+  test('neither attestation phase can decide the verdict', async () => {
+    // A record of the run must never stand between a developer and their
+    // verification result. `begin` was briefly a blocking recipe line: with an
+    // unwritable output directory it failed the whole target before a single
+    // step ran, which is the attestation deciding the outcome — the one thing
+    // the Story forbids outright.
+    const makefile = await readRoot('Makefile')
+
+    expect(makefile).toMatch(/write-attestation\.ts begin\) \|\| run=''/)
+    expect(makefile).toMatch(/write-attestation\.ts finish \$\$status \$\$run \|\| true/)
+  })
+
   test('keeps every step it had before, in the same order', async () => {
     const recipe = await verifyRecipe()
 

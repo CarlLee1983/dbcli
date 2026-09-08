@@ -62,9 +62,17 @@ that counts as passing.
       Evidence: the writer exits non-zero naming the missing revision, and no
       file is written — an attestation with an unknown revision attests nothing.
 * [ ] An unwritable output path does not change the verification result.
-      Evidence: make the directory unwritable, run a passing verification, and
-      confirm the write failure is reported while `make verify`'s own exit
-      status is unchanged.
+      Evidence: with `.verification` at mode `555` and no attestation file
+      present, the recipe's shell reports `EACCES` and still exits with the
+      verification's own status.
+* [ ] A failure in the phase that runs *before* the first step does not change
+      the verification result either.
+      Evidence: with `git` replaced by a stub that exits `1`, `begin` reports
+      that there is no revision to attest, `finish` reports that it was given
+      nothing, every step still runs, and the recipe exits with the
+      verification's own status. This is the direction the first implementation
+      got wrong: `begin` was a blocking recipe line, so an unwritable directory
+      failed the target before a single step ran.
 * [ ] A truncated or malformed attestation is refused by the reader, not
       partially read.
       Evidence: a fixture with a removed required field fails parsing with the
@@ -80,7 +88,8 @@ that counts as passing.
 * [ ] No dbcli source file or package manifest gains a reference to ForgePilot,
       and nothing reads `.forgepilot/`.
       Evidence: `tests/contract/forgepilot-boundary.test.ts`, plus a search for
-      `.forgepilot` under `src/` and `scripts/` returning nothing.
+      `.forgepilot` under `src/` and `scripts/` returning only prose — no
+      `readFile`, `Bun.file`, `import`, or path join reaching into it.
 
 ## Security Fixture Matrix
 
@@ -91,7 +100,7 @@ Every row is a required case. The expected result is one of `preserve`,
 | --- | --- | --- | --- | --- |
 | `env.DBCLI_PASSWORD` | `hunter2` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
 | `env.GITHUB_TOKEN` | `ghp_000000000000000000000000000000000000` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
-| `env.CI` | `true` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
+| `env.CI` | `azure-pipelines` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
 | `env.USER` | `carl` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
 | `cwd` | `/Users/carl/Dev/CMG/Dbcli` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
 | `hostname` | `carls-macbook-air.local` | omit | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
@@ -99,8 +108,11 @@ Every row is a required case. The expected result is one of `preserve`,
 | `git.revision` | `980cc078b850f799615dce51b2993141b85c40c7` | preserve | `.verification/attestation.json` | `tests/unit/scripts/verification-attestation.test.ts` |
 
 `env.CI` is `omit` for its *value*: the document records only whether the
-variable was present, as a boolean. Copying `true` would be one field's worth of
-harmless CI output today and an arbitrary string from a caller tomorrow.
+variable was present, as a boolean. The payload is deliberately not the literal
+`true` most providers set — as a substring that is indistinguishable from the
+boolean the schema records, so it could not tell a copied value from a correctly
+derived one. Copying the value would be one field's worth of harmless CI output
+today and an arbitrary string from a caller tomorrow.
 
 `step.stderr` is `omit` in this Story and stays that way. Per-step detail is
 DBCLI-019's, and whatever it records will have to answer this same question

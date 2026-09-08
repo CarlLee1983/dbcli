@@ -171,3 +171,83 @@ describe('parseAttestation', () => {
     expect(() => parseAttestation(JSON.stringify(document))).toThrow(/work_item/)
   })
 })
+
+/**
+ * The Security Fixture Matrix, run against the real writer.
+ *
+ * `buildAttestation` cannot leak an environment variable — it never reads one.
+ * The writer can, so the matrix is asserted where the risk is: spawn it with
+ * every payload the Story names present in its environment, then read what it
+ * actually wrote. It writes to the repository's gitignored `.verification/`,
+ * which every `make verify` run overwrites anyway.
+ */
+describe('the security fixture matrix', () => {
+  const REVISION = '980cc078b850f799615dce51b2993141b85c40c7'
+
+  const PAYLOADS = {
+    DBCLI_PASSWORD: 'hunter2',
+    GITHUB_TOKEN: 'ghp_000000000000000000000000000000000000',
+    // Not the literal `true` a CI provider usually sets: as a substring it is
+    // indistinguishable from the boolean the schema records, so it could not
+    // tell a copied value from a correctly derived one.
+    CI: 'azure-pipelines',
+    USER: 'carl',
+    HOSTNAME: 'carls-macbook-air.local',
+    PWD_PAYLOAD: '/Users/carl/Dev/CMG/Dbcli',
+    STDERR_PAYLOAD: 'error: connect ECONNREFUSED 127.0.0.1:5432',
+  } as const
+
+  const written = async (): Promise<string> => {
+    const root = new URL('../../../', import.meta.url).pathname
+    const spawned = Bun.spawnSync({
+      cmd: [
+        'bun',
+        'run',
+        'scripts/write-attestation.ts',
+        'finish',
+        '0',
+        REVISION,
+        'clean',
+        '2026-09-08T04:00:00.000Z',
+      ],
+      cwd: root,
+      env: {
+        ...process.env,
+        DBCLI_PASSWORD: PAYLOADS.DBCLI_PASSWORD,
+        GITHUB_TOKEN: PAYLOADS.GITHUB_TOKEN,
+        CI: PAYLOADS.CI,
+        USER: PAYLOADS.USER,
+        HOSTNAME: PAYLOADS.HOSTNAME,
+      },
+    })
+
+    expect(spawned.exitCode).toBe(0)
+    return Bun.file(`${root}.verification/attestation.json`).text()
+  }
+
+  test('no payload the Story names reaches the document', async () => {
+    const document = await written()
+
+    for (const payload of Object.values(PAYLOADS)) {
+      expect(document).not.toContain(payload)
+    }
+  })
+
+  test("CI's presence is recorded, its value is not", async () => {
+    const attestation = parseAttestation(await written())
+
+    expect(attestation.environment.ci).toBe(true)
+    expect(JSON.stringify(attestation)).not.toContain(PAYLOADS.CI)
+  })
+
+  test('the revision is preserved, because it is the one thing being attested', async () => {
+    expect(parseAttestation(await written()).revision).toBe(REVISION)
+  })
+
+  test('the document carries the twelve schema fields and nothing else', async () => {
+    const document = JSON.parse(await written()) as Record<string, unknown>
+
+    expect(Object.keys(document)).toHaveLength(12)
+    expect(Object.keys(document.environment as object)).toEqual(['os', 'arch', 'bun', 'ci'])
+  })
+})

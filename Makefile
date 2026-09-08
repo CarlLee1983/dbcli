@@ -10,11 +10,19 @@
 # at the first failing step, so an attestation written as a final line would only
 # ever describe a passing run — the case nobody needs evidence for. The subshell
 # captures the status, the attestation is written either way, and the recipe
-# re-exits with the captured status: writing a record never changes a verdict.
+# re-exits with the captured status.
+#
+# Neither attestation phase can decide the verdict, which is the point of the
+# `|| run=''` and the `|| true`: `begin` failing leaves `run` empty so `finish`
+# refuses and says so, and neither failure is allowed to stand between a
+# developer and their verification result. The two phases hand the revision
+# along this one shell rather than through a file, so a run killed halfway
+# cannot leave state for the next run to pick up and describe as its own.
 # DBCLI-017, and `scripts/write-attestation.ts` for what the record says.
 verify:
-	@bun run scripts/write-attestation.ts begin
-	@set -o pipefail; ( \
+	@set -o pipefail; \
+	run=$$(bun run scripts/write-attestation.ts begin) || run=''; \
+	( \
 		bun install --frozen-lockfile && \
 		bun run services:check && \
 		bun run audit && \
@@ -40,5 +48,5 @@ verify:
 		bun run plan:check && \
 		bun run forgeflow:check \
 	); status=$$?; \
-	bun run scripts/write-attestation.ts finish $$status; \
+	bun run scripts/write-attestation.ts finish $$status $$run || true; \
 	exit $$status

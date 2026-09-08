@@ -26,6 +26,12 @@ requires `BlacklistValidator` to report it, which makes the counter a surface
 that outlives the test reading it — a public thing, whether or not it is
 documented as one.
 
+It is reported as `cost` on `FilterColumnsResult`, frozen, rather than as a
+module-level counter a caller resets between measurements. A global would be
+shared state that two callers can interleave and a test can forget to clear; the
+result object already belongs to exactly one call, which is the scope the
+measurement describes.
+
 That is the cost of this decision and it is not small. A counter that is wrong
 is worse than no counter: it would certify masking that never ran. So it fails
 when it observed no work, the way `medianElapsed` already refuses to certify a
@@ -36,6 +42,13 @@ The alternative considered and not taken was moving the budgets to a controlled
 CI runner. It removes the flake by removing the gate from the place developers
 run it, and it leaves the same absolute comparison in place — a quieter version
 of raising the constant.
+
+The first version of this written under DBCLI-020 fell into exactly the failure
+below and is worth recording: the early return taken when nothing was omitted
+reported zero cost, and that is the *expensive* shape — rules that match nothing
+are the ones that walk every row. `tests/unit/core/blacklist-masking-cost.test.ts`
+now pins both directions, that a rule which omitted nothing still reports the
+rows it walked, and that zero is reported only when no rule applied at all.
 
 **Falsified if:** a counter in `src/core/blacklist-validator.ts` or
 `src/core/blacklist-manager.ts` can report a passing value for input the masking

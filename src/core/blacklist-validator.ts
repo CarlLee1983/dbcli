@@ -72,9 +72,63 @@ function dedupe(values: string[]): string[] {
 /**
  * Result of column filtering operation
  */
+/**
+ * What the masking pass had to do, counted rather than timed.
+ *
+ * A wall-clock budget cannot say whether masking got slower or the machine got
+ * busy: the same commit produced FAIL, FAIL and PASS on three verifications
+ * (DBCLI-019, EV-018 to EV-020). These counts are the quantity those budgets
+ * were reaching for. They are deterministic for a given input, so a regression
+ * moves them and a loaded runner does not. ADR-0028.
+ *
+ * They count work, not time, and cannot see a change that does the same
+ * traversal more slowly — the benches therefore still print what they measured.
+ */
+export interface MaskingCost {
+  /** Rows walked to collect the column names present. */
+  readonly rowsScanned: number
+  /** Own property names read during that pass. */
+  readonly keysScanned: number
+  /** Blacklist rules considered against the result. */
+  readonly ruleEvaluations: number
+  /** Rules whose dotted path had to be split into segments. */
+  readonly pathSplits: number
+  /**
+   * Rows a literal dotted rule descended into.
+   *
+   * The regression this exists for: deciding once for the whole result set
+   * whether recursion is needed puts every row on this path, where deciding per
+   * rule leaves it at zero for a rule whose head is never an object.
+   */
+  readonly nestedProbeRows: number
+  /** Rows the nested wildcard walk descended into. */
+  readonly nestedGlobRows: number
+  /**
+   * Nested wildcard *rules* found to match.
+   *
+   * The regression this exists for: collecting matched keys instead of matched
+   * rules made the removal pass rebuild each record once per key per row — 200
+   * rows of 20 row-specific keys measured 1.8s. One rule that hits a different
+   * key in every row is one entry here, not one per row.
+   */
+  readonly nestedGlobMatches: number
+}
+
+const NO_MASKING_COST: MaskingCost = Object.freeze({
+  rowsScanned: 0,
+  keysScanned: 0,
+  ruleEvaluations: 0,
+  pathSplits: 0,
+  nestedProbeRows: 0,
+  nestedGlobRows: 0,
+  nestedGlobMatches: 0,
+})
+
 export interface FilterColumnsResult {
   filteredRows: Record<string, unknown>[]
   omittedColumns: string[]
+  /** See {@link MaskingCost}. */
+  cost: MaskingCost
   /**
    * Whether a caller-supplied field path is covered by what was omitted.
    *
@@ -366,7 +420,12 @@ export class BlacklistValidator {
         : Array.from(new Set(tables.flatMap((table) => this.manager.getBlacklistedColumns(table))))
 
     if (blacklistedColumns.length === 0) {
-      return { filteredRows: rows, omittedColumns: [], reachesOmitted: () => false }
+      return {
+        filteredRows: rows,
+        omittedColumns: [],
+        cost: NO_MASKING_COST,
+        reachesOmitted: () => false,
+      }
     }
 
     // SQL adapters normally return a uniform top-level column set, but JSON
@@ -396,11 +455,19 @@ export class BlacklistValidator {
     // so a non-enumerable own property used to be found and masked. Enumerable-only
     // collection would silently stop omitting it, and an empty omitted list returns
     // the rows untouched — fail-open, in the one place that must not be.
+    let rowsScanned = 0
+    let keysScanned = 0
+    let ruleEvaluations = 0
+    let pathSplits = 0
+    let nestedProbeRows = 0
+    let nestedGlobRows = 0
+
     const probeNested = blacklistedColumns.some((path) => path.includes('.'))
     const presentColumns = new Set(columnList)
     const nestedHeads = new Set<string>()
     const collect = (record: Record<string, unknown>): void => {
       for (const key of Object.getOwnPropertyNames(record)) {
+        keysScanned += 1
         presentColumns.add(key)
         if (!probeNested) continue
         const value = record[key]
@@ -410,6 +477,7 @@ export class BlacklistValidator {
       }
     }
     for (const row of rows) {
+      rowsScanned += 1
       if (row === null || typeof row !== 'object') continue
       // `readPath` treats an array as a transparent container — the fields it can
       // find in an array row are the elements' fields, not `0` and `length`. Reading
@@ -445,6 +513,7 @@ export class BlacklistValidator {
 
     const omitted = new Set<string>()
     for (const path of blacklistedColumns) {
+      ruleEvaluations += 1
       // `presentColumns` first: it is a Set lookup, while the nested probe walks
       // every row. The fail-safe branch above can hand this loop the whole rule set
       // with almost nothing matching, which is exactly the shape that probe is worst at.
@@ -468,8 +537,17 @@ export class BlacklistValidator {
       if (!nestedHeads.has(foldFieldPath(path.slice(0, dot)))) continue
       // Folded here, not inside `hasFieldPath`: the probe asks the same rule of
       // every row, and folding at the entry allocated one array per row.
+      pathSplits += 1
       const segments = path.split('.').map(foldFieldPath)
-      if (rows.some((row) => hasFieldPath(row, segments, PRE_FOLDED))) omitted.add(path)
+      let found = false
+      for (const row of rows) {
+        nestedProbeRows += 1
+        if (hasFieldPath(row, segments, PRE_FOLDED)) {
+          found = true
+          break
+        }
+      }
+      if (found) omitted.add(path)
     }
     // Wildcard rules that name something below a top-level key. The loop above
     // compares against the names a row carries at the top — which on the
@@ -495,6 +573,7 @@ export class BlacklistValidator {
       const states = compileNestedRules(nestedGlobs)
       for (const row of rows) {
         if (pending.size === 0) break
+        nestedGlobRows += 1
         if (row === null || typeof row !== 'object') continue
         collectNestedMatches(row as Record<string, unknown>, states, pending, (pattern) => {
           matchedNested.push(pattern)
@@ -550,7 +629,24 @@ export class BlacklistValidator {
     const omittedColumns = Array.from(omitted)
 
     if (omittedColumns.length === 0) {
-      return { filteredRows: rows, omittedColumns: [], reachesOmitted: () => false }
+      // Nothing was omitted, but the work of deciding that still happened — this is
+      // the expensive shape, not the cheap one: rules that miss are what walk every
+      // row. Reporting no cost here would let a benchmark certify a traversal it
+      // never saw, which is the failure ADR-0028 names.
+      return {
+        filteredRows: rows,
+        omittedColumns: [],
+        cost: Object.freeze({
+          rowsScanned,
+          keysScanned,
+          ruleEvaluations,
+          pathSplits,
+          nestedProbeRows,
+          nestedGlobRows,
+          nestedGlobMatches: matchedNested.length,
+        }),
+        reachesOmitted: () => false,
+      }
     }
 
     // Create new row objects without blacklisted top-level or dotted fields.
@@ -572,6 +668,15 @@ export class BlacklistValidator {
     return {
       filteredRows,
       omittedColumns,
+      cost: Object.freeze({
+        rowsScanned,
+        keysScanned,
+        ruleEvaluations,
+        pathSplits,
+        nestedProbeRows,
+        nestedGlobRows,
+        nestedGlobMatches: matchedNested.length,
+      }),
       reachesOmitted: (path) => {
         if (omittedByName(removalPaths, path)) return true
         if (matchedNested.length === 0) return false

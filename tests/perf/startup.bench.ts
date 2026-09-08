@@ -38,6 +38,7 @@ const STARTUP_BUDGETS =
 // ordinary growth, while anything that pulls a driver or a UI bundle onto the
 // startup path — the shapes that put hundreds of KB in at once — turns it red.
 const STARTUP_BYTES_BUDGET = 2_600_000
+const VERSION_BYTES_BUDGET = 8_000
 const runtimePath = path.resolve(process.cwd(), 'dist/cli-runtime.mjs')
 
 const SAMPLE_COUNT = 9
@@ -85,9 +86,24 @@ describe.if(enabled)('Performance: CLI Startup', () => {
     expect(elapsed).toBeGreaterThan(0)
   })
 
-  it('--version renders within budget', () => {
+  it('--version loads nothing but the entry file', () => {
+    // `dist/cli.mjs` answers `--version` without importing `./cli-runtime`, which is
+    // the whole reason it is 16ms where `--help` is 170ms. The gate is that the
+    // short circuit is still there: the entry alone, 5,017 bytes when this was
+    // written, against 8,000. Pulling the runtime onto this path adds 2.1MB and
+    // fails long before the budget is a matter of taste.
+    const bytes = statSync(cliPath).size
+    console.log(`CLI --version bytes = ${bytes} (budget ${VERSION_BYTES_BUDGET})`)
+    expect(bytes).toBeLessThan(VERSION_BYTES_BUDGET)
+  })
+
+  it('--version reports what it cost', () => {
     const elapsed = fastestStartupMs('--version')
+    // Printed, not asserted — the same reason as `--help`. Measured 15–25ms under
+    // eight CPU-bound processes against a 100ms budget, so this one had head-room
+    // rather than a different property; DBCLI-020 closed it for the same reason
+    // rather than waiting for it to start flipping too.
     report('CLI startup (--version)', elapsed, STARTUP_BUDGETS.version)
-    expect(elapsed).toBeLessThan(STARTUP_BUDGETS.version)
+    expect(elapsed).toBeGreaterThan(0)
   })
 })

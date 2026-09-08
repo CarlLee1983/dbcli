@@ -153,6 +153,19 @@ jobs:
       - name: Canonical verification
         run: make verify
 
+      # `if: always()` because a FAIL is the result worth keeping: the run that
+      # passed is the one nobody needs a record of. The attestation is written
+      # by `make verify` itself on both outcomes and names the exact revision,
+      # so downloading it answers "was this commit verified" without trusting
+      # the job summary or anyone's recollection. DBCLI-017.
+      - name: Verification attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-attestation-${{ github.sha }}
+          path: .verification/attestation.json
+          if-no-files-found: warn
+
       - name: Service logs (on failure)
         if: failure()
         run: docker compose -f docker-compose.test.yml logs --tail 100

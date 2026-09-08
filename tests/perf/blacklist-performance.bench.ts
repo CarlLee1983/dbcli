@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { BlacklistManager } from '@/core/blacklist-manager'
+import { foldFieldPath } from '@/core/blacklist-fold'
 import { BlacklistValidator } from '@/core/blacklist-validator'
 import type { DbcliConfig } from '@/types'
 import { medianElapsed, report } from '../helpers/bench'
@@ -116,13 +117,77 @@ describe('Blacklist Performance Benchmarks', () => {
     // Budget tightened from 10ms to 2ms by DBCLI-015. The lookup is set-backed, so
     // it does not care that the blacklist is ten times larger: 0.099ms here,
     // ~0.3ms on a runner at this file's 3x scaling. The old 10ms was 100x the
-    // measurement, and the regression it exists to catch — a linear scan with
-    // per-lookup case folding, which is what this replaced — measures 7.67ms here,
-    // i.e. it passed the old budget on this machine and only failed once a slow
-    // runner tripled it. At 2ms it fails everywhere, and still clears the real
-    // measurement by 6.7x.
+    // measurement. This budget is a cost ceiling only; the linear-scan regression
+    // is rejected by the scaling pair below, which does not depend on how fast
+    // the machine reading it happens to be.
     report('Table lookup (1000 tables)', elapsed, 2)
     expect(elapsed).toBeLessThan(2)
+  })
+
+  // ─── R2: lookup cost does not grow with blacklist size ──────────────────
+
+  // The two cases below are the only place the linear-scan regression is
+  // actually rejected by something that re-runs. The wall-clock budgets above
+  // are calibrated on one machine and scaled; a claim that a linear scan would
+  // blow them was, until DBCLI-015 was reviewed, a sentence in a comment. A
+  // ratio between two sizes is dimensionless — it survives a slow runner, and
+  // it is the property R2 names ("linear in the table count") rather than a
+  // duration standing in for it.
+
+  /** Probes must be spread across the whole blacklist. */
+  const LOOKUPS_PER_SAMPLE = 2000
+  /** Set-backed measures 0.83–1.04 here; a linear scan measures 7.3–9.6. */
+  const MAX_SIZE_SCALING = 3
+
+  const probeAllOf = (size: number, lookup: (name: string) => boolean) => () => {
+    let hits = 0
+    for (let i = 0; i < LOOKUPS_PER_SAMPLE; i++) {
+      if (lookup(`table_${i % size}`)) hits++
+    }
+    return hits
+  }
+
+  const scalingRatio = (lookupFor: (size: number) => (name: string) => boolean): number => {
+    const small = medianElapsed(probeAllOf(100, lookupFor(100)))
+    const large = medianElapsed(probeAllOf(1000, lookupFor(1000)))
+    return large / small
+  }
+
+  it('Table lookup cost does not scale with blacklist size', () => {
+    const ratio = scalingRatio((size) => {
+      const manager = new BlacklistManager({
+        ...baseConfig,
+        blacklist: { tables: Array.from({ length: size }, (_, i) => `table_${i}`), columns: {} },
+      } as any)
+      return (name) => manager.isTableBlacklisted(name)
+    })
+
+    console.log(
+      `Table lookup 1000-vs-100 cost ratio = ${ratio.toFixed(2)} (max ${MAX_SIZE_SCALING})`
+    )
+    expect(ratio).toBeLessThan(MAX_SIZE_SCALING)
+  })
+
+  it('...and that assertion rejects a lookup that is linear in the table count', () => {
+    // The shape the set-backed lookup replaced: fold every entry on every
+    // lookup. Kept here as the regression the assertion above has to catch, so
+    // that the threshold is checked against a failing implementation rather
+    // than asserted to discriminate.
+    const ratio = scalingRatio((size) => {
+      const tables = Array.from({ length: size }, (_, i) => `table_${i}`)
+      return (name) => {
+        const folded = foldFieldPath(name)
+        for (const entry of tables) {
+          if (foldFieldPath(entry) === folded) return true
+        }
+        return false
+      }
+    })
+
+    console.log(
+      `Linear-scan 1000-vs-100 cost ratio = ${ratio.toFixed(2)} (must exceed ${MAX_SIZE_SCALING})`
+    )
+    expect(ratio).toBeGreaterThan(MAX_SIZE_SCALING)
   })
 
   it('Column lookup (100 cols blacklisted): 1000 lookups in < 10ms', () => {

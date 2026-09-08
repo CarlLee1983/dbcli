@@ -413,6 +413,21 @@ runner 把時間乘三倍之後才會紅。收緊到 2 ms 才讓 R2 成立：離
 它要擋的那個回歸時才看得出來。** 舊的 10 ms 兩頭落空——它擋不住回歸，卻擋得住
 一台忙碌的機器。
 
+審查補上的一件事：上面那句「線性掃描量到 7.67 ms」原本只寫在註解裡，是一次手測
+紀錄，不是會再跑的斷言——R2 因此沒有東西守著。現在 `tests/perf/` 多了一對測試，
+量同一份查表在 100 與 1000 個表名下的成本比：set 查表約 0.8–1.3，線性掃描約
+6–12，門檻取 3。比值沒有單位，慢的 runner 兩邊一起慢，所以它擋的是 R2 講的那個
+性質，不是某台機器上的一個毫秒數。第二支測試拿線性掃描跑同一個檢查並要求它超過
+門檻——門檻能不能分辨，是量出來的，不是宣稱的。
+
+`.forgepilot/` 的忽略檢查也從比對 `.gitignore` 字串改成問 Git（`git check-ignore`），
+acceptance 本來就是這樣寫的：字串在不等於 Git 真的忽略它，後面任何一條反向規則
+都能推翻。拿掉那行規則驗過，測試會紅。
+
+DBCLI-014 這次一併進 `completed_stories`。它交付、驗證、Human Review 都過了，
+留在清單外只會讓紀錄同時說不出它是進行中還是完成——`status` 仍是 `review`，因為
+ForgeFlow 的 DONE 還要求 merge policy，而這條分支尚未合併。
+
 ## Lifecycle
 
 ```yaml
@@ -441,6 +456,7 @@ workflow:
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
     - DBCLI-PLAT-007
+    - DBCLI-014
   status: review
 
 baseline:

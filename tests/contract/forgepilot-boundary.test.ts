@@ -90,6 +90,15 @@ const verifyRecipe = async (): Promise<Recipe> => {
   // read the first and report on a recipe that never executes.
   expect(lines.filter((line) => line.startsWith('verify:'))).toHaveLength(1)
 
+  // An `include` brings in definitions this file cannot see, and a later one
+  // replaces the target outright — reproduced: make ran the included recipe and
+  // exited 0 while all five scaffolding lines here still matched.
+  expect(lines.filter((line) => /^[-\s]*include\s/.test(line))).toEqual([])
+
+  // The target line itself, not just its prefix. `verify: sneak` runs `sneak`
+  // before the recipe, and nothing below would look at it.
+  expect(lines.filter((line) => line.startsWith('verify:'))[0]).toBe('verify:')
+
   const start = lines.findIndex((line) => line.startsWith('verify:'))
   const recipe: string[] = []
   for (const line of lines.slice(start + 1)) {

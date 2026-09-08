@@ -173,20 +173,13 @@ describe('BlacklistManager', () => {
     })
   })
 
-  describe('performance', () => {
-    it('completes 1000 table lookups in < 10ms', () => {
-      const tables = Array.from({ length: 100 }, (_, i) => `table_${i}`)
-      const config = makeConfig({ tables, columns: {} })
-      const manager = new BlacklistManager(config)
-
-      const start = performance.now()
-      for (let i = 0; i < 1000; i++) {
-        manager.isTableBlacklisted(`table_${i % 100}`)
-      }
-      const elapsed = performance.now() - start
-      expect(elapsed).toBeLessThan(10)
-    })
-
+  // The lookup cost budget that used to live here is in
+  // `tests/perf/blacklist-performance.bench.ts` (DBCLI-015). It measured a single
+  // shot of wall-clock time inside a 6,700-test run and read 21.43ms against a
+  // 10ms budget under load, while three standalone runs of this file passed — the
+  // same commit verified twice, once FAIL and once PASS. Timing belongs where the
+  // budgets are sampled and printed.
+  describe('robustness', () => {
     it('handles malformed config gracefully (no crash)', () => {
       const config = makeConfig({ tables: 'not-an-array', columns: null })
       // Should not throw

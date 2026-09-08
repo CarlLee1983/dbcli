@@ -329,11 +329,110 @@ Issue #150 已以 `tests/unit/core/semantic/semantic.test.ts` 釘住 semantic co
 版本邊界：v1、v2 合法，v3、字串 `"2"`、缺版本與 v1 migration 以外的來源均拒絕。
 本次 `make verify` 通過 6,757 tests、0 failures。
 
+## DBCLI-014：ForgePilot 第一次真的駕駛這個 repository
+
+這個 Story 最值得留下的一句：**`make verify` 從來沒有在乾淨 checkout 上跑過，
+而那正是它宣稱自己在說的事。**
+
+ForgePilot 在 `.forgepilot/worktrees/` 建立確切 commit 的 detached worktree，
+在裡面執行這個 repository 自己的 `make verify`。第一次動手之前先量了一次：
+那個 checkout 沒有 `node_modules`，`format:check` 得到
+`prettier: command not found`，`typecheck` 解析到一個從 PATH 來的 `tsc`，
+回報的是一個跟這個 repository 無關的 TS5101。
+
+CI 每個 job 前面都有 `bun install --frozen-lockfile`，Makefile 沒有。所以
+`make verify` 一直是「在一台已經裝好東西的機器上會通過」，不是「這個 commit
+會通過」。差別在 ForgePilot 之前沒有東西會撞到——每個人都在自己的工作樹裡跑它。
+補的是 install，不是把哪一步放寬：既有 23 步一步沒刪、順序沒換，並由
+`tests/contract/forgepilot-boundary.test.ts` 以名冊釘住。名冊而不是從 Makefile
+重算，理由跟 `check-forgeflow-adoption` 一樣——會自己重算清單的檢查對任何清單
+都通過。
+
+`--frozen-lockfile` 而不是 `bun install`：解析出一份 `bun.lock` 沒有釘住的
+依賴集合，跟找不到 prettier 是同一類錯誤，只是它不會出聲。
+
+整合服務不是問題，這一點事前猜錯過：detached worktree 走的是 host port，
+`docker-compose.test.yml` 起的六個服務照樣連得到，`services:check` 在沒有
+`node_modules` 的 checkout 裡就通過了——它只用 Bun 內建。
+
+**ForgePilot 是操作工具，不是相依。** 契約測試同時釘住三件事：install 是第一步、
+`package.json` 與 `src/` 任何檔案都不提 ForgePilot、`.gitignore` 匹配
+`.forgepilot/`。沒裝 ForgePilot 的人 clone 下來 `make verify` 照跑。
+
+順帶在 ForgePilot 自己那邊修掉兩個 install-path 缺陷（記錄在該 repository 的
+`0e7030e`、`884144e`）：`go.mod` 宣告的 module path 指向一個不存在的
+repository，README 照抄的 `go install` 從來沒成功過；`forgepilot --help` 在
+還沒 init 的地方回「run forgepilot init first」，而問有哪些指令的人正是還沒
+決定要不要 init 的人。
+
+## DBCLI-015 起草中：同一個 commit 給出兩種答案
+
+DBCLI-014 的驗證跑了三次：EV-001 PASS 在 `aab45382`，EV-002 FAIL 與 EV-003
+PASS 都在 `d618f196`。兩次之間 repository 一個字沒改，差別只有機器當下的負載。
+
+失敗的是 `tests/unit/core/blacklist-manager.test.ts` 的
+`performance > completes 1000 table lookups in < 10ms`：整套 6,700 支測試一起
+跑時量到 21.43 ms，單獨跑那個檔案三次全過。
+
+這比一支慢測試嚴重，因為 `make verify` 是這個 repository 的驗證契約，而
+ForgePilot 把它的結果綁在確切 commit 上。一個判決取決於機器的斷言，會讓那個綁定
+宣稱它撐不住的事；而且它訓練讀的人重跑而不是細看，真的回歸就是這樣被揮過去的。
+
+怎麼修是人的決定，記在 GATE-002，不在這裡選。兩個選項是搬進 `bun run test:perf`
+（那裡的預算依 runner 實測設定並印出量到的值，理由寫在 CI workflow 裡那段四個月
+沒人發現的 benchmark 失敗），或改成斷言複雜度而非絕對時間。**放寬常數刻意不是
+選項**：它留下同一個 load-dependent 的判決，正是缺陷本身。Story 的 Constraints
+把這句話寫死，免得下一個人重新爭論。
+
+Story 已起草但尚未 READY——GATE-002 未解除之前 `forgepilot next` 不會選到它。
+
+## 已交付：DBCLI-015——把載重敏感的判決搬離 unit suite
+
+GATE-002 選的是「搬進 `bun run test:perf`，預算依 runner 實測設定並印出量到的
+值」。動手之後那個「搬」揭露了兩件 Story 沒預料到的事。
+
+**目的地早就有一份更大的同一個量測。** `Table lookup (1000 tables)` 一直在
+`tests/perf/blacklist-performance.bench.ts` 裡，用 `medianElapsed` 取九次中位數
+並印出數字。unit suite 那份是它嚴格較弱的複本：100 張表、單次 `performance.now()`、
+不印任何東西。
+
+**典型規模的預算擋不住那個回歸。** 這台機器上，set-backed 查表在 100 張表下
+中位數 0.14 ms，而它取代掉的形狀——逐次 case folding 的線性掃描——中位數
+0.98 ms。這個檔案把 dev 量測乘以三倍當作 runner 成本，任何寬到不會變成擲硬幣的
+預算都落在 0.98 ms 之上。所以典型規模那一條記錄成本，不防守成本。
+
+**大規模那一條的舊預算也擋不住。** 1000 張表量到 0.099 ms，預算 10 ms——量測值的
+一百倍——而線性掃描回歸量到 7.67 ms，在這台機器上**低於**舊預算。它只有在慢的
+runner 把時間乘三倍之後才會紅。收緊到 2 ms 才讓 R2 成立：離真實量測 6.7 倍，
+而回歸在哪裡都會失敗。
+
+兩個規模都留著，斷言數沒有減少。unit suite 原地留一段註解說明預算去哪了，以及
+為什麼不要再放一份回來——不然下一個人只會看到一個少掉的測試。
+
+這個 Story 最值得留下的一句：**一個一百倍寬的預算跟沒有預算的差別，只有在你去量
+它要擋的那個回歸時才看得出來。** 舊的 10 ms 兩頭落空——它擋不住回歸，卻擋得住
+一台忙碌的機器。
+
+審查補上的一件事：上面那句「線性掃描量到 7.67 ms」原本只寫在註解裡，是一次手測
+紀錄，不是會再跑的斷言——R2 因此沒有東西守著。現在 `tests/perf/` 多了一對測試，
+量同一份查表在 100 與 1000 個表名下的成本比：set 查表約 0.8–1.3，線性掃描約
+6–12，門檻取 3。比值沒有單位，慢的 runner 兩邊一起慢，所以它擋的是 R2 講的那個
+性質，不是某台機器上的一個毫秒數。第二支測試拿線性掃描跑同一個檢查並要求它超過
+門檻——門檻能不能分辨，是量出來的，不是宣稱的。
+
+`.forgepilot/` 的忽略檢查也從比對 `.gitignore` 字串改成問 Git（`git check-ignore`），
+acceptance 本來就是這樣寫的：字串在不等於 Git 真的忽略它，後面任何一條反向規則
+都能推翻。拿掉那行規則驗過，測試會紅。
+
+DBCLI-014 這次一併進 `completed_stories`。它交付、驗證、Human Review 都過了，
+留在清單外只會讓紀錄同時說不出它是進行中還是完成——`status` 仍是 `review`，因為
+ForgeFlow 的 DONE 還要求 merge policy，而這條分支尚未合併。
+
 ## Lifecycle
 
 ```yaml
 workflow:
-  current_story: pending
+  current_story: DBCLI-015
   next_story: pending
   completed_stories:
     - DBCLI-001
@@ -357,38 +456,33 @@ workflow:
     - DBCLI-PLAT-012
     - DBCLI-PLAT-013
     - DBCLI-PLAT-007
-  status: done
+    - DBCLI-014
+  status: review
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: release/v9.0.0
-  commit: 9383f82226cd20194564b632d459ea2686b45285
+  branch: main
+  commit: 64f2831eb708b3687ca990151aba8ba982f23545
   dirty_worktree: true
   story_owned_paths:
-    - .claude-plugin/plugin.json
-    - .codex-plugin/plugin.json
-    - .cursor-plugin/plugin.json
-    - CHANGELOG.md
-    - SECURITY.md
-    - gemini-extension.json
-    - package.json
-    - plugins/dbcli-agent/.codex-plugin/plugin.json
     - specs/handoff.md
-    - tests/fixtures/plat004/legacy-surface-baseline.json
-    - tests/integration/lazy-entry-path.test.ts
-  known_unrelated_paths:
-    - CONTRIBUTING.md
-    - docs/dbcli-architecture-eli5.html
-    - docs/feature-matrix.md
-    - docs/index.html
-    - scripts/release-check.sh
-    - tests/docs/intro-pages.test.ts
+    - specs/stories/DBCLI-015-deterministic-blacklist-lookup-budget/task.md
+    - tests/perf/blacklist-performance.bench.ts
+    - tests/unit/core/blacklist-manager.test.ts
+    - specs/stories/DBCLI-014-forgepilot-dogfood/acceptance.md
+    - specs/stories/DBCLI-014-forgepilot-dogfood/story.md
+    - specs/stories/DBCLI-014-forgepilot-dogfood/task.md
+    - tests/contract/forgepilot-boundary.test.ts
+  known_unrelated_paths: []
 
 verification:
-  last_command: bun run release:check
+  last_command: make verify
   result: pass
   detail: >-
-    Release verification passed with 6746 tests across 570 files and 0 failures.
-    Audit, formatting, typecheck, lint, build, dist smoke, documentation,
-    capability contracts, and plugin manifests passed.
+    Run by ForgePilot in a detached worktree of the exact commit. DBCLI-015's
+    implementation commit was verified twice in a row and passed both times,
+    which is the determinism its acceptance asks for; the same shape produced
+    one FAIL and one PASS before this Story. Evidence IDs and revisions live in
+    ForgePilot's state, deliberately not restated here — restating them needs a
+    commit, and that commit invalidates the evidence being restated.
 ```

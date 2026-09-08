@@ -141,6 +141,19 @@ const PINNED_WORKFLOW_VALUES: ReadonlyMap<string, string> = new Map([
 const COMPLETED = 'workflow.completed_stories'
 
 /**
+ * The keys the contract writes as a list of `- item` lines.
+ *
+ * A list item under a scalar key is neither read nor reported without this: a
+ * `- DBCLI-999` slipped under `status:` was silently nothing, which is the one
+ * outcome the scan promises never to produce.
+ */
+const LIST_KEYS: ReadonlySet<string> = new Set([
+  COMPLETED,
+  'baseline.story_owned_paths',
+  'baseline.known_unrelated_paths',
+])
+
+/**
  * Return the body of the one fenced `yaml` block.
  *
  * Exactly one, not the first one. The handoff is five hundred lines of prose
@@ -309,7 +322,17 @@ export function readLifecycle(body: string): Reading {
     }
 
     if (listLine) {
-      if (`${section}.${key}` === COMPLETED) completedStories.push(listLine[1] as string)
+      const location = `${section}.${key}`
+
+      if (!LIST_KEYS.has(location)) {
+        violations.push({
+          location: locate(section, key, line),
+          reason: `is a list item under a key the contract does not write as a list: ${JSON.stringify(line)}`,
+        })
+        continue
+      }
+
+      if (location === COMPLETED) completedStories.push(listLine[1] as string)
       continue
     }
 

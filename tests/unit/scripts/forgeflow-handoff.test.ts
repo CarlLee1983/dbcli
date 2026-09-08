@@ -228,6 +228,14 @@ describe('readLifecycle', () => {
     expect(found[0]!.reason).toMatch(/Workflow:/)
   })
 
+  test('a list item under a scalar key is reported rather than silently ignored', () => {
+    // Neither read nor reported is the one outcome the scan promises never to
+    // produce: a `- DBCLI-999` under `status:` was simply nothing.
+    const found = violations(`${BODY}    - DBCLI-999\n`)
+    expect(found.map((violation) => violation.location)).toEqual(['verification.result'])
+    expect(found[0]!.reason).toMatch(/does not write as a list/)
+  })
+
   test('a blank line inside the delivery list does not truncate it', () => {
     // Two readers of one list disagreed here: the list regex stopped at the
     // gap, the contract scan did not care, and a Story recorded below it was

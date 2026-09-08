@@ -118,8 +118,10 @@ mandatory.
   does not have to guess whether to delete the line or the tool.
 * A lifecycle key outside the contract fails, naming the key and the contract
   that defines the permitted set.
-* A handoff with no lifecycle block, or with no `completed_stories`, still
-  throws rather than passing — unchanged.
+* A handoff with no lifecycle block throws, naming the ambiguity when the cause
+  is more than one fenced block rather than none.
+* A handoff whose block records no `completed_stories`, or records them in a
+  shape this gate does not read, is refused rather than reconciled as empty.
 * A shallow clone still refuses to render a verdict — unchanged.
 
 ## Dependencies

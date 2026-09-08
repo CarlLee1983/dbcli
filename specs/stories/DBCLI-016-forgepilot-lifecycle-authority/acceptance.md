@@ -33,11 +33,13 @@ acceptance, it is review.
 * [ ] A lifecycle key outside the adopted contract is refused, naming the key.
       Evidence: a fixture carrying `verification.detail` fails with
       `verification.detail` in the message.
-* [ ] `completed_stories` reconciliation is unchanged.
-      Evidence: every existing test in
-      `tests/unit/scripts/forgeflow-handoff.test.ts` that does not name a
-      current Story passes unmodified, including the shallow-clone refusal, the
-      stale-exemption rule and the duplicate-directory refusal.
+* [ ] The `completed_stories` reconciliation rules are unchanged.
+      Evidence: every assertion in `tests/unit/scripts/forgeflow-handoff.test.ts`
+      that does not name a current Story survives, including the shallow-clone
+      refusal, the stale-exemption rule and the duplicate-directory refusal. The
+      only edit to those tests is the `Lifecycle` literal they pass in, which
+      lost a field. The rules are unchanged; the reader in front of them is not,
+      and every difference in it fails closed.
 * [ ] The gate needs no ForgePilot.
       Evidence: `mv .forgepilot "$TMPDIR/fp-016" && env PATH=/usr/bin:/bin
       bun run forgeflow:check` → exit `0`; then move it back.
@@ -51,10 +53,15 @@ acceptance, it is review.
 
 * [ ] A handoff with no lifecycle block still throws rather than passing.
       Evidence: existing fixture test, unmodified.
-* [ ] A handoff whose block records no `completed_stories` still throws.
-      Evidence: existing fixture test, unmodified.
+* [ ] A handoff whose block records no `completed_stories` cannot pass.
+      Evidence: `readLifecycle` reports `workflow.completed_stories records no
+      Story` and the gate exits 1. This is a violation rather than the throw the
+      first draft of this Story expected — one reader replaced two, so the case
+      that used to be a parse failure is now a reported one. The property being
+      accepted is that it fails, not the shape of the failure.
 * [ ] A shallow clone still refuses to render a verdict instead of passing.
-      Evidence: `shallowCloneRefusal` fixture tests, unmodified.
+      Evidence: `shallowCloneRefusal` fixture tests, whose assertions are
+      unchanged.
 * [ ] Reintroducing the duplicated state fails loudly rather than being
       reconciled: a handoff naming a current Story that is also in
       `completed_stories` fails on the refusal, and the failure text tells the
@@ -73,9 +80,12 @@ acceptance, it is review.
       are out of scope: 0.3.2's Story ID grammar predates `DBCLI-PLAT-*`, 0.6.0
       widened it, and DBCLI-018 owns the upgrade. This criterion is met when the
       remaining failures are exactly those eight.
-* [ ] No dbcli source, test fixture, or package manifest gains a reference to
-      ForgePilot.
-      Evidence: `tests/contract/forgepilot-boundary.test.ts`, unmodified.
+* [ ] No dbcli source file or package manifest gains a reference to ForgePilot.
+      Evidence: `tests/contract/forgepilot-boundary.test.ts`, unmodified — it
+      scans `src/` and `package.json`, which is the boundary that matters. The
+      gate's own rules and tests do name ForgePilot, deliberately: the refusal
+      message has to say where the state belongs, and a refusal that does not
+      name it sends the reader nowhere.
 
 ## Verification Notes
 

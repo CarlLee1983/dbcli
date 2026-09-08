@@ -15,6 +15,47 @@ mandatory.
 
 * Security sensitive: no
 * Baseline conformance: no
+* Task mode: execution
+
+`Task mode` is optional and defaults to `execution`. Use `architecture` for a
+boundary, ownership, contract, or migration decision; `evidence` for inspection,
+review, or diagnosis that must not change the repository; and `mixed` when the
+Story contains both.
+
+## Authority
+
+Optional. Delete this section to accept the documented defaults for the task
+mode. Every operation is declared as `yes` or `no`, and being able to perform an
+operation is never authorization to perform it.
+
+* plan: yes
+* modify: yes
+* add_dependency: no
+* migration: no
+* commit: no
+* push: no
+* deploy: no
+
+## Architecture
+
+Optional. `Impact` defaults to `low`; delete this section for a Story that
+carries no architecture weight. `Impact: medium` or `high` must name at least
+one decision or contract. Each `Decision` resolves to a record under
+`specs/decisions/`.
+
+* Impact: low
+* Decision: `ADR-001`
+* Boundary: `BoundaryName`
+* Contract: `BoundaryName public interface remains compatible`
+* Owner: `BoundaryName = owning-domain`
+
+## Risk
+
+Optional. `Level` defaults to `low`; `medium` and `high` must name at least one
+reason. Risk raises inspection and verification depth. It never widens scope.
+
+* Level: low
+* Reason: `signal`
 
 ## Scope
 
@@ -48,6 +89,20 @@ mandatory.
 *
 
 ## Constraints
+
+*
+
+## Guidance
+
+<!-- Optional. Reference relevant engineering principles, decisions, or
+practices. Do not place product requirements here. Omit this section when no
+guidance is relevant. -->
+
+Relevant:
+
+* principle: <id>
+
+Not applicable:
 
 *
 

@@ -159,6 +159,15 @@ repository-local `story-development` Skill and:
 5. Repair failures without changing the Story or weakening acceptance criteria,
    and rerun the gate until it passes.
 
+A Story may now declare `## Authority`, `## Risk`, `## Architecture` and a
+`Task mode:` bullet, and its acceptance may carry an `## Acceptance Evidence`
+map — ForgeFlow 0.6.0, all optional, all in `specs/stories/_template/`. They are
+checked by upstream's own checkers, which CI runs as the `forgeflow-contract`
+job against the revision `specs/.forgeflow-adoption` pins; `make verify` stays
+offline and does not run them. Authority is per-permission and nothing implies
+anything else: `modify` does not grant `commit`, and `commit` does not grant
+`push`.
+
 `make verify` is the automated completion authority. PASS makes work eligible
 for human review; it does not approve or merge it. Do not bypass repository
 verification, remove failing tests to obtain PASS, or expand Story scope without

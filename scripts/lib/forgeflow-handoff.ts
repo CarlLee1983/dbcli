@@ -99,23 +99,22 @@ export interface ReconcileInput {
   readonly commitExists: (commit: string) => Promise<boolean>
 }
 
-const LIFECYCLE_BLOCK = /```yaml\n([\s\S]*?)```/
-const COMPLETED_LIST = /completed_stories:\n((?:[ \t]+-[ \t]+\S+\n)+)/
-const LIST_ITEM = /-\s+(\S+)/g
+const LIFECYCLE_FENCE = /```yaml\n([\s\S]*?)```/g
 const STORY_HEADING = /^#\s*Story:\s*(\S+)/m
 
 const SECTION_LINE = /^([a-z_]+):$/
 const KEY_LINE = /^ {2}([a-z_]+):(?:[ \t]+(.*))?$/
-const LIST_LINE = /^\s{3,}-\s+\S/
+const LIST_LINE = /^ {3,}-[ \t]+(\S+)[ \t]*$/
 
 /**
  * The lifecycle keys the adopted ForgeFlow handoff contract defines.
  *
  * Presence is upstream `handoff-check`'s business and is not duplicated here;
- * what this gate owns is that nothing outside the contract appears. The two
+ * what this gate owns is that nothing outside the contract appears. The
  * exceptions are `current_story` and `next_story`, which are required *and*
  * pinned to one value each, because their absence and their being filled in are
- * the same failure seen from two sides.
+ * the same failure seen from two sides, and `completed_stories`, which this
+ * gate reads and so must insist on being able to read.
  */
 const CONTRACT_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['workflow', new Set(['current_story', 'next_story', 'completed_stories', 'status'])],
@@ -133,55 +132,70 @@ const CONTRACT_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['verification', new Set(['last_command', 'result'])],
 ])
 
-/** The only value each work-queue field may hold, and why it holds it. */
+/** The only value each work-queue field may hold. ForgePilot holds the rest. */
 const PINNED_WORKFLOW_VALUES: ReadonlyMap<string, string> = new Map([
   ['current_story', 'none'],
   ['next_story', 'pending'],
 ])
 
+const COMPLETED = 'workflow.completed_stories'
+
 /**
- * Return the body of the single fenced `yaml` block.
+ * Return the body of the one fenced `yaml` block.
+ *
+ * Exactly one, not the first one. The handoff is five hundred lines of prose
+ * that quotes this block's own contents, and a non-greedy match for the first
+ * fence would read whichever example a later narrative section happened to put
+ * above the real block — a gate reconciling a quotation of itself, passing
+ * whatever the block below actually says. Nothing else in `specs/handoff.md`
+ * may be fenced as `yaml`; other examples are fenced as `text`.
  *
  * A missing block throws rather than yielding an empty body: checking nothing
  * would pass, and a gate that passes wherever its input has gone missing is a
  * gate that passes everywhere eventually.
  */
 export function lifecycleBlock(handoff: string): string {
-  const block = handoff.match(LIFECYCLE_BLOCK)
-  if (!block) throw new Error('specs/handoff.md has no lifecycle block')
-  return block[1] ?? ''
+  const blocks = [...handoff.matchAll(LIFECYCLE_FENCE)]
+
+  if (blocks.length === 0) throw new Error('specs/handoff.md has no lifecycle block')
+  if (blocks.length > 1) {
+    throw new Error(
+      `specs/handoff.md has ${blocks.length} fenced yaml blocks, so which one is the lifecycle ` +
+        'block is ambiguous — fence narrative examples as `text`'
+    )
+  }
+
+  return blocks[0]?.[1] ?? ''
+}
+
+/** What one pass over a lifecycle block body found. */
+export interface Reading {
+  readonly lifecycle: Lifecycle
+  readonly violations: readonly Violation[]
 }
 
 /**
- * Read the delivery claims out of a lifecycle block body.
+ * Read a lifecycle block body once: what it claims, and what it may not claim.
  *
- * `completed_stories` is the whole of what this reads. It is the one lifecycle
- * fact ForgePilot cannot hold — `.forgepilot/` is not committed, and most
- * delivered Stories predate the queue entirely — so it is the one this
- * repository reconciles for itself.
- */
-export function parseLifecycle(body: string): Lifecycle {
-  const list = body.match(COMPLETED_LIST)
-  if (!list) throw new Error('the lifecycle block records no completed_stories')
-
-  const completedStories = [...(list[1] ?? '').matchAll(LIST_ITEM)].map(([, id]) => id as string)
-
-  return { completedStories }
-}
-
-/**
- * Report every lifecycle statement the handoff is not allowed to make.
+ * One reader, deliberately. The delivery list and the contract check used to be
+ * two independent regexes over the same text, and they disagreed: a blank line
+ * inside `completed_stories` ended the list for one and meant nothing to the
+ * other, so a Story recorded below the gap was never reconciled against
+ * anything and never reported missing either. Two readers of one document is
+ * the same failure this gate exists to catch, one level down.
  *
- * The scan is deliberately literal rather than a YAML parse: this file imports
+ * The scan is literal rather than a YAML parse because this file imports
  * nothing, which is what makes "the gate does not reach the network" a property
- * of the file instead of a promise in its header. The shapes it accepts are the
- * shapes the contract's own example uses — a section, a two-space key, a list
- * item — and anything else is reported rather than interpreted, because a line
- * this gate cannot read is a line whose meaning nobody has checked.
+ * of the file instead of a promise in its header. It accepts the shapes the
+ * contract's own example uses — a section, a two-space key, a list item — and
+ * reports anything else rather than interpreting it, because a line this gate
+ * cannot read is a line whose meaning nobody has checked.
  */
-export function collectLifecycleViolations(body: string): Violation[] {
+export function readLifecycle(body: string): Reading {
   const violations: Violation[] = []
-  const seen = new Map<string, string>()
+  const values = new Map<string, string>()
+  const completedStories: string[] = []
+  const sections = new Set<string>()
 
   let section: string | null = null
   let known = false
@@ -195,12 +209,17 @@ export function collectLifecycleViolations(body: string): Violation[] {
       section = sectionLine[1] as string
       known = CONTRACT_KEYS.has(section)
       key = null
+
       if (!known) {
         violations.push({
           location: section,
           reason: 'is not a section the adopted ForgeFlow handoff contract defines',
         })
+      } else if (sections.has(section)) {
+        violations.push({ location: section, reason: 'is declared twice' })
       }
+
+      sections.add(section)
       continue
     }
 
@@ -220,11 +239,31 @@ export function collectLifecycleViolations(body: string): Violation[] {
         continue
       }
 
-      seen.set(location, value)
+      // Last-wins would make the verdict depend on line order: the same two
+      // lines in the other order refuse the handoff, and neither order says
+      // which value the writer meant.
+      if (values.has(location)) {
+        violations.push({ location, reason: 'is stated twice' })
+        continue
+      }
+
+      if (location === COMPLETED && value.length > 0) {
+        violations.push({
+          location,
+          reason: `is written inline as ${JSON.stringify(value)}; this gate reads it as a list of \`- <Story ID>\` items`,
+        })
+        continue
+      }
+
+      values.set(location, value)
       continue
     }
 
-    if (LIST_LINE.test(line)) continue
+    const listLine = line.match(LIST_LINE)
+    if (listLine) {
+      if (`${section}.${key}` === COMPLETED) completedStories.push(listLine[1] as string)
+      continue
+    }
 
     violations.push({
       location: key === null ? (section as string) : `${section}.${key}`,
@@ -234,13 +273,15 @@ export function collectLifecycleViolations(body: string): Violation[] {
 
   for (const [field, pinned] of PINNED_WORKFLOW_VALUES) {
     const location = `workflow.${field}`
-    const value = seen.get(location)
+    const value = values.get(location)
 
     if (value === undefined) {
-      violations.push({
-        location,
-        reason: `is not stated; the handoff contract requires the key, and this repository requires the value \`${pinned}\``,
-      })
+      if (!violations.some((violation) => violation.location === location)) {
+        violations.push({
+          location,
+          reason: `is not stated; the handoff contract requires the key, and this repository requires the value \`${pinned}\``,
+        })
+      }
       continue
     }
 
@@ -254,9 +295,15 @@ export function collectLifecycleViolations(body: string): Violation[] {
     }
   }
 
-  // Reported in the order they are found, then the pinned fields in the order
-  // the contract lists them: two runs over one handoff read the same way.
-  return violations
+  // The delivery list is what this gate reconciles; an empty one would
+  // reconcile nothing and pass.
+  if (completedStories.length === 0 && !violations.some((v) => v.location === COMPLETED)) {
+    violations.push({ location: COMPLETED, reason: 'records no Story' })
+  }
+
+  // Found order first, then the pinned fields in contract order, then the
+  // delivery list: two runs over one handoff read the same way.
+  return { lifecycle: { completedStories }, violations }
 }
 
 /**

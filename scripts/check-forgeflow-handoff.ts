@@ -20,12 +20,11 @@
 
 import { $ } from 'bun'
 import {
-  collectLifecycleViolations,
   collectStoryIds,
   formatFailures,
   formatViolations,
   lifecycleBlock,
-  parseLifecycle,
+  readLifecycle,
   reconcile,
   shallowCloneRefusal,
   type Exemption,
@@ -96,13 +95,11 @@ const body = lifecycleBlock(await Bun.file(handoffPath).text())
 // The contract first, the claims second. A block making a statement it is not
 // allowed to make is not a block whose delivery list is worth reconciling, and
 // reporting both at once would bury the one the reader has to fix first.
-const violations = collectLifecycleViolations(body)
+const { lifecycle, violations } = readLifecycle(body)
 if (violations.length > 0) {
   console.error(formatViolations(violations))
   process.exit(1)
 }
-
-const lifecycle = parseLifecycle(body)
 
 const failures = await reconcile({
   lifecycle,

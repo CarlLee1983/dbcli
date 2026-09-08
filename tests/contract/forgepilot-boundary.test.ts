@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { $ } from 'bun'
 
 const ROOT = join(import.meta.dir, '..', '..')
 
@@ -107,8 +108,11 @@ describe('ForgePilot is an operator tool, not a dependency', () => {
   })
 
   test('keeps its operational state out of version control', async () => {
-    const ignore = await readRoot('.gitignore')
+    // Ask Git, not `.gitignore`. The line being present is not the property that
+    // matters — any later negation pattern overrides it — and the acceptance
+    // criterion names `git check-ignore` for that reason. Exit 0 means ignored.
+    const checked = await $`git check-ignore .forgepilot/state.json`.cwd(ROOT).nothrow().quiet()
 
-    expect(ignore.split('\n').map((line) => line.trim())).toContain('.forgepilot/')
+    expect(checked.exitCode).toBe(0)
   })
 })

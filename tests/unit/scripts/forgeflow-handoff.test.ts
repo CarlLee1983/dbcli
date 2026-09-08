@@ -189,6 +189,45 @@ describe('readLifecycle', () => {
     expect(found.some((violation) => /indentation/.test(violation.reason))).toBe(true)
   })
 
+  test('a quoted or annotated sentinel says what the bare one says', () => {
+    // Both are idiomatic YAML the contract permits. Refusing them told a reader
+    // who had deferred to ForgePilot that they had not.
+    expect(violations(body('  current_story: "none"\n  next_story: \'pending\'\n'))).toEqual([])
+    expect(
+      violations(body('  current_story: none # ForgePilot owns this\n  next_story: pending\n'))
+    ).toEqual([])
+  })
+
+  test('a key with no value states no Story, rather than the wrong one', () => {
+    const found = violations(body('  current_story:\n  next_story: pending\n'))
+    expect(found.map((violation) => violation.location)).toEqual(['workflow.current_story'])
+    expect(found[0]!.reason).toMatch(/is not stated/)
+  })
+
+  test('an unreadable line is attributed by its indentation, not by the last key seen', () => {
+    // A `---` after the block's final key used to be reported against that key,
+    // naming a statement the writer never made.
+    const found = violations(`${BODY}---\n`)
+    expect(found.map((violation) => violation.location)).toEqual(['lifecycle block'])
+  })
+
+  test('an unknown key does not also claim the lines beneath it', () => {
+    const found = violations(`${BODY}  detail: >-\n    a continuation\n`)
+    expect(found.map((violation) => violation.location)).toEqual([
+      'verification.detail',
+      'verification',
+    ])
+  })
+
+  test('a mis-capitalised section is reported, not swallowed', () => {
+    // `Workflow:` used to be skipped in silence and surface three rules later
+    // as `workflow.current_story is not stated`, sending the reader to add a
+    // key that was already in front of them.
+    const found = violations('Workflow:\n  current_story: none\n  next_story: pending\n')
+    expect(found[0]!.location).toBe('lifecycle block')
+    expect(found[0]!.reason).toMatch(/Workflow:/)
+  })
+
   test('a blank line inside the delivery list does not truncate it', () => {
     // Two readers of one list disagreed here: the list regex stopped at the
     // gap, the contract scan did not care, and a Story recorded below it was

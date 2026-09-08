@@ -168,6 +168,39 @@ export function lifecycleBlock(handoff: string): string {
   return blocks[0]?.[1] ?? ''
 }
 
+/**
+ * The value a lifecycle line states, with YAML's decoration removed.
+ *
+ * `"none"` and `none # ForgePilot owns this` say what `none` says. Comparing
+ * the raw text told a reader who had quoted or annotated the value that
+ * ForgePilot owns the state they had just deferred to ForgePilot — a refusal
+ * whose message is about the wrong thing is worse than no refusal, because it
+ * sends the reader to change something that was already right.
+ */
+function bareValue(value: string): string {
+  const uncommented = value.replace(/\s+#.*$/, '').trim()
+  return uncommented.replace(/^(['"])([\s\S]*)\1$/, '$2').trim()
+}
+
+/**
+ * Name the place a line the scanner cannot read belongs to.
+ *
+ * Indentation decides, not whichever key happened to be seen last: four spaces
+ * or more continues the key above it, less than that does not, and a line at
+ * the margin belongs to the block rather than to any section. A `---` after the
+ * block's final key used to be reported against that key, which named a
+ * statement the writer never made.
+ */
+function locate(section: string | null, key: string | null, line: string): string {
+  const indent = line.length - line.trimStart().length
+  if (indent >= 4 && section !== null && key !== null) return `${section}.${key}`
+  if (indent >= 1 && section !== null) return section
+  return 'lifecycle block'
+}
+
+const unreadable = (line: string) =>
+  `carries an unsupported lifecycle indentation: ${JSON.stringify(line)}`
+
 /** What one pass over a lifecycle block body found. */
 export interface Reading {
   readonly lifecycle: Lifecycle
@@ -223,9 +256,21 @@ export function readLifecycle(body: string): Reading {
       continue
     }
 
-    if (!known) continue
-
     const keyLine = line.match(KEY_LINE)
+    const listLine = line.match(LIST_LINE)
+
+    // An unrecognised section is reported once, not once per line beneath it;
+    // one mistake deserves one message. Lines that parse as nothing at all are
+    // still reported, because that is a different mistake — a capitalised
+    // `Workflow:` used to be swallowed here and surfaced three rules later as
+    // `workflow.current_story is not stated`, sending the reader to add a key
+    // that was already in front of them.
+    if (!known) {
+      if (keyLine || listLine) continue
+      violations.push({ location: locate(section, key, line), reason: unreadable(line) })
+      continue
+    }
+
     if (keyLine) {
       key = keyLine[1] as string
       const location = `${section}.${key}`
@@ -236,6 +281,10 @@ export function readLifecycle(body: string): Reading {
           location,
           reason: 'is not a key the adopted ForgeFlow handoff contract defines',
         })
+        // The key is not one this gate knows, so nothing below it continues
+        // anything it can name: attributing those lines here would report one
+        // mistake twice under a location that does not exist in the contract.
+        key = null
         continue
       }
 
@@ -259,23 +308,22 @@ export function readLifecycle(body: string): Reading {
       continue
     }
 
-    const listLine = line.match(LIST_LINE)
     if (listLine) {
       if (`${section}.${key}` === COMPLETED) completedStories.push(listLine[1] as string)
       continue
     }
 
-    violations.push({
-      location: key === null ? (section as string) : `${section}.${key}`,
-      reason: `carries an unsupported lifecycle indentation: ${JSON.stringify(line)}`,
-    })
+    violations.push({ location: locate(section, key, line), reason: unreadable(line) })
   }
 
   for (const [field, pinned] of PINNED_WORKFLOW_VALUES) {
     const location = `workflow.${field}`
-    const value = values.get(location)
+    const stated = values.get(location)
+    const value = stated === undefined ? undefined : bareValue(stated)
 
-    if (value === undefined) {
+    // `current_story:` with nothing after it states no Story either. Reporting
+    // it as the wrong value printed an empty pair of backticks at the reader.
+    if (value === undefined || value.length === 0) {
       if (!violations.some((violation) => violation.location === location)) {
         violations.push({
           location,
@@ -289,7 +337,7 @@ export function readLifecycle(body: string): Reading {
       violations.push({
         location,
         reason:
-          `is \`${value}\`, but ForgePilot decides which Story is in progress and which is next — ` +
+          `is \`${stated}\`, but ForgePilot decides which Story is in progress and which is next — ` +
           `record it there and leave this \`${pinned}\``,
       })
     }

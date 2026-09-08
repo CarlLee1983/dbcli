@@ -158,11 +158,18 @@ jobs:
       # by `make verify` itself on both outcomes and names the exact revision,
       # so downloading it answers "was this commit verified" without trusting
       # the job summary or anyone's recollection. DBCLI-017.
+      #
+      # The artifact carries no SHA in its name on purpose. `github.sha` and the
+      # `git rev-parse HEAD` the attestation records agree only because the
+      # default `pull_request` checkout resolves both to the merge commit — an
+      # agreement by configuration, not by construction. A name that states a
+      # revision the file could contradict is worse than a name that states
+      # none: the document inside is the only thing that knows which commit ran.
       - name: Verification attestation
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: verification-attestation-${{ github.sha }}
+          name: verification-attestation
           path: .verification/attestation.json
           if-no-files-found: warn
 

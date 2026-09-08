@@ -19,7 +19,10 @@ that counts as passing.
 * [ ] The document travels off the machine that produced it.
       Evidence: the CI `integration` job uploads it; the artifact is
       downloadable from the workflow run, and its `revision` is the commit CI
-      checked out.
+      checked out. The artifact's name states no revision — `github.sha` and the
+      attestation's own `revision` agree only by the checkout's configuration,
+      and a name that could contradict the file it names is worse than one that
+      says nothing.
 
 ## Business Rules
 

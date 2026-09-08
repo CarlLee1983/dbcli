@@ -707,6 +707,65 @@ commit 不在 `main` 上，寫 `main` 會讓這兩行合起來指向一個不存
 `templates/story/verification.md` 也沒裝——bootstrap 不管它，而 verification result
 contract 在這裡還沒有消費者。
 
+## DBCLI-019：同一個 commit 不該給出兩種判決
+
+`forgepilot verify` 在同一個 commit `c3230d79` 上給出過 FAIL、FAIL、PASS
+（EV-018 到 EV-020），程式碼一行沒變。加壓重現（`bun run test:perf`，十核機器上掛
+八個 CPU 忙迴圈）改前十跑十敗，閒置時穩過。
+
+哪一條斷言造成 EV-018／EV-019 **無法回推**——ForgePilot 的 FAIL evidence 只留 exit
+status，浮上來的輸出止於 bun 的 `error: script "test:perf" exited with code 1`。所以
+「重現並指名」被寫成 Story 的第一項工作，而不是前提；startup 只是有文件佐證的嫌疑犯。
+重現結果推翻了那個猜測：三條斷言都會翻，而不是一條。
+
+GATE-003 選比例斷言，落地在兩條上（flattened docs 用「一列巢狀 vs 全平坦」，
+redactFields 用深度比值）。startup 做不出來，量測寫在 Story 的 `task.md`：裸直譯器
+啟動閒置與加壓都是 6.5–7.6ms 完全不動，而 `--help` 是 172→285ms，所以 `help/bare`
+從 20–25 漂到 31–44，比絕對值更糟。GATE-004 因此改量位元組——`dist/cli.mjs` 只答
+`--version`，其餘一律動態載入 `./cli-runtime`，兩個檔的大小是 build 的性質。
+
+`test:perf` 也加了 `--timeout 30000`：bun 預設的 5000ms per-test timeout 同樣是一條
+會被負載翻掉的絕對門，而且翻掉時連數字都不印。
+
+剩下十九條沒有修好，只是被揭露：`tests/unit/build/perf-absolute-time-budgets.test.ts`
+逐檔登記，數量只能往下走。這是刻意的——常數因子的退步只有絕對時間量得到。
+
+## DBCLI-020：那十九條，換的是量不是比較方式
+
+`ABSOLUTE_TIME_BUDGETS` 從 19 歸零。加壓十輪改前 1/10 敗、改後 0/10——同一份程式碼
+另外兩次取樣是 3/10 與 6/10，失敗率本來就是機器忙碌程度的函數。
+
+GATE-005 選計數器。`MaskingCost` 掛在 `FilterColumnsResult.cost` 上凍結回傳，不是
+全域計數器：全域是共享狀態，兩個呼叫會交錯、測試會忘記清。六個欄位各對著一個具體
+退步，`nestedProbeRows`、`pathSplits`、`nestedGlobMatches` 分別是「一列巢狀拖垮
+999 列」「每列重新切路徑」「收鍵而不是收規則」。
+
+**第一版的計數器自己違反了 ADR-0028。** 「沒有東西被移除」那個提前返回回報零成本，
+但落空的規則才是走遍每一列的那些——benchmark 會認證一段它沒看過的走訪。在任何斷言
+寫上去之前修掉，兩個方向釘在 `tests/unit/core/blacklist-masking-cost.test.ts`。
+
+沒有可數的量的那幾條各自處理：查找與 config 載入改成「查找真的發生且答案沒變」加
+一條載入的規模比值（線性，量到 10.34，門檻 25——不能用 `MAX_SIZE_SCALING` 的 3）。
+
+**放棄掉的保護要記住：端到端查詢延遲不再有自動的門。** 一次 CLI 往返大半是 process
+啟動與 I/O 等待，沒有 in-process 的量能把負載除掉，加壓下曾經量到 spawn 被砍、
+`status` 回 `null`。`query.bench.ts` 現在斷言往返成功且有輸出，延遲只印。要擋延遲
+退步得在受控 runner 上做，不是 `make verify` 的事。
+
+計數器量的是做了多少事，不是多快：同樣走訪但更慢的實作不會被抓到，所以每個 case
+仍然把時間印出來給人看。ADR-0028 的失效條件就寫在這裡。
+
+### 兩個 Story 的 trailer 是補的
+
+`efabbd3e`（DBCLI-019 的實作）與 `d9a5a716`（DBCLI-020 的實作）都沒有帶
+`Story:` trailer，交付當下漏掉了，兩個 PR 也已經合併進 `main`。發現它的是
+`bun run forgeflow:check`——這正是那道門存在的理由。
+
+補救方式是這個 handoff commit 帶上兩個 trailer，而不是往
+`DELIVERED_BEFORE_TRAILERS` 加兩筆：那份名單自己寫著「只能縮不能長」，用它來吸收
+一次當下的疏漏，就是把 ratchet 變成 amnesty。所以紀錄留在這裡：trailer 是補的，
+真正做事的是上面那兩個 commit。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -743,28 +802,32 @@ workflow:
     - DBCLI-016
     - DBCLI-017
     - DBCLI-018
+    - DBCLI-019
+    - DBCLI-020
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: feat/dbcli-017-portable-verification-attestation
-  commit: 1ad461745c2596b773d9e7c41425737789541894
+  branch: main
+  commit: 161a2645fd896b21a81e3bf7e6912f28cef6a6a2
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
-    - specs/.forgeflow-adoption
-    - specs/stories/README.md
-    - specs/stories/_template/story.md
-    - specs/stories/_template/acceptance.md
-    - specs/stories/DBCLI-018-forgeflow-adoption-upgrade/story.md
-    - specs/stories/DBCLI-018-forgeflow-adoption-upgrade/acceptance.md
-    - docs/adr/0027-upstream-forgeflow-checkers-are-run-not-reimplemented.md
-    - scripts/lib/forgeflow-contract.ts
-    - scripts/check-forgeflow-contract.ts
-    - tests/unit/scripts/forgeflow-contract.test.ts
-    - .github/workflows/ci.yml
+    - specs/stories/DBCLI-019-load-independent-perf-verdict/story.md
+    - specs/stories/DBCLI-019-load-independent-perf-verdict/acceptance.md
+    - specs/stories/DBCLI-019-load-independent-perf-verdict/task.md
+    - specs/stories/DBCLI-020-perf-gates-without-a-clock/story.md
+    - specs/stories/DBCLI-020-perf-gates-without-a-clock/acceptance.md
+    - specs/stories/DBCLI-020-perf-gates-without-a-clock/task.md
+    - docs/adr/0028-masking-cost-is-observable-without-a-clock.md
+    - src/core/blacklist-validator.ts
+    - tests/perf/startup.bench.ts
+    - tests/perf/query.bench.ts
+    - tests/perf/blacklist-performance.bench.ts
+    - tests/perf/contiguous-section-matcher.bench.ts
+    - tests/unit/build/perf-absolute-time-budgets.test.ts
+    - tests/unit/core/blacklist-masking-cost.test.ts
     - package.json
-    - AGENTS.md
   known_unrelated_paths: []
 
 verification:

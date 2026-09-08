@@ -591,6 +591,22 @@ ForgePilot 都沒被用過。
 attestation 寫出 `result: FAIL`、`exit_code: 1`、revision 正確。注意 `exit_code` 記的是
 失敗那個 step 的狀態，不是 `make` 自己的錯誤碼——除錯的人要的是前者。
 
+### review 抓到的兩個 CRITICAL
+
+`set -o pipefail` 不是 POSIX。GNU Make 忽略環境的 `SHELL` 直接用 `/bin/sh`，而
+`integration` job 跑的 ubuntu runner 上 `/bin/sh` 是 dash——實測 `ubuntu:24.04`
+與 `ubuntu:22.04` 都回 `set: Illegal option -o pipefail` 並以 exit 2 中止，24 個
+step 一個都不會跑，attestation 也不會寫，而且失敗看起來像驗證失敗。本機測不出來，
+因為 macOS 的 `/bin/sh` 是 bash。那 24 個 step 裡沒有任何一個 pipe，所以 pipefail
+本來就是個什麼都不保護的致命 no-op，直接刪掉。
+
+roster parser 有六種寫法能一邊維持綠燈一邊把 gate 掏空：recipe 行前面加 `-`
+（make 忽略錯誤，`make verify` 在有 step 失敗時 exit 0）、`exit $status` 換成
+`exit 0`、在開括號那一行或閉括號之後夾帶額外指令、以及在檔案後面再定義一次
+`verify:`（make 跑最後一個）。共同成因是 parser 只讀 subshell 裡面那一半，
+scaffolding 整個被丟掉，而 `toContain` 是對整個檔案搜尋、註解也算數。改成把
+prologue 與 epilogue 五行逐字釘死；六種寫法現在全部會 fail，逐一實測過。
+
 把 step 清單搬進 `scripts/` runner 的那個選項沒有被否決，只是延後：DBCLI-019 要的
 per-step 時間與失敗步驟幾乎是免費的，該由那個 Story 重新評估，而不是在這裡先猜。
 

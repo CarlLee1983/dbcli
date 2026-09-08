@@ -12,6 +12,14 @@
 # captures the status, the attestation is written either way, and the recipe
 # re-exits with the captured status.
 #
+# The recipe stays POSIX. GNU Make ignores the environment's `SHELL` and runs
+# `/bin/sh`, which is dash on the Ubuntu runner this gate's `integration` job
+# uses — and dash has no `pipefail`. An earlier version set it, which aborted
+# the recipe line before the subshell was entered: zero of the 24 steps ran, no
+# attestation was written, and the failure looked like a verification failure.
+# It passed locally only because macOS `/bin/sh` is bash. Nothing here pipes
+# anything, so `pipefail` was a fatal no-op.
+#
 # Neither attestation phase can decide the verdict, which is the point of the
 # `|| run=''` and the `|| true`: `begin` failing leaves `run` empty so `finish`
 # refuses and says so, and neither failure is allowed to stand between a
@@ -20,8 +28,7 @@
 # cannot leave state for the next run to pick up and describe as its own.
 # DBCLI-017, and `scripts/write-attestation.ts` for what the record says.
 verify:
-	@set -o pipefail; \
-	run=$$(bun run scripts/write-attestation.ts begin) || run=''; \
+	@run=$$(bun run scripts/write-attestation.ts begin) || run=''; \
 	( \
 		bun install --frozen-lockfile && \
 		bun run services:check && \

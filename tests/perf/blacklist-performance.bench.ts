@@ -93,12 +93,12 @@ describe('Blacklist Performance Benchmarks', () => {
       return hits
     })
 
-    // 0.14ms on this machine across five runs. Scaled the same way as the rest of
-    // this file — a CI runner costs about 3x here — that is ~0.42ms, so 2ms keeps
-    // a 4.7x margin. This case does not guard the linear-scan regression on its
-    // own: at 100 tables that shape measures 0.98ms here, under any budget loose
-    // enough not to be a coin flip. The 1000-table case below is what fails on it,
-    // which is why both scales are kept.
+    // Measured on the runners this actually runs on (workflow run 34177694446,
+    // the merge of DBCLI-015): 0.08ms ubuntu, 0.07ms macos, 0.27ms windows. The
+    // slowest of the three leaves 2ms a 7.4x margin. This case does not guard the
+    // linear-scan regression on its own — at 100 tables that shape is fast enough
+    // to pass any budget loose enough not to be a coin flip. The scaling pair
+    // below is what rejects it, which is why both scales are kept.
     report('Table lookup (100 tables, typical)', elapsed, 2)
     expect(elapsed).toBeLessThan(2)
   })
@@ -115,11 +115,12 @@ describe('Blacklist Performance Benchmarks', () => {
     })
 
     // Budget tightened from 10ms to 2ms by DBCLI-015. The lookup is set-backed, so
-    // it does not care that the blacklist is ten times larger: 0.099ms here,
-    // ~0.3ms on a runner at this file's 3x scaling. The old 10ms was 100x the
-    // measurement. This budget is a cost ceiling only; the linear-scan regression
-    // is rejected by the scaling pair below, which does not depend on how fast
-    // the machine reading it happens to be.
+    // it does not care that the blacklist is ten times larger: same run as above,
+    // 0.10ms ubuntu, 0.07ms macos, 0.20ms windows — indistinguishable from the
+    // 100-table case, which is the point. The old 10ms was 100x the measurement.
+    // This budget is a cost ceiling only; the linear-scan regression is rejected
+    // by the scaling pair below, which does not depend on how fast the machine
+    // reading it happens to be.
     report('Table lookup (1000 tables)', elapsed, 2)
     expect(elapsed).toBeLessThan(2)
   })
@@ -136,7 +137,12 @@ describe('Blacklist Performance Benchmarks', () => {
 
   /** Probes must be spread across the whole blacklist. */
   const LOOKUPS_PER_SAMPLE = 2000
-  /** Set-backed measures 0.83–1.04 here; a linear scan measures 7.3–9.6. */
+  /**
+   * Set-backed measures 1.03–1.15 across ubuntu, macos and windows runners; a
+   * linear scan measures 8.33–9.49 on the same three (workflow run 34177694446).
+   * The threshold sits between them with margin on both sides, and because a
+   * ratio has no unit, a slow runner slows both halves.
+   */
   const MAX_SIZE_SCALING = 3
 
   const probeAllOf = (size: number, lookup: (name: string) => boolean) => () => {

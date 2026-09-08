@@ -159,3 +159,79 @@ export function formatContractFailures(failures: readonly ContractFailure[]): st
     `${failures.length} finding(s) upstream ForgeFlow reports that this repository has not admitted to.`,
   ].join('\n')
 }
+
+/**
+ * Findings that predate this gate, exactly as upstream `story-check` states
+ * them.
+ *
+ * All twenty-one failed identically under 0.3.2; the upgrade did not cause one
+ * of them. They are three kinds of wording — a trust-boundary field written as
+ * prose, a security fixture cell written as prose instead of an exact value in
+ * backticks, and one Story whose Classification contradicts its own Superseded
+ * Behavior section. Fixing them means re-deriving sixteen matrix cells from the
+ * code they describe and editing acceptance text a human already accepted, so
+ * it is its own Story rather than a paragraph of DBCLI-018.
+ *
+ * The ratchet's two directions are enforced differently, and the difference is
+ * worth knowing. Shrinking is mechanical: a finding that has been fixed makes
+ * the gate fail as a stale entry. Growing is caught by the counts below, which
+ * a test compares this map against — adding an entry fails until someone
+ * lowers, never raises, those numbers, which is the deliberate act the rule is
+ * asking for. Neither direction is left to a reviewer noticing.
+ */
+export const PREDATING_FINDINGS: Exemptions = new Map([
+  [
+    'DBCLI-PLAT-004-operation-envelope-v1',
+    ['every trust-boundary field must name an exact field, not prose'],
+  ],
+  [
+    'DBCLI-PLAT-005-agent-json-mode',
+    [
+      'every trust-boundary field must name an exact field, not prose',
+      'Story declares Baseline conformance: no but declares superseded behavior',
+    ],
+  ],
+  [
+    'DBCLI-PLAT-006-correlation-id',
+    [
+      'security fixture row 1 states verification as prose instead of an exact value',
+      'security fixture row 2 states verification as prose instead of an exact value',
+      'security fixture row 3 states verification as prose instead of an exact value',
+      'security fixture row 4 states verification as prose instead of an exact value',
+      'security fixture row 5 states verification as prose instead of an exact value',
+      'security fixture row 6 states verification as prose instead of an exact value',
+    ],
+  ],
+  [
+    'DBCLI-PLAT-007-bounded-evidence-receipts',
+    [
+      'security fixture row 1 states source field as prose instead of an exact value',
+      'security fixture row 2 states source field as prose instead of an exact value',
+      'security fixture row 3 states source field as prose instead of an exact value',
+      'security fixture row 4 states source field as prose instead of an exact value',
+      'security fixture row 5 states source field as prose instead of an exact value',
+      'security fixture row 6 states source field as prose instead of an exact value',
+      'security fixture row 7 states source field as prose instead of an exact value',
+      'security fixture row 8 states source field as prose instead of an exact value',
+      'every trust-boundary field must name an exact field, not prose',
+    ],
+  ],
+  [
+    'DBCLI-PLAT-012-schema-cache-write-boundary',
+    [
+      'security fixture row 10 states source field as prose instead of an exact value',
+      'security fixture row 10 states persisted locations as prose instead of an exact value',
+      'every trust-boundary field must name an exact field, not prose',
+    ],
+  ],
+])
+
+/**
+ * How many findings this repository has admitted to, and across how many
+ * Stories.
+ *
+ * These numbers may be lowered and never raised. They exist so that "the list
+ * may shrink and never grow" is a check rather than a sentence in a header.
+ */
+export const ADMITTED_FINDINGS = 21
+export const ADMITTED_STORIES = 5

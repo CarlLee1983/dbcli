@@ -46,10 +46,23 @@ that counts as passing.
       entry; a Story with no entry must be clean.
       Evidence: fixture tests in
       `tests/unit/scripts/forgeflow-contract.test.ts`.
-* [ ] `make verify` is unchanged.
-      Evidence: `git diff main...HEAD -- Makefile` is empty, and
-      `tests/contract/forgepilot-boundary.test.ts` passes with its
-      `REQUIRED_STEPS` roster unedited.
+* [ ] The list cannot grow without a deliberate edit.
+      Evidence: `ADMITTED_FINDINGS` and `ADMITTED_STORIES` are compared against
+      `PREDATING_FINDINGS` by a test, so adding an entry fails until someone
+      lowers — never raises — those numbers. Verified by adding an entry: the
+      suite goes red. Shrinking is already mechanical, since a fixed finding
+      fails as a stale entry; this is the other direction, which was a sentence
+      in a header that nothing checked.
+* [ ] `make verify` is unchanged by this Story.
+      Evidence: `git show <delivering commit> --name-only` names no `Makefile`,
+      no `tests/contract/`, and no `src/`. Not `git diff main...HEAD`: this
+      branch is stacked on DBCLI-017, whose attestation work does change the
+      `Makefile`, so a range diff would attribute that change here.
+* [ ] The offline guarantee is intact.
+      Evidence: `bun run forgeflow:check` — the only ForgeFlow step in
+      `make verify` — exits `0` with `FORGEFLOW_ROOT` unset, and neither
+      `check-forgeflow-adoption.ts` nor `check-forgeflow-handoff.ts` reads that
+      variable.
 
 ## Failure Cases
 
@@ -68,8 +81,8 @@ that counts as passing.
       Evidence: `bun run forgeflow:check` and the attestation unit tests pass
       unchanged.
 * [ ] No Story file, other than this Story's own, is edited.
-      Evidence: `git diff --stat main...HEAD -- specs/stories/` names only
-      `_template/` and `DBCLI-018-*`.
+      Evidence: `git show <delivering commit> --name-only -- specs/stories/`
+      names only `_template/` and `DBCLI-018-*`.
 
 ## Verification Notes
 

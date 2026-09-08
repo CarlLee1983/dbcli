@@ -7,8 +7,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  ADMITTED_FINDINGS,
+  ADMITTED_STORIES,
   checkoutRefusal,
   formatContractFailures,
+  PREDATING_FINDINGS,
   reconcileFindings,
   type Exemptions,
 } from '../../../scripts/lib/forgeflow-contract'
@@ -100,5 +103,30 @@ describe('formatContractFailures', () => {
     expect(report).toContain('DBCLI-016')
     expect(report).toContain(PROSE)
     expect(report).toContain('1 finding(s)')
+  })
+})
+
+describe('the exemption ratchet', () => {
+  test('admits exactly what it says it admits', () => {
+    // The rule is "may shrink and never grow". Shrinking is already mechanical
+    // — a fixed finding fails as a stale entry. This is the other direction:
+    // adding an entry fails here until someone lowers, never raises, these two
+    // numbers, which is the deliberate act the rule asks for. Without it the
+    // ratchet was a sentence in a header that nothing checked.
+    const findings = [...PREDATING_FINDINGS.values()].reduce(
+      (total, list) => total + list.length,
+      0
+    )
+
+    expect(PREDATING_FINDINGS.size).toBe(ADMITTED_STORIES)
+    expect(findings).toBe(ADMITTED_FINDINGS)
+  })
+
+  test('admits no duplicate finding within one Story', () => {
+    // A repeated string would satisfy the count while admitting one fewer real
+    // finding than it appears to.
+    for (const [story, findings] of PREDATING_FINDINGS) {
+      expect(new Set(findings).size, story).toBe(findings.length)
+    }
   })
 })

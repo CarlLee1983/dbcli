@@ -106,9 +106,13 @@ mandatory.
 * R4: Every finding upstream reports is either absent or listed exactly. A new
   finding fails; a listed finding that has been fixed fails as a stale entry; a
   Story with no entry must be clean.
-* R5: The list may shrink and never grow.
+* R5: The list may shrink and never grow. Both directions are checked: a fixed
+  finding fails as a stale entry, and a new entry fails an admitted-count test
+  until someone lowers that count deliberately.
 * R6: `make verify` gains no step, keeps its existing steps in order, and still
-  runs offline from a clone of this repository alone.
+  runs offline from a clone of this repository alone. This Story's own commit
+  touches no `Makefile`; the branch it is stacked on does, so the two must not
+  be read from one range diff.
 
 ## Expected Errors
 

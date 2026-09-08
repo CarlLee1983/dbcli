@@ -19,73 +19,12 @@ import { fileURLToPath } from 'node:url'
 import {
   checkoutRefusal,
   formatContractFailures,
+  PREDATING_FINDINGS,
   reconcileFindings,
-  type Exemptions,
   type StoryResult,
 } from './lib/forgeflow-contract'
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
-
-/**
- * Findings that predate this gate, exactly as upstream `story-check` states
- * them.
- *
- * All twenty-one failed identically under 0.3.2; the upgrade did not cause one
- * of them. They are three kinds of wording — a trust-boundary field written as
- * prose, a security fixture cell written as prose instead of an exact value in
- * backticks, and one Story whose Classification contradicts its own Superseded
- * Behavior section. Fixing them means re-deriving sixteen matrix cells from the
- * code they describe and editing acceptance text a human already accepted, so
- * it is its own Story rather than a paragraph of this one.
- *
- * A ratchet: entries may be deleted and never added.
- */
-const PREDATING_FINDINGS: Exemptions = new Map([
-  [
-    'DBCLI-PLAT-004-operation-envelope-v1',
-    ['every trust-boundary field must name an exact field, not prose'],
-  ],
-  [
-    'DBCLI-PLAT-005-agent-json-mode',
-    [
-      'every trust-boundary field must name an exact field, not prose',
-      'Story declares Baseline conformance: no but declares superseded behavior',
-    ],
-  ],
-  [
-    'DBCLI-PLAT-006-correlation-id',
-    [
-      'security fixture row 1 states verification as prose instead of an exact value',
-      'security fixture row 2 states verification as prose instead of an exact value',
-      'security fixture row 3 states verification as prose instead of an exact value',
-      'security fixture row 4 states verification as prose instead of an exact value',
-      'security fixture row 5 states verification as prose instead of an exact value',
-      'security fixture row 6 states verification as prose instead of an exact value',
-    ],
-  ],
-  [
-    'DBCLI-PLAT-007-bounded-evidence-receipts',
-    [
-      'security fixture row 1 states source field as prose instead of an exact value',
-      'security fixture row 2 states source field as prose instead of an exact value',
-      'security fixture row 3 states source field as prose instead of an exact value',
-      'security fixture row 4 states source field as prose instead of an exact value',
-      'security fixture row 5 states source field as prose instead of an exact value',
-      'security fixture row 6 states source field as prose instead of an exact value',
-      'security fixture row 7 states source field as prose instead of an exact value',
-      'security fixture row 8 states source field as prose instead of an exact value',
-      'every trust-boundary field must name an exact field, not prose',
-    ],
-  ],
-  [
-    'DBCLI-PLAT-012-schema-cache-write-boundary',
-    [
-      'security fixture row 10 states source field as prose instead of an exact value',
-      'security fixture row 10 states persisted locations as prose instead of an exact value',
-      'every trust-boundary field must name an exact field, not prose',
-    ],
-  ],
-])
 
 const adopted = (await Bun.file(join(repoRoot, 'specs/.forgeflow-adoption')).text())
   .split('\n')

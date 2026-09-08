@@ -694,6 +694,12 @@ canonical gate 必須能從這個 repo 單獨一份 clone、離線跑完。
 在那之前這 21 條被逐條列進 `PREDATING_FINDINGS`，是棘輪不是特赦：exempt 的 Story 多一條
 新的會 fail，修好了卻沒刪 entry 也會 fail，沒有 entry 的 Story 必須全乾淨。清單只准縮短。
 
+### baseline 為什麼不是 main
+
+DBCLI-018 疊在 DBCLI-017 上，而 017 還沒合併。baseline 記的是這個 Story 實際從哪裡
+長出來的那個 commit（`1ad46174`），branch 因此是 017 的分支而不是 `main`——那個
+commit 不在 `main` 上，寫 `main` 會讓這兩行合起來指向一個不存在的位置。
+
 ### 沒有採用的東西
 
 `story-check --ready` 要求每個 Story 都有 Acceptance Evidence map，現在會回報 71 條。
@@ -741,8 +747,8 @@ workflow:
 
 baseline:
   repository: CarlLee1983/dbcli
-  branch: main
-  commit: 284b5211a19fa8d0d8dcc85995c3692d429f7809
+  branch: feat/dbcli-017-portable-verification-attestation
+  commit: 1ad461745c2596b773d9e7c41425737789541894
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md

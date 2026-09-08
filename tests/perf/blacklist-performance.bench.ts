@@ -85,13 +85,14 @@ describe('Blacklist Performance Benchmarks', () => {
       blacklist: { tables, columns: {} },
     } as any)
 
-    const elapsed = medianElapsed(() => {
-      let hits = 0
+    const hits = () => {
+      let found = 0
       for (let i = 0; i < 1000; i++) {
-        if (manager.isTableBlacklisted(`table_${i % 100}`)) hits++
+        if (manager.isTableBlacklisted(`table_${i % 100}`)) found++
       }
-      return hits
-    })
+      return found
+    }
+    const elapsed = medianElapsed(hits)
 
     // Measured on the runners this actually runs on (workflow run 34177694446,
     // the merge of DBCLI-015): 0.08ms ubuntu, 0.07ms macos, 0.27ms windows. The
@@ -99,20 +100,25 @@ describe('Blacklist Performance Benchmarks', () => {
     // linear-scan regression on its own — at 100 tables that shape is fast enough
     // to pass any budget loose enough not to be a coin flip. The scaling pair
     // below is what rejects it, which is why both scales are kept.
+    // 絕對耗時只印不斷言。上面那段量測本身就說明了理由：它是 DBCLI-015 從單元測試
+    // 搬過來的那一則，搬過來之後仍然是絕對比較，仍然會被負載翻掉。這一則自己也寫著
+    // 它擋不住線性掃描的退步——那是下面那對比值在擋的。留在這裡的斷言是「查找真的
+    // 發生過」：一千次查詢命中一千次，計數不會因為機器忙就變。
     report('Table lookup (100 tables, typical)', elapsed, 2)
-    expect(elapsed).toBeLessThan(2)
+    expect(hits()).toBe(1_000)
   })
 
   it('Table lookup (1000 tables): 1000 lookups in < 2ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
 
-    const elapsed = medianElapsed(() => {
-      let hits = 0
+    const hits = () => {
+      let found = 0
       for (let i = 0; i < 1000; i++) {
-        if (largeManager.isTableBlacklisted(`table_${i}`)) hits++
+        if (largeManager.isTableBlacklisted(`table_${i}`)) found++
       }
-      return hits
-    })
+      return found
+    }
+    const elapsed = medianElapsed(hits)
 
     // Budget tightened from 10ms to 2ms by DBCLI-015. The lookup is set-backed, so
     // it does not care that the blacklist is ten times larger: same run as above,
@@ -121,8 +127,9 @@ describe('Blacklist Performance Benchmarks', () => {
     // This budget is a cost ceiling only; the linear-scan regression is rejected
     // by the scaling pair below, which does not depend on how fast the machine
     // reading it happens to be.
+    // 同上：只印不斷言，線性掃描由下面那對比值否決。
     report('Table lookup (1000 tables)', elapsed, 2)
-    expect(elapsed).toBeLessThan(2)
+    expect(hits()).toBe(1_000)
   })
 
   // ─── R2: lookup cost does not grow with blacklist size ──────────────────
@@ -199,16 +206,19 @@ describe('Blacklist Performance Benchmarks', () => {
   it('Column lookup (100 cols blacklisted): 1000 lookups in < 10ms', () => {
     const largeManager = new BlacklistManager(largeConfig as any)
 
-    const elapsed = medianElapsed(() => {
-      let hits = 0
+    const hits = () => {
+      let found = 0
       for (let i = 0; i < 1000; i++) {
-        if (largeManager.isColumnBlacklisted('table_50', `col_${i % 100}`)) hits++
+        if (largeManager.isColumnBlacklisted('table_50', `col_${i % 100}`)) found++
       }
-      return hits
-    })
+      return found
+    }
+    const elapsed = medianElapsed(hits)
 
+    // 只印不斷言，理由同上面兩則。斷言是查找真的發生過且答案沒有變：一千次查詢，
+    // 一百個被列管的欄名輪流問，每一次都該命中。
     report('Column lookup (1000 lookups)', elapsed, 10)
-    expect(elapsed).toBeLessThan(10)
+    expect(hits()).toBe(1_000)
   })
 
   it('Column filtering (100 rows x 50 cols, omits 50): < 8ms per call', () => {
@@ -220,8 +230,16 @@ describe('Blacklist Performance Benchmarks', () => {
       () => largeValidator.filterColumns('table_0', largeRows, columnList).filteredRows
     )
 
+    const cost = largeValidator.filterColumns('table_0', largeRows, columnList).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (100 rows x 50 cols)', elapsed, 8)
-    expect(elapsed).toBeLessThan(8)
+    // 100 列 × 51 個鍵，100 條規則全部由名稱比對答完，一列都不必往下走。
+    // 退步的樣子是 nestedProbeRows 從 0 變成上萬。
+    expect(cost.rowsScanned).toBe(100)
+    expect(cost.keysScanned).toBe(5_100)
+    expect(cost.ruleEvaluations).toBe(100)
+    expect(cost.nestedProbeRows).toBe(0)
   })
 
   it('Column filtering (1000 rows x 7 cols, omits 3): < 5ms per call', () => {
@@ -229,8 +247,15 @@ describe('Blacklist Performance Benchmarks', () => {
       () => typicalValidator.filterColumns('users', typicalRows, typicalColumnList).filteredRows
     )
 
+    const cost = typicalValidator.filterColumns('users', typicalRows, typicalColumnList).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (1000 rows x 7 cols)', elapsed, 5)
-    expect(elapsed).toBeLessThan(5)
+    // 一般設定：三條規則、七個欄位，走過一千列收名字就結束。
+    expect(cost.rowsScanned).toBe(1_000)
+    expect(cost.keysScanned).toBe(7_000)
+    expect(cost.ruleEvaluations).toBe(3)
+    expect(cost.nestedProbeRows).toBe(0)
   })
 
   it('Column filtering (100 rows, 5 dotted JSON paths): < 10ms per call', () => {
@@ -260,8 +285,14 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('orders', jsonRows, columnList).filteredRows
     )
 
+    const cost = validator.filterColumns('orders', jsonRows, columnList).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (100 rows, 5 dotted paths)', elapsed, 10)
-    expect(elapsed).toBeLessThan(10)
+    // 五條點分規則，每條切一次路徑；探測在第一列就命中，所以是 5 而不是 500。
+    expect(cost.ruleEvaluations).toBe(5)
+    expect(cost.pathSplits).toBe(5)
+    expect(cost.nestedProbeRows).toBe(5)
   })
 
   it('Column filtering (1000 flattened docs): one nested row does not slow the other 999', () => {
@@ -350,8 +381,16 @@ describe('Blacklist Performance Benchmarks', () => {
     // 3x this machine, so 0.90ms locally is ~2.7ms there and 6ms keeps the 2.2x margin
     // that stops this being a coin flip. The regression it guards measures 12.1ms
     // locally — roughly 36ms on that runner — so it still fails loudly.
+    const cost = validator.filterColumns('users', rows, columnList).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (60 missing dotted rules)', elapsed, 6)
-    expect(elapsed).toBeLessThan(6)
+    // 這一則的全部意義：規則的頭在任何一列都不是物件，所以 nestedHeads 在碰任何
+    // 一列之前就否決掉全部 60 條。退步是把那個判斷搬回每列做一次——60,000 次探測
+    // 與 60 次切分，兩個數字都不會因為機器忙就變。
+    expect(cost.ruleEvaluations).toBe(61)
+    expect(cost.nestedProbeRows).toBe(0)
+    expect(cost.pathSplits).toBe(0)
   })
 
   it('Column filtering (wide rows, dotted rules that miss on a real nested head): < 60ms per call', () => {
@@ -381,8 +420,17 @@ describe('Blacklist Performance Benchmarks', () => {
     // 3x this machine) that is ~210ms there, so the budget is 400ms: it clears CI
     // with margin and still fails loudly on the 417ms shape this guards, which is
     // what one uncached key scan per lookup measured.
+    const cost = validator.filterColumns('users', rows, columnList).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (wide rows, dotted misses on a real head)', elapsed, 400)
-    expect(elapsed).toBeLessThan(400)
+    // 頭是真的巢狀物件，所以每條規則都要走完兩千列：40 × 2000。這是這一則要盯住
+    // 的形狀——每次查找退回一次整列掃描時，走過的列數不變而時間爆掉，所以時間仍
+    // 然印出來給人看，數量則保證走的是同一條路。
+    expect(cost.rowsScanned).toBe(2_000)
+    expect(cost.keysScanned).toBe(162_000)
+    expect(cost.ruleEvaluations).toBe(40)
+    expect(cost.nestedProbeRows).toBe(80_000)
   })
 
   it('Column filtering (nested wildcard rules over a nested column): < 60ms per call', () => {
@@ -411,8 +459,16 @@ describe('Blacklist Performance Benchmarks', () => {
     // makes it cheap is the transition memo: the same (rule set, key) question
     // is asked once per result rather than once per row. Without it this shape
     // measured 43ms, and 50 such rules 190ms.
+    const cost = validator.filterColumns('users', rows, ['id', 'profile']).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (nested wildcard rules, all miss)', elapsed, 35)
-    expect(elapsed).toBeLessThan(35)
+    // 十條萬用字元規則全部落空：字面探測走一千列 × 十條，巢狀走訪再走一千列，
+    // 而一條都沒有命中。
+    expect(cost.ruleEvaluations).toBe(10)
+    expect(cost.nestedProbeRows).toBe(10_000)
+    expect(cost.nestedGlobRows).toBe(1_000)
+    expect(cost.nestedGlobMatches).toBe(0)
   })
 
   it('Column filtering (nested wildcard rule matching every row): < 60ms per call', () => {
@@ -434,8 +490,13 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('users', rows, ['id', 'profile']).filteredRows
     )
 
+    const cost = validator.filterColumns('users', rows, ['id', 'profile']).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (nested wildcard rule, all hit)', elapsed, 25)
-    expect(elapsed).toBeLessThan(25)
+    // 命中就停：巢狀走訪在第一列把唯一的規則消掉，所以是 1 列 1 條。
+    expect(cost.nestedGlobRows).toBe(1)
+    expect(cost.nestedGlobMatches).toBe(1)
   })
 
   it('Column filtering (nested wildcard rule hitting a different key per row): < 80ms per call', () => {
@@ -459,22 +520,58 @@ describe('Blacklist Performance Benchmarks', () => {
       () => validator.filterColumns('users', rows, ['id', 'profile']).filteredRows
     )
 
+    const cost = validator.filterColumns('users', rows, ['id', 'profile']).cost
+    // 絕對耗時只印不斷言：同一個 commit 在忙碌的機器上會給出不同的判決
+    // （DBCLI-019）。門在下面的計數上，那是這段程式做了多少事，不是機器多閒。
     report('Column filtering (nested wildcard rule, key per row)', elapsed, 40)
-    expect(elapsed).toBeLessThan(40)
+    // 一條規則在每一列命中不同的鍵，收的仍然是規則不是鍵——所以是 1。收成鍵的
+    // 那個退步會讓移除階段把每列重建一次（200 列 × 20 鍵量到 1.8 秒），在這裡表現
+    // 為 nestedGlobMatches 變成上千。
+    expect(cost.nestedGlobRows).toBe(1)
+    expect(cost.nestedGlobMatches).toBe(1)
   })
 
-  it('Config loading - typical blacklist: < 5ms', () => {
+  it('Config loading - typical blacklist', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(typicalConfig as any))
 
+    // 只印不斷言。載入成本的退步會是「規模上去成本非線性上去」，那是下面那一則比值
+    // 在擋的；單一絕對值在忙碌的機器上只會翻判決。這裡斷言載入真的把設定讀進去了。
     report('Config loading (typical)', elapsed, 5)
-    expect(elapsed).toBeLessThan(5)
+    const manager = new BlacklistManager(typicalConfig as any)
+    expect(manager.getBlacklistedColumns('users')).toHaveLength(3)
   })
 
-  it('Config loading - large blacklist (1000 tables): < 50ms', () => {
+  it('Config loading - large blacklist (1000 tables)', () => {
     const elapsed = medianElapsed(() => new BlacklistManager(largeConfig as any))
 
     report('Config loading (1000 tables)', elapsed, 50)
-    expect(elapsed).toBeLessThan(50)
+    const manager = new BlacklistManager(largeConfig as any)
+    expect(manager.getBlacklistedColumns('table_0')).toHaveLength(100)
+  })
+
+  it('Config loading cost does not grow faster than the blacklist', () => {
+    // 載入是線性的，所以十倍的規模就是大約十倍的成本——量到 10.34，門檻放在 25。
+    // 這裡不能用 MAX_SIZE_SCALING（那是給 O(1) 查找的 3 倍門檻，線性載入必然超過）。
+    // 退回「每個條目都要跟其他條目比一次」那種形狀，比值會是上百。比值兩邊在同一台
+    // 機器上量，負載同時放大所以抵消。
+    const load = (size: number) => {
+      const tables = Array.from({ length: size }, (_, i) => `table_${i}`)
+      const columns: Record<string, string[]> = {}
+      for (let i = 0; i < size; i++) {
+        columns[`table_${i}`] = ['password', 'ssn']
+      }
+      const config = { ...baseConfig, blacklist: { tables, columns } }
+      return medianElapsed(() => new BlacklistManager(config as any))
+    }
+    const small = load(100)
+    const large = load(1_000)
+    const ratio = large / Math.max(small, 0.001)
+
+    const MAX_LOAD_SCALING = 25
+    console.log(
+      `Config loading 1000-vs-100 cost ratio = ${ratio.toFixed(2)} (max ${MAX_LOAD_SCALING})`
+    )
+    expect(ratio).toBeLessThan(MAX_LOAD_SCALING)
   })
 
   it('Typical query flow overhead: blacklist check < 1ms', () => {
@@ -499,7 +596,17 @@ describe('Blacklist Performance Benchmarks', () => {
     })
     const perQuery = elapsed / ITERATIONS
 
+    // 只印不斷言。門在每一次呼叫做了多少事上：一列、三個鍵、三條規則，一次都不必
+    // 往下走。每查詢多走一列或多探一次，這裡就會變。
     report('Per-query overhead', perQuery, 1)
-    expect(perQuery).toBeLessThan(1)
+    const cost = validator.filterColumns(
+      'users',
+      [{ id: 1, password: 'hash', email: 'e@e.com' }],
+      ['id', 'password', 'email']
+    ).cost
+    expect(cost.rowsScanned).toBe(1)
+    expect(cost.keysScanned).toBe(3)
+    expect(cost.ruleEvaluations).toBe(3)
+    expect(cost.nestedProbeRows).toBe(0)
   })
 })

@@ -15,18 +15,18 @@ const BENCH_DIR = path.resolve(import.meta.dir, '../../perf')
 /**
  * 每支 bench 檔還剩幾條「單一絕對耗時 < 常數」的斷言。只准調降。
  *
- * 2026-09-08 的起點是 19 條。DBCLI-019 把 `startup.bench.ts` 的 `--help`、
+ * 2026-09-08 的起點是 19 條，DBCLI-020 把它收到 0。DBCLI-019 把 `startup.bench.ts` 的 `--help`、
  * `blacklist-performance.bench.ts` 的 flattened docs 與
  * `contiguous-section-matcher.bench.ts` 的 redactFields 換掉之後剩下這些。
  */
 const ABSOLUTE_TIME_BUDGETS: Record<string, number> = {
-  'blacklist-performance.bench.ts': 14,
+  'blacklist-performance.bench.ts': 0,
   'contiguous-section-matcher.bench.ts': 0,
-  'query.bench.ts': 4,
+  'query.bench.ts': 0,
   // 純報告，一條斷言都沒有。列在這裡是為了讓「每支 bench 檔都被算到」成立：
   // 新增一支 bench 而忘記登記，會在那一則失敗。
   'schema-performance.bench.ts': 0,
-  'startup.bench.ts': 1,
+  'startup.bench.ts': 0,
 }
 
 /** 比值、位元組與數量不隨負載變，不算在內。 */
@@ -62,6 +62,6 @@ describe('perf benches: absolute wall-clock assertions only shrink', () => {
 
   it('the total is the number DBCLI-019 left behind', () => {
     const total = Object.keys(ABSOLUTE_TIME_BUDGETS).reduce((sum, f) => sum + countIn(f), 0)
-    expect(total).toBe(19)
+    expect(total).toBe(0)
   })
 })

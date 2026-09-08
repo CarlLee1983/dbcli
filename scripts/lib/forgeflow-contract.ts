@@ -8,12 +8,19 @@
 // ## Why this exists at all
 //
 // DBCLI-018 upgraded the adopted contract from 0.3.2 to 0.6.0, which brings
-// Authority, Risk, Task mode and an Acceptance Evidence map. Every one of them
-// is enforced by an upstream checker and by nothing else, and those checkers
-// live in a ForgeFlow checkout this repository does not contain. So a version
-// bump on its own would have changed what a Story is permitted to say and
-// nothing about what is checked — the shape of adoption that produced the two
-// drifts DBCLI-013 and DBCLI-016 already had to close.
+// Authority, Risk, Task mode and an Acceptance Evidence map. Each is enforced
+// by an upstream checker and by nothing else, and those checkers live in a
+// ForgeFlow checkout this repository does not contain. So a version bump on its
+// own would have changed what a Story is permitted to say and nothing about
+// what is checked — the shape of adoption that produced the two drifts
+// DBCLI-013 and DBCLI-016 already had to close.
+//
+// Three of the four are closed by this gate. Authority, Risk and Task mode are
+// checked in `story-check`'s default mode, which is what runs here. The
+// Acceptance Evidence map is a `--ready` check, and this gate does not pass
+// `--ready`, so it is expressible and unenforced — including in DBCLI-018's own
+// Story. Adopting `--ready` needs its own exemption set for the twenty-five
+// Stories that predate it, so it is out of scope rather than quietly missing.
 //
 // The alternative was to reimplement the rules here. That was refused: the
 // sibling gate's header states outright that it "deliberately does not overlap
@@ -42,6 +49,50 @@
 // than tolerated: a new finding in an exempt Story fails, a finding that has
 // been fixed fails as a stale entry, and any Story not on the list must pass.
 // The list may shrink and never grow.
+
+/**
+ * What one run of an upstream checker actually said.
+ *
+ * The exit code is part of the reading, not a detail. Upstream reports
+ * operational failures — a missing, empty, unreadable or symlinked `story.md`
+ * or `acceptance.md` — on stderr with an `ERROR` prefix and exit 2, printing no
+ * `FAIL` lines at all. A reader that only looks for `FAIL` sees nothing wrong
+ * and counts the Story as clean, so a Story upstream *refused to read* was
+ * reported as satisfying the contract. That is the exact false PASS this gate
+ * exists to make impossible, and it was reproduced before this function
+ * existed.
+ *
+ * So the three outcomes are named. Anything that is not one of them — exit 0
+ * with findings, exit 1 without them, a checker that could not be spawned at
+ * all — is a failure of the gate rather than a verdict about a Story.
+ */
+export interface CheckerRun {
+  readonly exitCode: number
+  readonly output: string
+}
+
+/**
+ * Read a checker run, refusing to turn an unreadable result into a clean one.
+ *
+ * Returns the findings when the run is one this gate understands, or a string
+ * naming why the run itself cannot be trusted.
+ */
+export function readCheckerRun(subject: string, run: CheckerRun): Finding[] | string {
+  const findings = run.output
+    .split('\n')
+    .filter((line) => line.startsWith('FAIL'))
+    .map((line) => line.trim())
+
+  if (run.exitCode === 0 && findings.length === 0) return []
+  if (run.exitCode === 1 && findings.length > 0) return findings
+
+  const detail = run.output.trim() === '' ? '(no output)' : run.output.trim()
+  return (
+    `${subject}: the checker exited ${run.exitCode} with ${findings.length} FAIL line(s), ` +
+    `which is neither a clean run nor a set of findings — the gate cannot say whether ` +
+    `the contract is satisfied:\n\n${detail}`
+  )
+}
 
 /** One upstream finding, as the checker stated it, minus the path prefix. */
 export type Finding = string

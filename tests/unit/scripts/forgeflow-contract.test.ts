@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ADMITTED_FINDINGS,
+  readCheckerRun,
   ADMITTED_STORIES,
   checkoutRefusal,
   formatContractFailures,
@@ -128,5 +129,47 @@ describe('the exemption ratchet', () => {
     for (const [story, findings] of PREDATING_FINDINGS) {
       expect(new Set(findings).size, story).toBe(findings.length)
     }
+  })
+})
+
+describe('readCheckerRun', () => {
+  test('a clean run is no findings', () => {
+    expect(readCheckerRun('DBCLI-016', { exitCode: 0, output: 'PASS  all good\n' })).toEqual([])
+  })
+
+  test('a run with findings returns them', () => {
+    const read = readCheckerRun('DBCLI-016', { exitCode: 1, output: `FAIL  ${PROSE}\n` })
+
+    expect(read).toEqual([`FAIL  ${PROSE}`])
+  })
+
+  test('a Story upstream refused to read is not a clean Story', () => {
+    // The false PASS this function exists to prevent: upstream reports a
+    // missing or unreadable acceptance.md on stderr with an ERROR prefix and
+    // exit 2, printing no FAIL lines, and a reader that only looks for FAIL
+    // counts the Story as satisfying the contract it was never checked against.
+    const read = readCheckerRun('DBCLI-999', {
+      exitCode: 2,
+      output: 'ERROR required Story file is missing or unreadable\n',
+    })
+
+    expect(typeof read).toBe('string')
+    expect(read as string).toContain('DBCLI-999')
+    expect(read as string).toContain('exited 2')
+  })
+
+  test('a checker that could not be spawned is not a clean repository', () => {
+    // `.nothrow()` swallows the spawn failure, and every Story then yields zero
+    // findings — which reads exactly like a repository with nothing wrong.
+    const read = readCheckerRun('DBCLI-016', {
+      exitCode: 1,
+      output: 'bun: command not found: story-check\n',
+    })
+
+    expect(typeof read).toBe('string')
+  })
+
+  test('findings without a failing exit are refused too', () => {
+    expect(typeof readCheckerRun('DBCLI-016', { exitCode: 0, output: 'FAIL  x\n' })).toBe('string')
   })
 })

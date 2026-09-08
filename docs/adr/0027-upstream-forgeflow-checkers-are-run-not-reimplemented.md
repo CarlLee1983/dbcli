@@ -6,12 +6,23 @@ date: 2026-09-08
 # Upstream ForgeFlow's checkers are run, not reimplemented
 
 DBCLI-018 moved the adopted contract from 0.3.2 to 0.6.0, which brings
-Authority, Risk, Task mode and an Acceptance Evidence map. Every one of them is
-enforced by an upstream checker and by nothing else, and those checkers live in
-a ForgeFlow checkout this repository does not contain. So the version bump on
-its own would have changed what a Story is permitted to say and nothing about
-what is checked — an adoption that exists only as a number, which is the shape
-DBCLI-013 and DBCLI-016 each had to close after the fact.
+Authority, Risk, Task mode and an Acceptance Evidence map. Each is enforced by
+an upstream checker and by nothing else, and those checkers live in a ForgeFlow
+checkout this repository does not contain. So the version bump on its own would
+have changed what a Story is permitted to say and nothing about what is checked
+— an adoption that exists only as a number, which is the shape DBCLI-013 and
+DBCLI-016 each had to close after the fact.
+
+One of the four is not closed by this decision, and saying so is the point of
+this paragraph. Authority, Risk and Task mode are checked in `story-check`'s
+default mode, which is the mode CI runs. The Acceptance Evidence map is a
+readiness check: it runs only under `story-check --ready`, along with checkbox
+AC identifiers, Goal and Scope. This gate does not pass `--ready`, so Acceptance
+Evidence is available to authors and enforced by nobody — including in
+DBCLI-018's own Story, which fails `--ready` on exactly those two findings.
+Turning `--ready` on is a decision about every future Story and a second
+exemption set for the twenty-five that predate it; it is named out of scope in
+the Story rather than left to be discovered.
 
 Two ways to close it. Reimplement the rules in `scripts/`, offline, inside
 `make verify` — the shape of every other gate here. Or fetch the adopted

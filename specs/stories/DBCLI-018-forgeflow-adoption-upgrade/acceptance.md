@@ -66,6 +66,19 @@ that counts as passing.
 
 ## Failure Cases
 
+* [ ] A Story upstream refuses to read is not counted as a clean Story.
+      Evidence: with a Story directory whose `acceptance.md` is empty, upstream
+      exits 2 printing an `ERROR` line and no `FAIL` lines; the gate exits
+      non-zero quoting it. Before this was checked, that Story was counted as
+      satisfying the contract and the total simply went up by one.
+* [ ] A handoff that upstream cannot read is not "handoff contract OK".
+      Evidence: with `specs/handoff.md` emptied, upstream exits 2 with no `FAIL`
+      lines and the gate exits non-zero — the states the handoff contract exists
+      to prevent used to be reported as passing.
+* [ ] A checkout at the adopted revision that cannot run the checker is refused.
+      Evidence: with `scripts/` removed from the checkout, the gate exits
+      non-zero naming the missing `story-check`, rather than reading zero
+      findings for every Story.
 * [ ] A marker recording no revision is refused rather than defaulting.
       Evidence: the gate exits 1 naming `specs/.forgeflow-adoption`.
 * [ ] A Story directory that upstream reports on but that has no exemption entry
@@ -83,6 +96,17 @@ that counts as passing.
 * [ ] No Story file, other than this Story's own, is edited.
       Evidence: `git show <delivering commit> --name-only -- specs/stories/`
       names only `_template/` and `DBCLI-018-*`.
+
+## Known Limits
+
+The Acceptance Evidence map is expressible and unenforced. It is a
+`story-check --ready` check, and this gate runs the default mode; DBCLI-018's
+own Story fails `--ready` on exactly that finding and on checkbox AC
+identifiers. Adopting `--ready` is a decision about every future Story and needs
+a second exemption set for the twenty-five that predate it, so it is out of
+scope here — named rather than left to be discovered. Authority, Risk and Task
+mode are checked in the default mode and so are enforced from this Story
+onward.
 
 ## Verification Notes
 

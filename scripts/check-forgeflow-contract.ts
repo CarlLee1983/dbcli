@@ -20,6 +20,7 @@ import {
   checkoutRefusal,
   formatContractFailures,
   PREDATING_FINDINGS,
+  readCheckerRun,
   reconcileFindings,
   type StoryResult,
 } from './lib/forgeflow-contract'
@@ -51,6 +52,19 @@ if (refusal !== null) {
   process.exit(1)
 }
 
+/** Refuse rather than continue: an unusable run says nothing about any Story. */
+function refuse(reason: string): never {
+  console.error(`ForgeFlow contract check cannot run: ${reason}`)
+  process.exit(1)
+}
+
+// A checkout at the right revision can still be unusable — a partial clone, a
+// non-executable script. Bun's `.nothrow()` swallows the spawn failure and
+// hands back zero findings for every Story, which reads exactly like a clean
+// repository.
+const storyCheck = join(checkout as string, 'scripts/story-check')
+if (!(await Bun.file(storyCheck).exists())) refuse(`${storyCheck} does not exist`)
+
 const storiesRoot = join(repoRoot, 'specs/stories')
 const directories = (await Array.fromAsync(new Bun.Glob('*/story.md').scan({ cwd: storiesRoot })))
   .map((entry) => entry.replace(/[/\\]story\.md$/, ''))
@@ -60,17 +74,18 @@ const directories = (await Array.fromAsync(new Bun.Glob('*/story.md').scan({ cwd
 const results: StoryResult[] = []
 for (const directory of directories) {
   const path = join(storiesRoot, directory)
-  const checked = await $`${join(checkout as string, 'scripts/story-check')} ${path}`
-    .nothrow()
-    .quiet()
+  const checked = await $`${storyCheck} ${path}`.nothrow().quiet()
 
-  const output = `${checked.stdout.toString()}${checked.stderr.toString()}`
+  const read = readCheckerRun(directory, {
+    exitCode: checked.exitCode,
+    output: `${checked.stdout.toString()}${checked.stderr.toString()}`,
+  })
+
+  if (typeof read === 'string') refuse(read)
+
   results.push({
     story: directory,
-    findings: output
-      .split('\n')
-      .filter((line) => line.startsWith('FAIL'))
-      .map((line) => line.replace(`FAIL  ${path}: `, '').trim()),
+    findings: read.map((line) => line.replace(`FAIL  ${path}: `, '').trim()),
   })
 }
 
@@ -84,11 +99,18 @@ const handoff =
     .nothrow()
     .quiet()
 
-if (handoff.exitCode !== 0) {
-  const output = `${handoff.stdout.toString()}${handoff.stderr.toString()}`
-  for (const line of output.split('\n').filter((entry) => entry.startsWith('FAIL'))) {
-    failures.push({ subject: 'specs/handoff.md', reason: line.replace(/^FAIL\s+/, '') })
-  }
+const handoffRead = readCheckerRun('specs/handoff.md', {
+  exitCode: handoff.exitCode,
+  output: `${handoff.stdout.toString()}${handoff.stderr.toString()}`,
+})
+
+// A deleted, emptied or unreadable handoff exits non-zero with no FAIL lines —
+// the states the handoff contract exists to prevent — and used to be reported
+// as "handoff contract OK".
+if (typeof handoffRead === 'string') refuse(handoffRead)
+
+for (const line of handoffRead) {
+  failures.push({ subject: 'specs/handoff.md', reason: line.replace(/^FAIL\s+/, '') })
 }
 
 if (failures.length > 0) {

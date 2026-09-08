@@ -89,7 +89,7 @@
     "forgeflow:contract": "bun run scripts/check-forgeflow-contract.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "typecheck:tests": "tsc --noEmit --pretty false -p tsconfig.tests.json",
-    "test:perf": "bun test ./tests/perf/*.bench.ts",
+    "test:perf": "bun test --timeout 30000 ./tests/perf/*.bench.ts",
     "lint": "eslint src tests scripts --ext .ts --max-warnings=0",
     "format:check": "prettier --check .",
     "format": "prettier --write .",

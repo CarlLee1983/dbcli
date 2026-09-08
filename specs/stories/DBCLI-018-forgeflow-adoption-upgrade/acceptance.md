@@ -19,7 +19,8 @@ that counts as passing.
 * [ ] Upstream's checkers pass against this repository.
       Evidence: with a checkout at the adopted revision,
       `FORGEFLOW_ROOT=<checkout> bun run forgeflow:contract` → exit `0`,
-      reporting 25 Stories, 21 admitted findings and handoff contract OK.
+      reporting 26 Stories — the 25 that existed plus this one — 21 admitted
+      findings, and handoff contract OK.
 * [ ] `handoff-check` now passes where it used to fail.
       Evidence: upstream `handoff-check` on `specs/handoff.md` reports
       `HANDOFF_CONTRACT_OK`; under v0.3.2 the same file reported eight
@@ -39,7 +40,7 @@ that counts as passing.
       non-zero and names the commands that produce a usable checkout.
 * [ ] Every one of the 21 pre-existing findings is admitted exactly, by Story.
       Evidence: `PREDATING_FINDINGS` in
-      `scripts/check-forgeflow-contract.ts` lists 21 findings across
+      `scripts/lib/forgeflow-contract.ts` lists 21 findings across
       `DBCLI-PLAT-004`, `005`, `006`, `007` and `012`, each string identical to
       what upstream prints.
 * [ ] A new finding in an exempt Story fails; a fixed one fails as a stale
@@ -54,10 +55,11 @@ that counts as passing.
       fails as a stale entry; this is the other direction, which was a sentence
       in a header that nothing checked.
 * [ ] `make verify` is unchanged by this Story.
-      Evidence: `git show <delivering commit> --name-only` names no `Makefile`,
-      no `tests/contract/`, and no `src/`. Not `git diff main...HEAD`: this
-      branch is stacked on DBCLI-017, whose attestation work does change the
-      `Makefile`, so a range diff would attribute that change here.
+      Evidence: `git diff 284b5211..HEAD --name-only -- Makefile src
+      tests/contract` is empty. The range starts at DBCLI-017's delivered
+      commit, not at `main`: this branch is stacked on it, and its attestation
+      work does change the `Makefile`, so a diff from `main` would attribute
+      that change here.
 * [ ] The offline guarantee is intact.
       Evidence: `bun run forgeflow:check` — the only ForgeFlow step in
       `make verify` — exits `0` with `FORGEFLOW_ROOT` unset, and neither
@@ -93,9 +95,13 @@ that counts as passing.
 * [ ] DBCLI-016's refusal rules and DBCLI-017's attestation are untouched.
       Evidence: `bun run forgeflow:check` and the attestation unit tests pass
       unchanged.
-* [ ] No Story file, other than this Story's own, is edited.
-      Evidence: `git show <delivering commit> --name-only -- specs/stories/`
-      names only `_template/` and `DBCLI-018-*`.
+* [ ] No delivered Story's text is edited.
+      Evidence: `git diff 284b5211..HEAD --name-only -- specs/stories/` names
+      exactly five paths: this Story's two files, the two templates upstream's
+      bootstrap replaced, and `specs/stories/README.md`. The README carries the
+      canonical adoption declaration that `bun run forgeflow:check` compares
+      against the marker, so the upgrade cannot land without it. No file under a
+      delivered Story's directory appears.
 
 ## Known Limits
 

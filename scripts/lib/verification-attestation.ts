@@ -274,6 +274,18 @@ export function parseAttestation(text: string): Attestation {
     refuse('environment', 'is not a JSON object')
   }
 
+  // Types before values. `buildAttestation` narrows the strings by regex and
+  // the number by range, but it reads `dirty_worktree` as `x === true` — so a
+  // document saying `"yes"` used to rebuild as `false`, match its own hash, and
+  // be handed back with the flag flipped. Every other reader of that file sees
+  // a dirty worktree; this one saw a clean one, and said nothing.
+  if (typeof record.dirty_worktree !== 'boolean') {
+    refuse('dirty_worktree', `must be a boolean, got ${JSON.stringify(record.dirty_worktree)}`)
+  }
+  if (typeof record.exit_code !== 'number') {
+    refuse('exit_code', `must be a number, got ${JSON.stringify(record.exit_code)}`)
+  }
+
   const attestation = buildAttestation({
     repository: record.repository as string,
     revision: record.revision as string,
@@ -286,8 +298,14 @@ export function parseAttestation(text: string): Attestation {
   })
 
   // Rebuilding and comparing is the whole check: every derived field — the
-  // result, the duration, the hash — has to follow from the stated ones, so a
-  // document whose hash matches but whose `result` was edited is still refused.
+  // result, the duration, the hash — has to follow from the stated ones.
+  //
+  // The two comparisons are not redundant. The hash catches an edit to a stated
+  // field, because the rebuild then produces a different digest. The result and
+  // duration comparison catches the opposite forgery: a derived field edited
+  // while the legitimate hash is left in place, where the rebuilt digest still
+  // matches. Without it the reader would silently hand back the corrected
+  // values for a file that says something else.
   if (record.attestation_hash !== attestation.attestation_hash) {
     refuse(
       'attestation_hash',

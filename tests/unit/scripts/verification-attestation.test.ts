@@ -162,6 +162,32 @@ describe('parseAttestation', () => {
     expect(() => parseAttestation(text)).toThrow(/attestation_hash/)
   })
 
+  test('a flag stated as anything but a boolean is refused, not coerced', () => {
+    // `"yes"` used to rebuild as `false`, match its own hash, and be handed back
+    // with the worktree flag flipped: every other reader of that file saw a
+    // dirty worktree, this one saw a clean one and said nothing.
+    const document = JSON.parse(serialiseAttestation(buildAttestation(INPUT))) as Record<
+      string,
+      unknown
+    >
+    document.dirty_worktree = 'yes'
+
+    expect(() => parseAttestation(JSON.stringify(document))).toThrow(/dirty_worktree/)
+  })
+
+  test('a derived field edited under a legitimate hash is refused', () => {
+    // The two comparisons are not redundant. The hash catches an edit to a
+    // stated field; this catches the opposite forgery, where a derived field is
+    // edited and the original hash left in place, so the rebuild still matches.
+    const document = JSON.parse(serialiseAttestation(buildAttestation(INPUT))) as Record<
+      string,
+      unknown
+    >
+    document.result = 'FAIL'
+
+    expect(() => parseAttestation(JSON.stringify(document))).toThrow(/result or duration/)
+  })
+
   test('a field the schema does not define is refused', () => {
     const document = JSON.parse(serialiseAttestation(buildAttestation(INPUT))) as Record<
       string,

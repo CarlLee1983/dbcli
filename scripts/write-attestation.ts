@@ -119,6 +119,17 @@ try {
   if (phase === 'begin') {
     await begin()
   } else if (phase === 'finish') {
+    // `$$run` is unquoted in the recipe so that begin's three words arrive as
+    // three arguments. The count is checked here rather than quoted there: an
+    // extra word was accepted in silence, and a word prepended — one line of
+    // unexpected stdout, a future banner — shifted everything and produced an
+    // error naming the wrong problem.
+    if (rest.length !== 4) {
+      throw new Error(
+        `finish takes <status> <revision> <clean|dirty> <started-at>, got ${rest.length} argument(s): ${JSON.stringify(rest)}`
+      )
+    }
+
     const [status, revision, worktree, startedAt] = rest
     const exitCode = Number.parseInt(status ?? '', 10)
     if (!Number.isInteger(exitCode)) {

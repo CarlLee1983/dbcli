@@ -538,6 +538,102 @@ repository 沒有任何讀者。
 0.3.2 下還剩八條 `completed Story is not a Story ID: DBCLI-PLAT-*`，那是 0.3.2 的 Story
 ID 文法早於 `DBCLI-PLAT-*` 命名，0.6.0 已經放寬。不在這個 Story 的範圍，DBCLI-018 收。
 
+## DBCLI-017：驗證證據終於離得開這台機器
+
+`make verify` 現在會寫出一份 Verification Attestation：一個 revision、一個指令、
+一個結果，PASS 與 FAIL 都寫。檔案在 `.verification/attestation.json`，gitignored。
+理由記在 ADR-0026，名詞進了 `CONTEXT.md`。
+
+在此之前，驗證證據只存在 `.forgepilot/state.json`，而且只存在跑它的那台機器上。
+那個檔案是刻意 gitignored 的：commit 進去會弄髒下一次驗證要求乾淨的工作樹，而且
+「記下結果」這個動作本身要一個 commit，那個 commit 會立刻讓被記下的結果失效。
+DBCLI-016 的交付報告只能寫「Evidence ID 留在 ForgePilot 的 state 裡，刻意不抄在
+這裡」，就是撞到這件事。
+
+兩個事實決定了設計，而不是 schema：
+
+**ForgePilot 沒有 export。** 它在 `8ce2c12` 的指令是 init／migrate／goal／work／
+next／start／verify／gate／review／status，development plan 裡也沒有 export 的規劃。
+等它等於把交付綁在另一個 repo 的行程上；直接讀 `.forgepilot/state.json` 則是把 dbcli
+綁上 ForgePilot 的內部格式，那正是 DBCLI-014 畫掉的界線。
+
+**`make verify` 是那個固定的指令**（ForgePilot 的 `internal/work/evidence.go` 與其
+測試），而且它是唯一第一手看到結果的參與者。所以由 repository 自己寫，ForgePilot／
+CI／人事後讀檔案。整合介面是一個路徑加一個版本化 schema，誰都不 import 誰。
+
+### 兩個已經被佔用的名字
+
+`Evidence receipt`（`src/core/evidence-receipt/`）與 `Verification artifact`
+（`src/core/verification/`）都是**產品**的東西：記的是 dbcli 對資料庫做的一次操作，
+會出貨、有發布的 schema 版本。這份記的是一個 commit，讀的人是審查者或 CI。把它塞進
+任何一個，等於為了使用者看不見的理由去動一個已發布的版本號，還會把流程工具出貨給
+只想連資料庫的人。所以叫 Verification Attestation，`attestation` 在 dbcli 與
+ForgePilot 都沒被用過。
+
+### 兩個刻意的減法
+
+沒有 `work_item`、沒有 `story`。`make verify` 不知道這兩個值，只能由呼叫端傳進來，
+而**產生者查不了的欄位，記下來的就是呼叫端說了什麼**。ForgePilot 本來就用 revision
+綁 Evidence，可以照同一條路綁這份檔案。這是 deferred decision，重啟條件寫在 ADR-0026。
+
+也沒有 staleness。文件只說 revision；那個 revision 是不是還是 HEAD，每次問答案都不同，
+一份自己回答這題的檔案在寫完的下一刻就是錯的。
+
+### FAIL 也要留紀錄，代價是 recipe 裡多了一段 shell
+
+`make` 在第一個失敗的 step 就停，所以寫在最後一行的 attestation 只會描述通過的那次
+——最不需要證據的那次。24 個 step 現在包在一個 subshell 裡以 `&&` 串接，捕捉狀態、
+寫檔、再以同一個狀態 exit。每個 step 都還在、順序沒動、也都還是阻斷性的；
+`tests/contract/forgepilot-boundary.test.ts` 的 roster 一個字沒改，只是改成從 subshell
+裡讀，並且順便擋掉 `|| true`、前置 `-` 與把 `&&` 換成 `;` 這三種偷偷放行的寫法。
+
+實測過 FAIL 這條路：在第一個 step 前插一個 `false`，`make verify` 以非零結束，
+attestation 寫出 `result: FAIL`、`exit_code: 1`、revision 正確。注意 `exit_code` 記的是
+失敗那個 step 的狀態，不是 `make` 自己的錯誤碼——除錯的人要的是前者。
+
+### review 抓到的兩個 CRITICAL
+
+`set -o pipefail` 不是 POSIX。GNU Make 忽略環境的 `SHELL` 直接用 `/bin/sh`，而
+`integration` job 跑的 ubuntu runner 上 `/bin/sh` 是 dash——實測 `ubuntu:24.04`
+與 `ubuntu:22.04` 都回 `set: Illegal option -o pipefail` 並以 exit 2 中止，24 個
+step 一個都不會跑，attestation 也不會寫，而且失敗看起來像驗證失敗。本機測不出來，
+因為 macOS 的 `/bin/sh` 是 bash。那 24 個 step 裡沒有任何一個 pipe，所以 pipefail
+本來就是個什麼都不保護的致命 no-op，直接刪掉。
+
+roster parser 有六種寫法能一邊維持綠燈一邊把 gate 掏空：recipe 行前面加 `-`
+（make 忽略錯誤，`make verify` 在有 step 失敗時 exit 0）、`exit $status` 換成
+`exit 0`、在開括號那一行或閉括號之後夾帶額外指令、以及在檔案後面再定義一次
+`verify:`（make 跑最後一個）。共同成因是 parser 只讀 subshell 裡面那一半，
+scaffolding 整個被丟掉，而 `toContain` 是對整個檔案搜尋、註解也算數。改成把
+prologue 與 epilogue 五行逐字釘死；六種寫法現在全部會 fail，逐一實測過。
+
+### 測試自己會偽造 attestation
+
+Security Fixture Matrix 的第一版是 spawn 真正的 writer 去測，而 writer 寫的是
+canonical 路徑。結果是每跑一次 `bun test` 就在 `.verification/attestation.json`
+留下一份 hash 正確、`result: PASS`、綁著當時 HEAD 的 attestation——沒有任何驗證
+跑過。`parseAttestation` 會收下它：hash 證明的是內部一致，從來不是「有一次執行
+發生過」。
+
+在 CI 會真的出事：`bun run test` 是 24 個 step 裡的第 10 個，`integration` job 的
+timeout 是 20 分鐘而這輪大約 15 分鐘。一旦逾時或被取消，`finish` 不會跑，而
+`if: always()` 的上傳步驟會把**測試寫的那份**當成這次的結果傳上去，審查者下載到
+一份「從未被驗證過的 revision 的 PASS」。
+
+修法不是把測試指到暫存目錄，是讓那個性質不需要跑 writer 就能測：環境讀取抽成
+`readEnvironment(source)`，它對 `env` 做的唯一一件事是問 `CI` 在不在。「沒有任何
+環境變數的值進得了文件」因此從一句要人相信的話，變成可以餵一組敵意環境進去檢查的
+東西。順帶也解掉 `new URL(...).pathname` 在 Windows 與含空白／CJK 路徑上會壞的問題
+——沒有 spawn 就沒有那個路徑。
+
+另外兩道防線：`begin` 會先刪掉任何殘留的 attestation，所以被中斷的 run 不會讓上一次
+的判決被當成這一次的；contract test 掃描 `tests/` 裡任何 spawn writer 的寫法並拒絕
+（pattern 是組出來的，寫死會抓到自己）。實測過：加一個會 spawn 的測試進去，這條
+就變紅。
+
+把 step 清單搬進 `scripts/` runner 的那個選項沒有被否決，只是延後：DBCLI-019 要的
+per-step 時間與失敗步驟幾乎是免費的，該由那個 Story 重新評估，而不是在這裡先猜。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -572,22 +668,27 @@ workflow:
     - DBCLI-014
     - DBCLI-015
     - DBCLI-016
+    - DBCLI-017
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 141cf4c3ebc019b9693430bfaa1a9c1b2559ff90
+  commit: 980cc078b850f799615dce51b2993141b85c40c7
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
-    - specs/stories/DBCLI-016-forgepilot-lifecycle-authority/story.md
-    - specs/stories/DBCLI-016-forgepilot-lifecycle-authority/acceptance.md
-    - docs/adr/0025-the-handoff-records-delivery-not-a-work-queue.md
-    - scripts/lib/forgeflow-handoff.ts
-    - scripts/check-forgeflow-handoff.ts
-    - tests/unit/scripts/forgeflow-handoff.test.ts
-    - AGENTS.md
+    - specs/stories/DBCLI-017-portable-verification-attestation/story.md
+    - specs/stories/DBCLI-017-portable-verification-attestation/acceptance.md
+    - docs/adr/0026-a-verification-attestation-is-not-an-evidence-receipt.md
+    - scripts/lib/verification-attestation.ts
+    - scripts/write-attestation.ts
+    - tests/unit/scripts/verification-attestation.test.ts
+    - tests/contract/forgepilot-boundary.test.ts
+    - Makefile
+    - .gitignore
+    - .github/workflows/ci.yml
+    - CONTEXT.md
   known_unrelated_paths: []
 
 verification:

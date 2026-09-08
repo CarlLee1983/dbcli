@@ -56,3 +56,8 @@ graft/
 
 # ForgePilot local work-queue state — operational, not source (`forgepilot init`).
 .forgepilot/
+
+# Verification Attestation (DBCLI-017). Written by every `make verify` run,
+# never committed: a record inside the worktree would dirty the tree the next
+# verification refuses to run against, and each run would invalidate the last.
+.verification/

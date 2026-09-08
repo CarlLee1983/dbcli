@@ -67,6 +67,15 @@ A bounded, machine-readable record of one explicit dbcli operation. It proves
 what dbcli observed or verified under a particular governed context; it never
 contains database rows, unredacted SQL, credentials, or an agent's conclusion.
 
+**Verification attestation**:
+A bounded, machine-readable record of one `make verify` run against one
+repository revision, written by that run and never committed. Its subject is a
+commit, not a database, and its reader is a reviewer, a CI job, or ForgePilot —
+so it is not an evidence receipt and not a verification artifact, and it lives
+in `scripts/` rather than being shipped. It states a revision; whether that
+revision is still HEAD is the reader's question, never the document's.
+_Avoid_: verification receipt, evidence receipt, build attestation
+
 **Evidence pack**:
 A reviewable collection that connects one or more human- or agent-authored
 claims to evidence receipts, verification artifacts, and audit references. A

@@ -181,6 +181,43 @@ describe('the verification attestation is repository tooling, not product', () =
     expect(offenders).toEqual([])
   })
 
+  test('no test can forge the artifact', async () => {
+    // A test that spawned the writer left a hash-valid PASS attestation for
+    // whatever HEAD was, produced by no verification at all — and `bun run test`
+    // is step 10 of 24, with the CI upload running `if: always()`. A job killed
+    // after step 10 would have published it. The environment read is a function
+    // over an argument for exactly this reason: the property is testable
+    // without anything running the writer.
+    const suites = await readdir(join(ROOT, 'tests'), { recursive: true, withFileTypes: true })
+
+    // Naming the writer is fine — this file pins the Makefile lines that call
+    // it. Running it is not, so what is looked for is a spawn: the mention with
+    // a process-starting call close enough above it to be the thing starting it.
+    // Assembled rather than written out, because a check for its own text finds
+    // itself: the previous version's regex literal was the only match.
+    const writer = ['write', 'attestation'].join('-')
+    const RUNS = new RegExp(
+      `(?:spawnSync|spawn|execFileSync|execSync|exec)\\b[\\s\\S]{0,400}?${writer}`
+    )
+
+    const offenders: string[] = []
+    for (const entry of suites) {
+      if (!entry.isFile() || !/\.ts$/.test(entry.name)) continue
+      const path = join(entry.parentPath, entry.name)
+      // Comments are stripped first, or this file's own explanation of what it
+      // looks for would be the thing it finds.
+      const source = (await readFile(path, 'utf8'))
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+
+      if (RUNS.test(source) || new RegExp(`\\$\`[^\`]*${writer}`).test(source)) {
+        offenders.push(path.slice(ROOT.length + 1))
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
   test('the published package does not carry it', async () => {
     const manifest = JSON.parse(await readRoot('package.json')) as { files?: string[] }
     const published = manifest.files ?? []

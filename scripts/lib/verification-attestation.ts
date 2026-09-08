@@ -163,6 +163,33 @@ function checkEnvironment(environment: AttestationEnvironment): AttestationEnvir
 }
 
 /**
+ * Read the bounded environment description from a process's own facts.
+ *
+ * The whole of what this does with `env` is ask whether `CI` is set. That is
+ * the point of it being a function over an argument rather than a read of
+ * `process.env` somewhere in the writer: "no environment variable's value
+ * reaches the document" stops being a promise a reviewer has to trust and
+ * becomes something a test can hand a hostile environment to and check.
+ *
+ * The value of `CI` is never copied. Presence is what a reader needs, and a
+ * copied value is one field's worth of harmless CI output today and an
+ * arbitrary caller-supplied string tomorrow.
+ */
+export function readEnvironment(source: {
+  readonly env: Readonly<Record<string, string | undefined>>
+  readonly platform: string
+  readonly arch: string
+  readonly bun: string
+}): AttestationEnvironment {
+  return {
+    os: source.platform,
+    arch: source.arch,
+    bun: source.bun,
+    ci: source.env.CI !== undefined,
+  }
+}
+
+/**
  * Build an attestation, refusing anything the repository cannot state.
  *
  * Validation is not defence against a hostile caller — the only caller is this

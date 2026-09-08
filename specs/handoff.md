@@ -607,6 +607,30 @@ roster parser 有六種寫法能一邊維持綠燈一邊把 gate 掏空：recipe
 scaffolding 整個被丟掉，而 `toContain` 是對整個檔案搜尋、註解也算數。改成把
 prologue 與 epilogue 五行逐字釘死；六種寫法現在全部會 fail，逐一實測過。
 
+### 測試自己會偽造 attestation
+
+Security Fixture Matrix 的第一版是 spawn 真正的 writer 去測，而 writer 寫的是
+canonical 路徑。結果是每跑一次 `bun test` 就在 `.verification/attestation.json`
+留下一份 hash 正確、`result: PASS`、綁著當時 HEAD 的 attestation——沒有任何驗證
+跑過。`parseAttestation` 會收下它：hash 證明的是內部一致，從來不是「有一次執行
+發生過」。
+
+在 CI 會真的出事：`bun run test` 是 24 個 step 裡的第 10 個，`integration` job 的
+timeout 是 20 分鐘而這輪大約 15 分鐘。一旦逾時或被取消，`finish` 不會跑，而
+`if: always()` 的上傳步驟會把**測試寫的那份**當成這次的結果傳上去，審查者下載到
+一份「從未被驗證過的 revision 的 PASS」。
+
+修法不是把測試指到暫存目錄，是讓那個性質不需要跑 writer 就能測：環境讀取抽成
+`readEnvironment(source)`，它對 `env` 做的唯一一件事是問 `CI` 在不在。「沒有任何
+環境變數的值進得了文件」因此從一句要人相信的話，變成可以餵一組敵意環境進去檢查的
+東西。順帶也解掉 `new URL(...).pathname` 在 Windows 與含空白／CJK 路徑上會壞的問題
+——沒有 spawn 就沒有那個路徑。
+
+另外兩道防線：`begin` 會先刪掉任何殘留的 attestation，所以被中斷的 run 不會讓上一次
+的判決被當成這一次的；contract test 掃描 `tests/` 裡任何 spawn writer 的寫法並拒絕
+（pattern 是組出來的，寫死會抓到自己）。實測過：加一個會 spawn 的測試進去，這條
+就變紅。
+
 把 step 清單搬進 `scripts/` runner 的那個選項沒有被否決，只是延後：DBCLI-019 要的
 per-step 時間與失敗步驟幾乎是免費的，該由那個 Story 重新評估，而不是在這裡先猜。
 

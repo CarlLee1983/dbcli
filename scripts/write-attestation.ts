@@ -16,14 +16,14 @@
  * PASS.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { $ } from 'bun'
 import {
   buildAttestation,
+  readEnvironment,
   serialiseAttestation,
-  type AttestationEnvironment,
 } from './lib/verification-attestation'
 
 const REPOSITORY = 'CarlLee1983/dbcli'
@@ -34,14 +34,13 @@ const attestationPath = join(outputDirectory, 'attestation.json')
 
 const instant = () => new Date().toISOString().replace(/\.(\d{3})\d*Z$/, '.$1Z')
 
-const environment = (): AttestationEnvironment => ({
-  os: process.platform,
-  arch: process.arch,
-  bun: Bun.version,
-  // Presence only. Copying the value would be harmless CI output today and an
-  // arbitrary caller-supplied string tomorrow.
-  ci: process.env.CI !== undefined,
-})
+const environment = () =>
+  readEnvironment({
+    env: process.env,
+    platform: process.platform,
+    arch: process.arch,
+    bun: Bun.version,
+  })
 
 /**
  * Print what the run started as, for `finish` to be handed back.
@@ -68,6 +67,12 @@ async function begin(): Promise<void> {
 
   const status = await $`git status --porcelain`.cwd(repoRoot).nothrow().quiet()
   if (status.exitCode !== 0) throw new Error('git status --porcelain failed')
+
+  // Any attestation still lying here belongs to an earlier run. Left in place,
+  // a run killed before `finish` — a CI timeout, a cancelled job — would let
+  // `if: always()` publish the previous run's verdict as this one's. No file is
+  // the honest answer to "was this revision verified"; a stale file is not.
+  await rm(attestationPath, { force: true })
 
   const worktree = status.text().trim().length > 0 ? 'dirty' : 'clean'
   console.log(`${resolved.text().trim()} ${worktree} ${instant()}`)

@@ -879,6 +879,72 @@ PLAT-012 各自的 trust-boundary 一條。Classification 矛盾這一類已經�
 
 沒有動 acceptance，沒有動 `src/`。
 
+## DBCLI-024／025／026：清單歸零，以及散文藏著的兩件事
+
+剩下的十八條一次收完，`PREDATING_FINDINGS` 現在是空的，兩個計數都是 0。五輪
+下來每一條都是拿程式碼重推宣告，沒有一條是替上游挑剔的那句話加反引號。
+
+**最值得留下的一句：把二十一條逐條列出來而不是記一個數字，是對的。** 因為
+checker 的輸出裡，「這格措辭鬆」跟「這列什麼都沒測」是同一行字。
+
+### PLAT-006：三列 fixture 什麼都沒斷言
+
+六條 finding 全是 `states verification as prose`。換成檔案路徑是兩分鐘的事，而
+且對其中一半是錯的：
+
+| 列 | payload | 宣稱 | 原本實際有的 |
+| --- | --- | --- | --- |
+| 1 | `DBCLI-PLAT-006` | preserve，兩個 sink | 只有 audit |
+| 2 | `INC-2026.09.05` | preserve，兩個 sink | 只有 envelope |
+| 3 | `../../PLAT006_PATH` | reject | 有 |
+| 4 | `postgresql://plat006:…` | reject | 沒有 |
+| 5 | `SELECT * FROM users…` | reject | 沒有 |
+| 6 | `PLAT006_RAW_ERROR_SENTINEL` | preserve，兩個 sink | 全 repo 找不到這個字串 |
+
+第 4、5 列最危險，因為它們**看起來有**：payload 確實出現在
+`tests/unit/core/operation-envelope.test.ts`，但那測的是
+`OperationEnvelope.context.correlationId`——矩陣裡另有一列專測它的**另一個 source
+field**。拿它當引用會是一個能解析、讀起來合理、卻對該列什麼都沒證明的引用。那比
+散文更糟，散文至少沒指名檔案。
+
+補的是斷言不是行為：`CORRELATION_ID_PATTERN` 是
+`/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/`，三個 reject payload 各含一個不在字元集裡
+的字元，三個 preserve payload 都符合。新測試對未修改的 `src/` 一次就過，這正是
+「找到的是覆蓋缺口不是缺陷」的證據。
+
+### PLAT-007：第八列的機制不存在
+
+七列都推得出具名欄位。第八列 `command stdout/stderr` 推不出來——因為沒有任何被
+捕獲的行程輸出會進 evidence receipt。fixture 裡 `PLAT007_UNBOUNDED_OUTPUT` 是跟
+`PLAT007_ROW_SENTINEL` 同一個 diagnostic 結果的另一個欄位，兩者都走
+`ReportFinding.rows`。列是真的、payload 是真的，標籤描述的機制是假的。現在它跟第
+一列共用 source field、以 payload 區分——誠實的重複，好過發明一個區別。
+
+### PLAT-012：宣告講的是風險，程式碼給的是保證
+
+row 10 的 persisted locations 原本寫 `stderr, audit entry`，那是**替代字串**的去處，
+不是 payload 的去處，而那一欄問的是後者。`cacheWriteReason` 從不引用被捕獲錯誤的
+`.message`：`SchemaCacheWriteError` 給自己那句（依建構就不含路徑），`ConfigError`
+給固定句，其餘一律換成 `The local schema cache could not be written.`。原始訊息是
+被丟棄不是被遮蔽，redaction 工具根本沒機會看到它。所以是 `none`，跟 PLAT-004 自己
+的 `redact` 列同一個慣例。
+
+順帶查清楚但沒改：分類後的字串確實會進 audit entry，位置是**頂層 `error` 欄位**
+而不是 `metadata` 底下，而且只在 audit 啟用時；被引用的 fixture 剛好把 audit 關掉。
+這些都不屬於那一格，記在這裡。
+
+### 空清單不是「不再檢查」
+
+`PREDATING_FINDINGS` 與兩個計數留著。空的意思是棘輪到底了：任何一條 finding 現在
+都會讓 gate 紅，而要加回一條就得**調低**——不能調高——那兩個數字。
+
+### 一個沒有修的落差
+
+DBCLI-022／023 的 `## Authority` 都宣告 `push: no`，實際上那個分支被 push 了，因為
+人類當場授權。沒有回頭改那兩份 Story：Authority 記的是核可當下授予了什麼，不是後
+來發生了什麼，而改寫已核可 Story 的內文正是 DBCLI-021 自己 Out of Scope 拒絕的事。
+記在這裡，讓落差有地方可查。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -923,9 +989,27 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 01ee82ecab07a7de6f6b870efa927a0e4f473bb7
+  commit: 38f6241e0d5bc620ed4cae918ebf3fee05a73b57
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-024-plat-012-cache-write-failure-field/story.md
+    - specs/stories/DBCLI-024-plat-012-cache-write-failure-field/acceptance.md
+    - specs/stories/DBCLI-025-plat-006-verification-that-exists/story.md
+    - specs/stories/DBCLI-025-plat-006-verification-that-exists/acceptance.md
+    - specs/stories/DBCLI-026-plat-007-receipt-source-fields/story.md
+    - specs/stories/DBCLI-026-plat-007-receipt-source-fields/acceptance.md
+    - specs/stories/DBCLI-PLAT-006-correlation-id/acceptance.md
+    - specs/stories/DBCLI-PLAT-007-bounded-evidence-receipts/story.md
+    - specs/stories/DBCLI-PLAT-007-bounded-evidence-receipts/acceptance.md
+    - specs/stories/DBCLI-PLAT-012-schema-cache-write-boundary/story.md
+    - specs/stories/DBCLI-PLAT-012-schema-cache-write-boundary/acceptance.md
+    - tests/integration/lazy-entry-path.test.ts
+    - tests/integration/capabilities-command.test.ts
+    - tests/unit/core/audit/integration-helper.test.ts
+    - docs/adr/ADR-0026-a-verification-attestation-is-not-an-evidence-receipt.md
+    - docs/adr/ADR-0027-upstream-forgeflow-checkers-are-run-not-reimplemented.md
+    - docs/adr/ADR-0028-masking-cost-is-observable-without-a-clock.md
+    - docs/adr/ADR-0029-decision-records-are-named-so-the-contract-can-resolve-them.md
     - specs/stories/DBCLI-023-faithful-plat-005-classification/story.md
     - specs/stories/DBCLI-023-faithful-plat-005-classification/acceptance.md
     - specs/stories/DBCLI-PLAT-005-agent-json-mode/story.md

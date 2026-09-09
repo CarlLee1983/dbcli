@@ -103,9 +103,22 @@ remain authoritative.
 
 * `--evidence-receipt <path>` — caller-controlled path; must remain within the
   real workspace and must not overwrite an existing file.
-* Command inputs and outputs — may contain SQL, rows, paths, errors, or secrets;
-  none may enter a receipt.
+* `ReportFinding.rows`, `LintReport.sql`, `ConnectionOptions.password`,
+  `ConnectionOptions.uri`, `ConnectionError.message`, `ProxyEvent.sessionId`,
+  and `DesignValidationError.filePath` — the seven fields a command genuinely
+  reaches while producing a receipt. Each one demonstrably reaches the
+  command's own stdout, stderr or on-disk input; none may enter a receipt.
+  The receipt is bounded by construction rather than by filtering: its parser
+  allows an exact key set, and `buildEvidenceReceiptContext` populates
+  `context` from only `connection.system`, `effectiveConnectionName`,
+  `effectiveEnvironment` and two SHA-256 fingerprints, so there is no field for
+  a row, a credential, a statement or an error body to occupy.
 * `--correlation-id` — caller-controlled but already grammar-validated opaque ID;
   it is the only caller value permitted as a correlation reference.
-* Receipt JSON — persisted and externally consumed; parse strictly and reject
-  unknown fields and unsafe content.
+* `version`, `id`, `createdAt`, `operation`, `outcome`, `context`,
+  `provenance`, `replay` and `observation` — the nine top-level keys of a
+  receipt read back from disk. A receipt is persisted and externally consumed,
+  so on the way back in it is a document from a producer this reader does not
+  control: the parser allows exactly this key set and rejects anything else,
+  including an unknown key nested inside `context`, `provenance` or
+  `observation`.

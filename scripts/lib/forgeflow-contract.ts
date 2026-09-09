@@ -39,22 +39,21 @@
 // ## The exemptions are a ratchet
 //
 // Five delivered Stories failed upstream `story-check` when this gate was
-// written, on twenty-one findings that have nothing to do with the upgrade:
-// they failed identically under 0.3.2, and nothing ran the checker, so nobody
-// knew. Rewriting the acceptance text of Stories a human has already accepted
-// is a change to the record, not a formatting fix — sixteen of the findings are
-// matrix cells whose real values have to be re-derived from the code. That is
-// its own Story.
+// written, on twenty-one findings that had nothing to do with the upgrade: they
+// failed identically under 0.3.2, and nothing ran the checker, so nobody knew.
 //
-// DBCLI-022 and DBCLI-023 removed the first two, which is what the list
-// shrinking looks like: each finding named a declaration that did not say what
-// the code does, so the declarations were re-derived against the code rather
-// than backticked to please the checker. PLAT-005 also carried the one
-// Classification contradiction — `Baseline conformance: no` beside a
-// `## Superseded Behavior` section — resolved by correcting the declaration,
-// because the section's content was true and four sibling Stories use `yes` for
-// exactly that shape. Three Stories and eighteen findings remain: sixteen
-// security-fixture cells and two more trust-boundary sections.
+// The list is now empty. DBCLI-022 and DBCLI-023 took PLAT-004's and PLAT-005's
+// out; DBCLI-024, DBCLI-025 and DBCLI-026 took the remaining eighteen. Every
+// one was fixed by re-deriving the declaration against the code it describes,
+// never by backticking the sentence upstream objected to.
+//
+// Two of them were not wording at all, which is the argument for having listed
+// them exactly rather than tolerating a count. PLAT-005 declared
+// `Baseline conformance: no` beside a `## Superseded Behavior` section, and the
+// declaration was the wrong half. PLAT-006's six fixture rows named their
+// verification as prose, and three of them had nothing asserting them at all —
+// two rejected payloads and one preserved payload that appeared nowhere under
+// `tests/`. The prose was hiding missing coverage, not untidy wording.
 //
 // Until then the findings are listed, exactly, so that they are bounded rather
 // than tolerated: a new finding in an exempt Story fails, a finding that has
@@ -287,72 +286,18 @@ export function formatContractFailures(failures: readonly ContractFailure[]): st
 }
 
 /**
- * Findings that predate this gate, exactly as upstream `story-check` states
- * them.
- *
- * All twenty-one failed identically under 0.3.2; the upgrade did not cause one
- * of them. They are three kinds of wording — a trust-boundary field written as
- * prose, a security fixture cell written as prose instead of an exact value in
- * backticks, and one Story whose Classification contradicts its own Superseded
- * Behavior section. Fixing them means re-deriving sixteen matrix cells from the
- * code they describe and editing acceptance text a human already accepted, so
- * it is its own Story rather than a paragraph of DBCLI-018.
- *
- * Eighteen across three Stories remain; DBCLI-022 took PLAT-004's out and
- * DBCLI-023 took PLAT-005's, which was also the only Classification
- * contradiction. What is left is sixteen security-fixture cells stating a value
- * as prose — the ones that have to be re-derived from the code — and the
- * trust-boundary sections of PLAT-007 and PLAT-012.
- *
- * The ratchet's two directions are enforced differently, and the difference is
- * worth knowing. Shrinking is mechanical: a finding that has been fixed makes
- * the gate fail as a stale entry. Growing is caught by the counts below, which
- * a test compares this map against — adding an entry fails until someone
- * lowers, never raises, those numbers, which is the deliberate act the rule is
- * asking for. Neither direction is left to a reviewer noticing.
- */
-export const PREDATING_FINDINGS: Exemptions = new Map([
-  [
-    'DBCLI-PLAT-006-correlation-id',
-    [
-      'security fixture row 1 states verification as prose instead of an exact value',
-      'security fixture row 2 states verification as prose instead of an exact value',
-      'security fixture row 3 states verification as prose instead of an exact value',
-      'security fixture row 4 states verification as prose instead of an exact value',
-      'security fixture row 5 states verification as prose instead of an exact value',
-      'security fixture row 6 states verification as prose instead of an exact value',
-    ],
-  ],
-  [
-    'DBCLI-PLAT-007-bounded-evidence-receipts',
-    [
-      'security fixture row 1 states source field as prose instead of an exact value',
-      'security fixture row 2 states source field as prose instead of an exact value',
-      'security fixture row 3 states source field as prose instead of an exact value',
-      'security fixture row 4 states source field as prose instead of an exact value',
-      'security fixture row 5 states source field as prose instead of an exact value',
-      'security fixture row 6 states source field as prose instead of an exact value',
-      'security fixture row 7 states source field as prose instead of an exact value',
-      'security fixture row 8 states source field as prose instead of an exact value',
-      'every trust-boundary field must name an exact field, not prose',
-    ],
-  ],
-  [
-    'DBCLI-PLAT-012-schema-cache-write-boundary',
-    [
-      'security fixture row 10 states source field as prose instead of an exact value',
-      'security fixture row 10 states persisted locations as prose instead of an exact value',
-      'every trust-boundary field must name an exact field, not prose',
-    ],
-  ],
-])
-
 /**
- * How many findings this repository has admitted to, and across how many
- * Stories.
+ * Findings this repository has admitted to, exactly as upstream `story-check`
+ * states them.
  *
- * These numbers may be lowered and never raised. They exist so that "the list
- * may shrink and never grow" is a check rather than a sentence in a header.
+ * Empty, and that is the point of the type still existing: the ratchet is at
+ * its floor, so every Story must pass upstream cleanly and any finding at all
+ * now fails the gate. An entry may be added back only by lowering — never
+ * raising — the two counts below, which is the deliberate act the rule asks
+ * for, and `tests/unit/scripts/forgeflow-contract.test.ts` is what makes it
+ * one.
  */
-export const ADMITTED_FINDINGS = 18
-export const ADMITTED_STORIES = 3
+export const PREDATING_FINDINGS: Exemptions = new Map()
+
+export const ADMITTED_FINDINGS = 0
+export const ADMITTED_STORIES = 0

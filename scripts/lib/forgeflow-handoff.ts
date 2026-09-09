@@ -458,6 +458,87 @@ export function shallowCloneRefusal(isShallowOutput: string): string | null {
 }
 
 /**
+ * Permissions a delivered Story necessarily exercised.
+ *
+ * Delivery here means a merged pull request: the work was committed and the
+ * branch was pushed. Nothing else on the Authority list is implied — `deploy`,
+ * `migration` and `add_dependency` are unconstrained by delivery, and Authority
+ * is per-permission by contract.
+ */
+const DELIVERY_IMPLIES: readonly string[] = ['commit', 'push']
+
+/**
+ * Read one permission from a Story's `## Authority` section.
+ *
+ * `undefined` when the Story declares no Authority at all, or declares that
+ * section without this permission — the section is optional, and a Story making
+ * no claim has nothing to contradict.
+ */
+export function readAuthority(source: string, permission: string): 'yes' | 'no' | undefined {
+  const section = source.split(/^## /m).find((part) => part.startsWith('Authority'))
+  if (section === undefined) return undefined
+
+  const pattern = new RegExp(`^\\* ${permission}:\\s*(\\S+)\\s*$`)
+  for (const line of section.split('\n')) {
+    const match = line.match(pattern)
+    if (match === null) continue
+    return match[1] === 'yes' || match[1] === 'no' ? (match[1] as 'yes' | 'no') : undefined
+  }
+
+  return undefined
+}
+
+/**
+ * Refuse a delivered Story that says it was not allowed to do what delivering it
+ * required.
+ *
+ * `completed_stories` is the repository's own statement that the Story reached
+ * `main`, which it can only have done as commits on a pushed branch. So a
+ * completed Story declaring `commit: no` or `push: no` is not recording a
+ * permission that was withheld; it is contradicting the handoff two files away.
+ *
+ * This exists because the declaration was wrong every time it was made. All
+ * eight Stories that had ever declared Authority said `push: no` and three also
+ * said `commit: no`, while every one of them reached `main` — a template field
+ * nobody filled in rather than a decision anybody made. A value that has never
+ * once been true is not a control, and what let it survive was that nothing
+ * compared it to anything. ADR-0030.
+ *
+ * Only the two permissions delivery actually implies are checked. Authority is
+ * per-permission and nothing implies anything else, so a delivered Story may
+ * still truthfully declare `deploy: no`.
+ */
+export function reconcileDeliveryAuthority(
+  lifecycle: Lifecycle,
+  directories: ReadonlyMap<string, string>,
+  stories: Iterable<StorySource>
+): Failure[] {
+  const sources = new Map([...stories].map(({ directory, source }) => [directory, source]))
+  const failures: Failure[] = []
+
+  for (const story of lifecycle.completedStories) {
+    const directory = directories.get(story)
+    if (directory === undefined) continue
+
+    const source = sources.get(directory)
+    if (source === undefined) continue
+
+    for (const permission of DELIVERY_IMPLIES) {
+      if (readAuthority(source, permission) !== 'no') continue
+      failures.push({
+        story,
+        reason:
+          `is recorded as completed but its ## Authority declares \`${permission}: no\` — a delivered ` +
+          'Story reached main as commits on a pushed branch, so correct the declaration or stop ' +
+          'recording it as completed',
+      })
+    }
+  }
+
+  return failures
+}
+
+/**
  * Compare every delivery claim against the repository.
  *
  * `DELIVERED_BEFORE_TRAILERS` is a ratchet, not an amnesty: it may shrink and

@@ -57,7 +57,7 @@ fixture rows assert nothing" are the same line in the checker's output.
 * add_dependency: no
 * migration: no
 * commit: yes
-* push: no
+* push: yes
 * deploy: no
 
 ## Architecture

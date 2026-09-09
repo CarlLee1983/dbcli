@@ -53,7 +53,7 @@ risk instead of the guard.
 * add_dependency: no
 * migration: no
 * commit: yes
-* push: no
+* push: yes
 * deploy: no
 
 ## Architecture

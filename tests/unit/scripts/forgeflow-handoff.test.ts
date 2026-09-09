@@ -71,12 +71,22 @@ const NO_EXEMPTIONS: ReadonlyMap<string, Exemption> = new Map()
 const present = async () => true
 const absent = async () => false
 
-/** The default reconciliation: everything backed, nothing exempt. */
+/**
+ * The default reconciliation: everything backed and everything delivered
+ * recorded, nothing exempt.
+ *
+ * The trailer set matches `completed_stories` exactly. It used to carry a third
+ * ID the handoff did not record, which was harmless while the gate only asked
+ * whether recorded Stories had evidence and became a failure in every test the
+ * moment it also asked whether delivered Stories were recorded. A default
+ * fixture has to be clean in both directions, or every test that uses it is
+ * asserting against a handoff that is already broken.
+ */
 function inputs(overrides: Partial<Parameters<typeof reconcile>[0]> = {}) {
   return {
     lifecycle: readLifecycle(BODY).lifecycle,
     directories: DIRECTORIES,
-    trailers: new Set(['DBCLI-001', 'DBCLI-PLAT-001', 'DBCLI-PLAT-013']),
+    trailers: new Set(['DBCLI-001', 'DBCLI-PLAT-001']),
     exemptions: NO_EXEMPTIONS,
     commitExists: present,
     ...overrides,
@@ -314,6 +324,7 @@ describe('reconcile', () => {
     const failures = await reconcile(
       inputs({
         lifecycle: { completedStories: ['DBCLI-001'] },
+        trailers: new Set(['DBCLI-001']),
       })
     )
     expect(failures).toEqual([])
@@ -323,6 +334,7 @@ describe('reconcile', () => {
     const failures = await reconcile(
       inputs({
         lifecycle: { completedStories: ['DBCLI-PLAT-001'] },
+        trailers: new Set(['DBCLI-PLAT-001']),
       })
     )
     expect(failures).toEqual([])
@@ -334,7 +346,7 @@ describe('reconcile', () => {
 
   test('a completed Story with no directory fails closed', async () => {
     const failures = await reconcile(
-      inputs({ lifecycle: { completedStories: ['DBCLI-PLAT-004'] } })
+      inputs({ lifecycle: { completedStories: ['DBCLI-PLAT-004'] }, trailers: new Set<string>() })
     )
     expect(failures).toHaveLength(1)
     expect(failures[0]!.story).toBe('DBCLI-PLAT-004')
@@ -388,6 +400,87 @@ describe('reconcile', () => {
       })
     )
     expect(failures.map((failure) => failure.story)).toContain('DBCLI-777')
+  })
+})
+
+describe('a delivery this history claims is recorded', () => {
+  // The forward direction — every recorded Story has evidence — has never been
+  // able to catch an omission, and the list rotted twice: DBCLI-027 found
+  // DBCLI-022 to DBCLI-026 delivered and unrecorded, and reconciling DBCLI-028
+  // found DBCLI-027 had left itself out of the same list. Both were noticed by
+  // a human. ADR-0032.
+  test('a Story delivered in this history and not recorded fails by name', async () => {
+    const failures = await reconcile(
+      inputs({
+        lifecycle: { completedStories: ['DBCLI-001'] },
+        trailers: new Set(['DBCLI-001', 'DBCLI-PLAT-013']),
+      })
+    )
+
+    expect(failures.map((failure) => failure.story)).toEqual(['DBCLI-PLAT-013'])
+    expect(failures[0]!.reason).toMatch(/completed_stories/)
+  })
+
+  test('a trailer for a Story this repository does not contain is not reported', async () => {
+    // DBCLI-PLAT-008 was accepted against an issue and has no Story directory.
+    // Demanding a handoff entry for it would invent a Story rather than
+    // reconcile one.
+    const failures = await reconcile(
+      inputs({ trailers: new Set([...inputs().trailers, 'DBCLI-PLAT-008']) })
+    )
+
+    expect(failures).toEqual([])
+  })
+
+  test('an authored Story nobody has delivered is not a delivery', async () => {
+    // A directory with no trailer is work in progress. Only the trailer says
+    // the work was delivered, which is the same evidence the forward rule reads,
+    // so `DBCLI-PLAT-013` — indexed, never delivered — is reported by neither.
+    const failures = await reconcile(
+      inputs({
+        lifecycle: { completedStories: ['DBCLI-001'] },
+        trailers: new Set(['DBCLI-001']),
+      })
+    )
+
+    expect(failures).toEqual([])
+  })
+
+  test('both directions decide against one set of trailers', async () => {
+    // One history, read once. A rule whose verdict differs between a local
+    // branch and the same branch in CI is the split DBCLI-028 removed, and two
+    // scopes here would rebuild it: `--all` cannot drive the reverse rule,
+    // because an unmerged branch would demand entries for Stories this tree has
+    // not delivered.
+    const failures = await reconcile(
+      inputs({
+        lifecycle: { completedStories: ['DBCLI-001', 'DBCLI-PLAT-001'] },
+        trailers: new Set(['DBCLI-PLAT-001', 'DBCLI-PLAT-013']),
+      })
+    )
+
+    expect(failures.map((failure) => failure.story).sort()).toEqual(['DBCLI-001', 'DBCLI-PLAT-013'])
+    expect(failures.find((failure) => failure.story === 'DBCLI-001')!.reason).toMatch(
+      /`Story:` trailer/
+    )
+    expect(failures.find((failure) => failure.story === 'DBCLI-PLAT-013')!.reason).toMatch(
+      /completed_stories/
+    )
+  })
+
+  test('a Story recorded under an exemption is not demanded twice', async () => {
+    // The exemption backs a Story delivered before trailers existed. It has no
+    // trailer, so the reverse rule has nothing to say about it, and saying
+    // something would contradict the forward rule that just accepted it.
+    const failures = await reconcile(
+      inputs({
+        lifecycle: { completedStories: ['DBCLI-001'] },
+        trailers: new Set<string>(),
+        exemptions: new Map([['DBCLI-001', { commit: 'abc123', evidence: 'two named tests' }]]),
+      })
+    )
+
+    expect(failures).toEqual([])
   })
 })
 
@@ -455,16 +548,17 @@ describe('delivery is reconciled; authorization is not derived from it', () => {
     `# Story: DBCLI-001 T\n\n## Authority\n\n* plan: yes\n* modify: yes\n* commit: ${commit}\n* push: ${push}\n* deploy: no\n\n## Scope\n`
   const NO_SECTION = '# Story: DBCLI-001 T\n\n## Scope\n'
   const delivered = { completedStories: ['DBCLI-001'] }
+  const trailers = new Set(['DBCLI-001'])
   const directory = 'DBCLI-001-contract-absence-and-invalid-drift'
   const sourced = (source: string) => [{ directory, source }]
 
   test('a delivered Story whose agent committed locally and left the push to a human', async () => {
-    expect(await reconcile(inputs({ lifecycle: delivered }))).toEqual([])
+    expect(await reconcile(inputs({ lifecycle: delivered, trailers }))).toEqual([])
     expect(collectStoryIds(sourced(AUTHORITY('yes', 'no'))).get('DBCLI-001')).toBe(directory)
   })
 
   test('a delivered Story whose agent did neither, because a human did both', async () => {
-    expect(await reconcile(inputs({ lifecycle: delivered }))).toEqual([])
+    expect(await reconcile(inputs({ lifecycle: delivered, trailers }))).toEqual([])
     expect(collectStoryIds(sourced(AUTHORITY('no', 'no'))).get('DBCLI-001')).toBe(directory)
   })
 
@@ -476,7 +570,7 @@ describe('delivery is reconciled; authorization is not derived from it', () => {
     // failed the explicit `no` while passing the blank.
     const verdicts = await Promise.all(
       [AUTHORITY('yes', 'yes'), AUTHORITY('no', 'no'), NO_SECTION].map(async (source) => ({
-        failures: await reconcile(inputs({ lifecycle: delivered })),
+        failures: await reconcile(inputs({ lifecycle: delivered, trailers })),
         index: [...collectStoryIds(sourced(source))],
       }))
     )

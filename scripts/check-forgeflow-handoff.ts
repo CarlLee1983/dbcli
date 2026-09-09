@@ -52,9 +52,17 @@ const DELIVERED_BEFORE_TRAILERS: ReadonlyMap<string, Exemption> = new Map([
   ],
 ])
 
-/** Story IDs that have a `Story: <ID>` trailer somewhere in history. */
+/**
+ * Story IDs carrying a `Story: <ID>` trailer reachable from `HEAD`.
+ *
+ * `HEAD`, not `--all`: the reconciliation runs in both directions now, and the
+ * reverse one would read an unmerged branch's trailers as deliveries this tree
+ * has to have recorded. One scope for both directions, and it is the history of
+ * the checkout in hand — the same set locally and in CI, where `pull_request`
+ * checks out the merge commit.
+ */
 async function storiesWithTrailers(): Promise<Set<string>> {
-  const log = await $`git log --all --format=%b`.text()
+  const log = await $`git log HEAD --format=%b`.text()
   return new Set([...log.matchAll(/^Story:\s*(\S+)\s*$/gm)].map(([, id]) => id as string))
 }
 

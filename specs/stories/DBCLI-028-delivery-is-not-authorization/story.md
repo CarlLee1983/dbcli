@@ -62,12 +62,19 @@ them. ADR-0031 names them.
 * add_dependency: no
 * migration: no
 * commit: yes
-* push: no
+* push: yes
 * deploy: no
 
-This Story is itself the case it is about: the implementing agent was authorized
-to change these files and commit them locally, and a human takes it from there.
-Its `push: no` is a statement, not a leftover.
+This Story is itself the case it is about, and its Authority moved once while it
+was being implemented. It was authored as `commit: yes, push: no` — change these
+files, commit them locally, a human takes the branch from there — and that was
+true through implementation and verification. The human then granted `push` in
+order to open the pull request, so the declaration says `push: yes`.
+
+That grant is the correction mechanism ADR-0031 names: a permission is granted by
+someone who can grant it, and the declaration follows the grant. What it is still
+not is the merge. Had the human pushed the branch themselves, this would read
+`push: no` and the Story would be no less delivered.
 
 ## Architecture
 

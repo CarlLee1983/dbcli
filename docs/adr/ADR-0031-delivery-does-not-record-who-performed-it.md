@@ -66,8 +66,13 @@ or a push is not one.
 
 A Story declares what its implementing agent may do, which for an agent that
 hands its branch to a human is `commit: yes, push: no` or `commit: no, push: no`.
-DBCLI-028 is the first Story in this repository to declare `push: no` and mean
-it.
+Such a Story is delivered like any other, and the gate no longer objects.
+
+DBCLI-028 was authored that way and then changed: it was implemented and verified
+under `push: no`, and the human granted `push` to open the pull request, so its
+declaration says `push: yes`. That is the correction mechanism this record names
+working as intended — a permission moves because someone who can grant it granted
+it, not because a branch turned out to be pushed.
 
 Nothing now compares an Authority declaration to anything, which is the state
 ADR-0030 objected to. That objection was right in general and had the wrong

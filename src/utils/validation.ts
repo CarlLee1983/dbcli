@@ -116,7 +116,7 @@ export function parseStatementTimeoutOption(value: string): number {
  *
  * authSource/replicaSet/tls/srv express the driver options that previously could
  * only be reached by hand-writing a full `uri`; see
- * docs/adr/0002-mongodb-connection-field-first-config.md.
+ * docs/adr/ADR-0002-mongodb-connection-field-first-config.md.
  */
 export const MongoDBConnectionConfigSchema = z.object({
   system: z.literal('mongodb'),

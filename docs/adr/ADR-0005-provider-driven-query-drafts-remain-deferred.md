@@ -1,11 +1,9 @@
----
-status: accepted
-date: 2026-08-07
-accepted: 2026-08-16
-reopen_trigger: Explicit product and security approval recorded against the checklist below.
----
-
 # Provider-driven query drafts remain deferred
+
+* Status: accepted
+* Date: 2026-08-07
+* Accepted: 2026-08-16
+* Reopen_trigger: Explicit product and security approval recorded against the checklist below.
 
 dbcli delivers the agent-driven `QueryDraft` workflow: an external agent creates
 an explicit draft and `dbcli semantic draft validate` checks it locally. No

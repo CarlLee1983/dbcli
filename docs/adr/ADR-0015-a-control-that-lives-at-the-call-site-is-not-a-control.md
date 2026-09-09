@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-30
----
-
 # A control that lives at the call site is not a control, and a mask cannot outrun a rename
+
+* Status: accepted
+* Date: 2026-08-30
 
 ## Context
 

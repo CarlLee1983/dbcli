@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-01
----
-
 # Connection-only adapters say `WithoutRules`
+
+* Status: accepted
+* Date: 2026-09-01
 
 ## Context
 

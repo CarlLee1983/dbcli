@@ -1,19 +1,17 @@
----
-status: accepted
-date: 2026-08-16
-supersedes: 0011
-amended_by: 0013
----
+* Status: accepted
+* Date: 2026-08-16
+* Supersedes: 0011
+* Amended_by: 0013
 
 > The versioning clause below — that the evidence-pack schema changes without a
 > version bump — is amended by
-> [ADR-0013](0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
+> [ADR-0013](ADR-0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
 > The decision this record is about, that a known defect gets repaired
 > regardless of usage, is unchanged and still current.
 
 # Known defects get fixed whether or not anyone is using the code
 
-[ADR-0011](0011-evidence-subsystem-waits-for-a-user-before-it-is-repaired.md)
+[ADR-0011](ADR-0011-evidence-subsystem-waits-for-a-user-before-it-is-repaired.md)
 made repair of the evidence subsystem's four known defects conditional on
 evidence that someone was using it. The condition was met on 2026-08-16 and the
 question became live rather than theoretical. It is now settled the other way,

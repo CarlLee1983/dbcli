@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-04
----
-
 # MongoDB 連線以逐欄設定為主要形式，URI 降為進階逃生門
+
+* Status: accepted
+* Date: 2026-08-04
 
 MongoDB 連線的設定檔形式改以 `host` / `port` / `user` / `password` / `database`
 加上 `authSource` / `replicaSet` / `tls` / `srv` 逐欄表達為主要路徑，與

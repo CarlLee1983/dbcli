@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-08
----
-
 # The handoff records delivery, not a work queue
+
+* Status: accepted
+* Date: 2026-09-08
 
 `specs/handoff.md` stops stating which Story is current and which is next.
 ForgePilot is the only component that answers those two questions. The handoff

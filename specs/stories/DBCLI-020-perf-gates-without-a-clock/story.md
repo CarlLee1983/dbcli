@@ -47,7 +47,7 @@ Only the third has a decided answer. How the first is closed is a boundary
 question — a counter that exists for tests to read is a public surface, and
 DBCLI-011's semantic contracts are the precedent for that being a decision
 rather than an implementation detail. It is recorded in
-`docs/adr/0028-masking-cost-is-observable-without-a-clock.md`, status
+`docs/adr/ADR-0028-masking-cost-is-observable-without-a-clock.md`, status
 `proposed`.
 
 This Story declares no `## Architecture` section, and that is deliberate rather

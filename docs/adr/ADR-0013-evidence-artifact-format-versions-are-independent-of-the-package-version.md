@@ -1,10 +1,8 @@
----
-status: accepted
-date: 2026-08-29
-amends: 0012
----
-
 # Evidence artifact format versions are independent of the package version
+
+* Status: accepted
+* Date: 2026-08-29
+* Amends: ADR-0012
 
 `EVIDENCE_PACK_VERSION` and `EVIDENCE_RECEIPT_VERSION` were both `1` from the
 subsystem's first release until this record. In between, v3.0.0 changed what
@@ -88,7 +86,7 @@ a new one from current evidence.
 
 ## Relationship to ADR-0012
 
-[ADR-0012](0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md)
+[ADR-0012](ADR-0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md)
 decided that the pack format would be "amended in place rather than versioned
 forward", on the grounds that it had no stored artifacts to keep compatible.
 

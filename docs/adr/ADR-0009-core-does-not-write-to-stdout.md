@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-14
----
-
 # Core does not write to stdout
+
+* Status: accepted
+* Date: 2026-08-14
 
 `DataExecutor.executeMutation` printed the generated SQL and its parameters with
 `console.log`, then called `promptUser.confirm` — inside `src/core`. Two consequences,

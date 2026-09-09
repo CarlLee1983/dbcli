@@ -218,7 +218,7 @@ the gap was a second reader, not a better grep.
 
 * `src/adapters/capabilities.ts` — the one engine support table.
 * `src/core/capabilities/registry.ts` — the catalog derived from it.
-* `docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md`.
+* `docs/adr/ADR-0022-the-capability-catalog-is-derived-from-the-engine-matrix.md`.
 
 ## Constraints
 

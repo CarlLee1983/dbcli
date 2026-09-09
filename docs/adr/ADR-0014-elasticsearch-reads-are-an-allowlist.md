@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-30
----
-
 # Elasticsearch reads are an allowlist, and the classifier reads the routed path
+
+* Status: accepted
+* Date: 2026-08-30
 
 Fixing the Elasticsearch shell's missing permission check required deciding two
 things that are easy to get backwards, and this record exists because the first

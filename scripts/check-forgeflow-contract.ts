@@ -75,7 +75,16 @@ if (!(await Bun.file(storyCheck).exists())) refuse(`${storyCheck} does not exist
 // Story directories itself. Globbing for them here was directory selection
 // reimplemented, and it hid a directory holding an `acceptance.md` and no
 // `story.md` — upstream ERRORs on that; the glob simply did not see it.
-const checked = await $`${storyCheck}`.cwd(repoRoot).nothrow().quiet()
+// `FORGEFLOW_DECISIONS_ROOT` is set here rather than left to the caller. Upstream
+// resolves `Decision:` against `specs/decisions/` by default (ForgeFlowV2 issue
+// #23, fixed in 0.7.0); this repository keeps its records in `docs/adr/`, and a
+// variable a human has to remember is a check that passes locally and fails in CI,
+// or worse the other way round. ADR-0029.
+const checked = await $`${storyCheck}`
+  .cwd(repoRoot)
+  .env({ ...process.env, FORGEFLOW_DECISIONS_ROOT: join(repoRoot, 'docs/adr') })
+  .nothrow()
+  .quiet()
 const read = readCheckerRun('specs/stories', {
   exitCode: checked.exitCode,
   output: `${checked.stdout.toString()}${checked.stderr.toString()}`,

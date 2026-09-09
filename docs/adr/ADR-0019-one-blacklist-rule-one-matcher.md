@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-31
----
-
 # One blacklist rule, one matcher — MongoDB's four comparers become one
+
+* Status: accepted
+* Date: 2026-08-31
 
 ## Context
 

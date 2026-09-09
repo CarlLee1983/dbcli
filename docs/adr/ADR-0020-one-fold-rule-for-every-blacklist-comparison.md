@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-01
----
-
 # One fold rule for every blacklist comparison
+
+* Status: accepted
+* Date: 2026-09-01
 
 ## Context
 

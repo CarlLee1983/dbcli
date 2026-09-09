@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-04
----
-
 # The capability catalog describes itself
+
+* Status: accepted
+* Date: 2026-09-04
 
 DBCLI-PLAT-011 extended the catalog to cover every public command. That raised a
 question the extension could not answer by rule: does `capabilities` itself get

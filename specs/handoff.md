@@ -766,6 +766,43 @@ GATE-005 選計數器。`MaskingCost` 掛在 `FilterColumnsResult.cost` 上凍�
 一次當下的疏漏，就是把 ratchet 變成 amnesty。所以紀錄留在這裡：trailer 是補的，
 真正做事的是上面那兩個 commit。
 
+## DBCLI-021：決策記錄從散文連結變成被檢查的連結
+
+DBCLI-018 導入的四個 Story section 裡，`## Architecture` 在這裡一直是不可用的：
+`Decision:` 只解析到 `specs/decisions/`，而這個 repo 的決策在 `docs/adr/`。
+DBCLI-020 需要它——那張改動了 `BlacklistValidator` 對外的樣子——只能把連結寫成散文。
+
+回報成 ForgeFlowV2 issue #23，上游在 v0.7.0（`cb4bc976`）加了
+`FORGEFLOW_DECISIONS_ROOT`，未設定時維持原本的預設。剩下的一半是這邊的。
+
+動工前量到：25 個 Story 在 v0.6.0 與 v0.7.0 下都是同樣的 21 條 finding；
+`FORGEFLOW_DECISIONS_ROOT=docs/adr` 單獨設定仍然失敗，因為查找的是
+`<root>/ADR-<digits>.md`；把記錄寫成 `0028` 則會撞上 id 文法。上游的 release note
+明說檔名文法不在修改範圍內，所以那是邊界，不是疏漏。
+
+於是 28 份記錄改名成 `ADR-<digits>-<slug>.md`（`git mv`，歷史跟著走），留在
+`docs/adr/`——搬去 `specs/decisions/` 會讓決策與引用它的文件分家，那正是當初排除
+那條路的理由。ADR-0029 記下這個決定，而 DBCLI-021 自己宣告 `## Architecture`
+指向它，是這個 repo 第一個宣告得起來的。
+
+### 兩件計畫外的
+
+**檔名不是全部。** 上游還把狀態讀成內文的 `* Status:` bullet，而這裡 29 份用 YAML
+frontmatter。兩種並存等於一份記錄兩個狀態，所以整批轉成 bullet；四份帶額外欄位的
+（`accepted`／`dogfooded`／`amends`／`superseded_by`／`reopen_trigger`）一併處理，
+`amends: 0012` 這類指涉改成 `ADR-0012`。
+
+**改名差點留下四條死連結。** 記錄之間互相引用寫的是相對路徑 `](0012-....md)`，
+沒有 `docs/adr/` 前綴，掃 34 處前綴引用的那一輪看不到。是讀那兩份 superseded 記錄
+時發現的，不是被檢查抓到的——`tests/unit/build/adr-references.test.ts` 現在涵蓋兩種
+連結形狀與 Status 宣告。
+
+### 為什麼變數設在腳本裡
+
+`FORGEFLOW_DECISIONS_ROOT` 寫在 `scripts/check-forgeflow-contract.ts` 而不是留給
+呼叫者。一個要人記得設的變數，會讓檢查在本機過而在 CI 紅，或者反過來——那種失敗
+說的是環境，不是這個 repo 的內容。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -804,15 +841,26 @@ workflow:
     - DBCLI-018
     - DBCLI-019
     - DBCLI-020
+    - DBCLI-021
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 161a2645fd896b21a81e3bf7e6912f28cef6a6a2
+  commit: 7fc25ff0a08b8d6ee3b969ecda87b8c935a8e400
   dirty_worktree: false
   story_owned_paths:
     - specs/handoff.md
+    - specs/.forgeflow-adoption
+    - specs/stories/README.md
+    - specs/stories/_template/story.md
+    - specs/stories/DBCLI-021-resolvable-decision-records/story.md
+    - specs/stories/DBCLI-021-resolvable-decision-records/acceptance.md
+    - specs/stories/DBCLI-021-resolvable-decision-records/task.md
+    - docs/adr/ADR-0029-decision-records-are-named-so-the-contract-can-resolve-them.md
+    - scripts/check-forgeflow-contract.ts
+    - tests/unit/build/adr-references.test.ts
+    - AGENTS.md
     - specs/stories/DBCLI-019-load-independent-perf-verdict/story.md
     - specs/stories/DBCLI-019-load-independent-perf-verdict/acceptance.md
     - specs/stories/DBCLI-019-load-independent-perf-verdict/task.md

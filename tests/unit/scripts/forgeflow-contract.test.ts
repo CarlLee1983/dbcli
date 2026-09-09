@@ -177,17 +177,26 @@ describe('the exemption ratchet', () => {
     expect(findings).toBe(ADMITTED_FINDINGS)
   })
 
-  test('no longer admits anything for DBCLI-PLAT-004', () => {
-    // DBCLI-022 re-derived that Story's trust-boundary declarations against the
-    // code, so upstream reports nothing for it. The counts above would still
-    // agree if the entry were merely renamed or traded for another, which is
-    // what this names outright.
+  test('no longer admits anything for DBCLI-PLAT-004 or DBCLI-PLAT-005', () => {
+    // DBCLI-022 and DBCLI-023 re-derived those Stories' declarations against the
+    // code, so upstream reports nothing for either. The counts above would still
+    // agree if an entry were merely renamed or traded for another, which is what
+    // this names outright.
     expect([...PREDATING_FINDINGS.keys()]).toEqual([
-      'DBCLI-PLAT-005-agent-json-mode',
       'DBCLI-PLAT-006-correlation-id',
       'DBCLI-PLAT-007-bounded-evidence-receipts',
       'DBCLI-PLAT-012-schema-cache-write-boundary',
     ])
+  })
+
+  test('what remains is fixture cells and two trust-boundary sections', () => {
+    // The Classification contradiction was PLAT-005's and is gone, so the
+    // header's claim about what is left is now checkable rather than prose.
+    const remaining = [...PREDATING_FINDINGS.values()].flat()
+
+    expect(remaining.filter((f) => f.startsWith('security fixture row'))).toHaveLength(16)
+    expect(remaining.filter((f) => f.includes('trust-boundary'))).toHaveLength(2)
+    expect(remaining.filter((f) => f.includes('Baseline conformance'))).toHaveLength(0)
   })
 
   test('admits no duplicate finding within one Story', () => {

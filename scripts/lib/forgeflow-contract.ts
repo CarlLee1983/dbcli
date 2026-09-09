@@ -46,11 +46,15 @@
 // matrix cells whose real values have to be re-derived from the code. That is
 // its own Story.
 //
-// DBCLI-022 removed the first of them, which is what the list shrinking looks
-// like: PLAT-004's one finding named a trust-boundary declaration that did not
-// say what the code does, so the declarations were re-derived against the code
-// rather than backticked to please the checker. Four Stories and twenty
-// findings remain.
+// DBCLI-022 and DBCLI-023 removed the first two, which is what the list
+// shrinking looks like: each finding named a declaration that did not say what
+// the code does, so the declarations were re-derived against the code rather
+// than backticked to please the checker. PLAT-005 also carried the one
+// Classification contradiction — `Baseline conformance: no` beside a
+// `## Superseded Behavior` section — resolved by correcting the declaration,
+// because the section's content was true and four sibling Stories use `yes` for
+// exactly that shape. Three Stories and eighteen findings remain: sixteen
+// security-fixture cells and two more trust-boundary sections.
 //
 // Until then the findings are listed, exactly, so that they are bounded rather
 // than tolerated: a new finding in an exempt Story fails, a finding that has
@@ -294,7 +298,11 @@ export function formatContractFailures(failures: readonly ContractFailure[]): st
  * code they describe and editing acceptance text a human already accepted, so
  * it is its own Story rather than a paragraph of DBCLI-018.
  *
- * Twenty across four Stories remain; DBCLI-022 took PLAT-004's out.
+ * Eighteen across three Stories remain; DBCLI-022 took PLAT-004's out and
+ * DBCLI-023 took PLAT-005's, which was also the only Classification
+ * contradiction. What is left is sixteen security-fixture cells stating a value
+ * as prose — the ones that have to be re-derived from the code — and the
+ * trust-boundary sections of PLAT-007 and PLAT-012.
  *
  * The ratchet's two directions are enforced differently, and the difference is
  * worth knowing. Shrinking is mechanical: a finding that has been fixed makes
@@ -304,13 +312,6 @@ export function formatContractFailures(failures: readonly ContractFailure[]): st
  * asking for. Neither direction is left to a reviewer noticing.
  */
 export const PREDATING_FINDINGS: Exemptions = new Map([
-  [
-    'DBCLI-PLAT-005-agent-json-mode',
-    [
-      'every trust-boundary field must name an exact field, not prose',
-      'Story declares Baseline conformance: no but declares superseded behavior',
-    ],
-  ],
   [
     'DBCLI-PLAT-006-correlation-id',
     [
@@ -353,5 +354,5 @@ export const PREDATING_FINDINGS: Exemptions = new Map([
  * These numbers may be lowered and never raised. They exist so that "the list
  * may shrink and never grow" is a check rather than a sentence in a header.
  */
-export const ADMITTED_FINDINGS = 20
-export const ADMITTED_STORIES = 4
+export const ADMITTED_FINDINGS = 18
+export const ADMITTED_STORIES = 3

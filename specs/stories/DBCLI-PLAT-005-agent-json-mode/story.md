@@ -28,7 +28,7 @@ capability catalog while preserving backward compatibility with all existing hum
 ## Classification
 
 * Security sensitive: yes
-* Baseline conformance: no
+* Baseline conformance: yes
 
 ## Scope
 
@@ -148,11 +148,55 @@ For `capabilities.list`:
 
 ## Trust Boundary Fields
 
-* `argv[]` — parsed during preflight to detect `--agent-output` and enforce placement rules.
-* `data.capabilities` — static capability objects emitted in `capabilities.list`. Must contain
-  no dynamic environment variables, paths, or database credentials.
-* `error.code` and `error.message` — stable curated English strings.
-* Serialized stdout bytes — must never exceed 65,536 UTF-8 bytes.
+`capabilities.list` is the narrower of the two operations: its answer is a
+compile-time constant, so `argv` is the only thing that enters. The remaining
+fields cross only inside `parseOperationEnvelope(unknown)`, which is exported
+through `@carllee1983/dbcli/core` and reads a document it did not produce.
+
+Entering from `argv`:
+
+* `process.argv` — scanned by `inspectAgentOutputInvocation` before Commander
+  runs, to detect `--agent-output`, reject it after the subcommand, and reject a
+  conflicting explicit `--format`. On this path a bare `capabilities` with no
+  further subcommand selects `capabilities.list`. No argv token reaches the
+  envelope.
+* `--format <type>` — checked against the catalog's three accepted values before
+  the catalog is built; a rejected value becomes
+  `AGENT_OUTPUT_INTERNAL_ERROR` and exit `1` when agent output is active.
+
+Emitted, not accepted — stated because the section must show they carry nothing
+external:
+
+* `data.schemaVersion` and `data.capabilities[]` — `buildCapabilityCatalog()`
+  returns the frozen `CAPABILITIES` table declared in
+  `src/core/capabilities/registry.ts`. No environment variable, path, credential,
+  connection or argv value is read while building it, which is why this
+  operation emits `context: null` and needs no configuration to answer.
+* `error.code` and `error.message` — on this path the only pair is
+  `AGENT_OUTPUT_INTERNAL_ERROR` with its fixed message; a raw `Error.message`
+  is never emitted.
+* `warnings`, `evidence`, `recovery`, and `context` — literal `[]`, `[]`, `null`
+  and `null` in the one place a `capabilities.list` envelope is constructed, and
+  the parser additionally refuses a successful `capabilities.list` envelope that
+  has any of them populated.
+
+Entering through `parseOperationEnvelope(unknown)`:
+
+* `data.capabilities[].id`, `.command`, `.risk`, `.sideEffect`, `.engines[]`,
+  `.limitedEngines[]`, `.minimumPermission` — accepted only from their closed
+  vocabularies and patterns; `.description` must be non-empty; the object is
+  `.strict()`, so an unknown key is rejected rather than carried.
+* `data.capabilities[].supportsJson`, `.supportsEvidence`,
+  `.engineIndependent`, `.requiresConnection`, `.mutatesConfiguration` — the
+  per-subcommand JSON granularity this Story clarifies, accepted only as
+  booleans.
+* `operation` — accepted only as a member of the registered union, which this
+  Story widens from `capabilities.check` alone to include `capabilities.list`.
+
+The 65,536-byte cap on the serialized document is not a field. It is stated as
+a rule and enforced by `serializeOperationEnvelope`, which replaces an oversized
+document with a bounded `AGENT_OUTPUT_LIMIT_EXCEEDED` envelope rather than
+truncating it.
 
 ## Superseded Behavior
 

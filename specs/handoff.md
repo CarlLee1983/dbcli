@@ -844,6 +844,41 @@ criterion 與一支被引用的測試；為了讓宣告與驗收看起來對稱�
 剩下四個 Story、二十條 findings。其中 PLAT-006 與 PLAT-007 合起來是十六格
 security fixture cells，要從程式碼重推，各自是自己的一輪。
 
+## DBCLI-023：第二條例外，以及最後一個 Classification 矛盾
+
+PLAT-005 是五條裡唯一同時帶兩種 finding 的：一條跟 PLAT-004 同形的
+trust-boundary 散文（`Serialized stdout bytes — must never exceed 65,536 UTF-8
+bytes`），另一條是 `Baseline conformance: no` 卻帶著 `## Superseded Behavior`
+——上游 R8 說宣告 `no` 的 Story 不得帶那一節。
+
+**第二條有兩個出口，而它們不等價。** 翻宣告，或刪那一節；兩者都能讓 checker 閉嘴，
+但一個保住紀錄、一個毀掉紀錄。
+
+判斷的依據不是語感，是同一個 repo 裡的四個兄弟。PLAT-005 那一節寫的是真的：
+PLAT-004 曾把 `operation` 限定在 `capabilities.check`、曾把
+`dbcli --agent-output capabilities` 當成 unsupported operation 拒絕，兩件事
+PLAT-005 都刻意換掉了——正是 template 講的「each existing test or documented
+behavior this Story intentionally replaces」。而 DBCLI-017（`make verify` 步驟
+名冊）、DBCLI-020（十九條絕對時間斷言）、DBCLI-PLAT-011（交付後就會變錯的文件
+句子）、DBCLI-PLAT-012 這四個 Story，全是「改動並取代既有具名行為」這個形狀，
+全都宣告 `yes`。照 `no` 讀，PLAT-005 會是這個形狀裡唯一相反的一個。
+
+所以錯的是宣告，改一個字，兩半都留住。刪掉那一節同樣會過，代價是 PLAT-005
+到底取代了什麼再也沒有任何地方寫著。
+
+trust-boundary 那半重推之後發現剩下的宣告是**單薄**而不是錯的。
+`capabilities.list` 的答案來自 `buildCapabilityCatalog()`，回傳
+`Object.freeze` 過的 `CAPABILITIES`；`src/core/capabilities/` 的整個 import graph
+被斷言不含 `process.env`、`Bun.file(`、`node:fs`、`import(`
+（`tests/contract/capability-contract.test.ts`）。舊宣告把這寫成 catalog「must
+contain no dynamic environment variables, paths, or database credentials」，像是
+一條待辦要求；它其實是程式碼**已經有**而且被結構性檢查釘住的性質。
+
+剩下三個 Story、十八條：十六格 security fixture cells，加上 PLAT-007 與
+PLAT-012 各自的 trust-boundary 一條。Classification 矛盾這一類已經清空。
+
+沒有動 acceptance，沒有動 `src/`。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -888,9 +923,12 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 8334517bb5c5fb4babf234b1ec87a1ac4a471bdd
+  commit: 01ee82ecab07a7de6f6b870efa927a0e4f473bb7
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-023-faithful-plat-005-classification/story.md
+    - specs/stories/DBCLI-023-faithful-plat-005-classification/acceptance.md
+    - specs/stories/DBCLI-PLAT-005-agent-json-mode/story.md
     - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/story.md
     - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/acceptance.md
     - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/story.md

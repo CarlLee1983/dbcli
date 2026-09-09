@@ -183,8 +183,14 @@ disk itself and writes back a document differing only in the cache fields.
   refusals.
 * `schemaLastUpdated`, `schemaTableCount` — derived locally from the read.
 * `DBCLI_AGENT_MODE` — process environment, read by the guard only.
-* The cache-write failure message — derived from a caught error, which may
-  carry a filesystem path from the runtime.
+* `error.message` — the message of whatever `persistSchemaCache` throws, caught
+  by `reportingCacheWriteFailure`. It is the one value here that could carry a
+  filesystem path from the runtime, and it is the one value that never leaves:
+  `cacheWriteReason` classifies the error instead of quoting it, so a
+  `SchemaCacheWriteError` contributes its own path-free message and everything
+  else — every `EACCES`, `ENOSPC` or other fs error — is replaced wholesale by
+  the fixed string `The local schema cache could not be written.` The raw
+  message is discarded, not masked, before any redaction utility sees it.
 
 ## Superseded Behavior
 

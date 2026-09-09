@@ -1775,11 +1775,20 @@ is load-bearing rather than decorative.
 
 Every gate here is a variation on one lesson: **a declaration nothing compares
 to anything is not a control.** Delivery claims in the handoff are reconciled
-against commit trailers; a Story's Authority declaration is reconciled against
-the fact of its delivery (ADR-0030); the adopted ForgeFlow version is reconciled
-against every place that restates it. One declaration was wrong in eight
-consecutive Stories without anyone noticing, for the only reason such things
-survive: nothing ever asked whether it was true.
+against commit trailers; the adopted ForgeFlow version is reconciled against
+every place that restates it; the ForgeFlow contract itself is run against a
+pinned upstream revision.
+
+The lesson has a limit, and finding it cost a decision. A Story's `## Authority`
+was briefly reconciled against the fact of its delivery, on the reasoning that
+reaching `main` requires commits on a pushed branch (ADR-0030). It does — but
+`completed_stories` records that a Story was delivered, not **who** performed
+each operation, and the normal flow here is an agent that is granted `modify` and
+a local `commit` handing its branch to a human who pushes and merges. The gate
+refused that flow by name, so the rule was removed (ADR-0031). Whether an
+Authority declaration is true is a question this repository cannot observe and
+Human Review can; a gate that guesses at it is worse than an unchecked
+declaration, because its verdict looks like evidence.
 
 ---
 

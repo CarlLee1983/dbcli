@@ -39,7 +39,7 @@ export async function handleMongoDBInit(ctx: {
   const isInteractive = options.interactive !== false && process.stdin.isTTY
 
   // Field-by-field is the primary path; a full URI is the advanced escape hatch.
-  // See docs/adr/0002-mongodb-connection-field-first-config.md.
+  // See docs/adr/ADR-0002-mongodb-connection-field-first-config.md.
   const SETUP_MODES = ['逐欄填寫（建議）', '貼上完整連線字串（進階）'] as const
   const URI_MODE_INDEX = 1
 

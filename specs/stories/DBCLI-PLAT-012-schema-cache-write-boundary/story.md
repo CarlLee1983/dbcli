@@ -192,7 +192,7 @@ disk itself and writes back a document differing only in the cache fields.
   deviation" — marked closed, not deleted. It was a true statement about what
   was accepted at delivery, and removing it would rewrite that.
 * `docs/specs/2026-09-04-agent-integration-contract-v1.md`, "The known
-  overstatement", and `docs/adr/0022-…`, "The one place the contract knowingly
+  overstatement", and `docs/adr/ADR-0022-…`, "The one place the contract knowingly
   overstates availability" — both keep their reasoning and gain a closing note.
   Design records are appended to, not rewritten (ADR-0001).
 * `docs/plans/2026-09-04-agent-integration-contract-v1.md`, criterion 16 — its

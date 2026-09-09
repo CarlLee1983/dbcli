@@ -41,7 +41,8 @@ operation is never authorization to perform it.
 Optional. `Impact` defaults to `low`; delete this section for a Story that
 carries no architecture weight. `Impact: medium` or `high` must name at least
 one decision or contract. Each `Decision` resolves to a record under
-`specs/decisions/`.
+`specs/decisions/` unless the invocation sets `FORGEFLOW_DECISIONS_ROOT` to an
+existing ADR directory.
 
 * Impact: low
 * Decision: `ADR-001`
@@ -53,6 +54,8 @@ one decision or contract. Each `Decision` resolves to a record under
 
 Optional. `Level` defaults to `low`; `medium` and `high` must name at least one
 reason. Risk raises inspection and verification depth. It never widens scope.
+Each reason is one non-empty same-line backticked signal, such as
+`versioned-surface`; prose and a closing backtick on a later line are invalid.
 
 * Level: low
 * Reason: `signal`

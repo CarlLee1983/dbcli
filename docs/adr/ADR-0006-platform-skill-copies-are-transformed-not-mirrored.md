@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-07
----
-
 # Platform skill copies are transformed, not mirrored
+
+* Status: accepted
+* Date: 2026-08-07
 
 `assets/SKILL.md` is the single source for every install target, and until now
 "install" meant copying it byte for byte. `scripts/sync-plugin-assets.ts`

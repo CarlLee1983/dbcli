@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-04
----
-
 # Operation envelopes use an explicit root output mode
+
+* Status: accepted
+* Date: 2026-09-04
 
 An Operation Envelope is an ephemeral, versioned response for one finite dbcli
 invocation. It is enabled by an invocation-scoped root option rather than an

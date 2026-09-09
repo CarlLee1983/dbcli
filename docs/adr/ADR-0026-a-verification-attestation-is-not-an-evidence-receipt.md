@@ -1,9 +1,7 @@
----
-status: proposed
-date: 2026-09-08
----
-
 # A Verification Attestation is not an Evidence Receipt
+
+* Status: proposed
+* Date: 2026-09-08
 
 DBCLI-017 introduces a third evidence-shaped artifact, and the reason it is not
 one of the two that already exist is worth writing down before someone

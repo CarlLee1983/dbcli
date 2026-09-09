@@ -1,9 +1,7 @@
----
-status: proposed
-date: 2026-09-08
----
-
 # Masking cost is observable without a clock
+
+* Status: proposed
+* Date: 2026-09-08
 
 DBCLI-019 established that a wall-clock budget is not a gate. Three Evidence
 records disagreed about one commit — EV-018 FAIL, EV-019 FAIL, EV-020 PASS at

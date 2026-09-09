@@ -161,10 +161,13 @@ repository-local `story-development` Skill and:
 
 A Story may now declare `## Authority`, `## Risk`, `## Architecture` and a
 `Task mode:` bullet, and its acceptance may carry an `## Acceptance Evidence`
-map — ForgeFlow 0.6.0, all optional, all in `specs/stories/_template/`. They are
+map — ForgeFlow 0.7.0, all optional, all in `specs/stories/_template/`. They are
 checked by upstream's own checkers, which CI runs as the `forgeflow-contract`
 job against the revision `specs/.forgeflow-adoption` pins; `make verify` stays
-offline and does not run them. Authority is per-permission and nothing implies
+offline and does not run them. A `Decision:` bullet resolves to a record in
+`docs/adr/`, named `ADR-<digits>-<slug>.md` and declaring `* Status:` as a
+bullet rather than in front matter — ADR-0029; the contract check sets
+`FORGEFLOW_DECISIONS_ROOT` itself, so nothing has to be set by hand. Authority is per-permission and nothing implies
 anything else: `modify` does not grant `commit`, and `commit` does not grant
 `push`.
 

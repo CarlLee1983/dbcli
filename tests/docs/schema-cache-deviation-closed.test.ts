@@ -37,7 +37,7 @@ const MUST_NOT_CLAIM = [
 /** Records that keep the deviation and must say it is closed. */
 const MUST_RECORD_CLOSURE = [
   'docs/specs/2026-09-04-agent-integration-contract-v1.md',
-  'docs/adr/0022-the-capability-catalog-is-derived-from-the-engine-matrix.md',
+  'docs/adr/ADR-0022-the-capability-catalog-is-derived-from-the-engine-matrix.md',
   'specs/stories/DBCLI-PLAT-001-capability-contract/acceptance.md',
 ]
 

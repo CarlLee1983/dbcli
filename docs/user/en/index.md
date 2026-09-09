@@ -1055,7 +1055,7 @@ labeled as such; they are not dbcli verification verdicts.
 #### Artifact format versions
 
 Packs and receipts carry their own `version`, which is **not** the dbcli package
-version — see [ADR-0013](https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
+version — see [ADR-0013](https://github.com/CarlLee1983/dbcli/blob/main/docs/adr/ADR-0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md).
 The current format is `version: 2`; dbcli 3.0.0 and earlier wrote `version: 1` in two
 mutually incompatible layouts.
 

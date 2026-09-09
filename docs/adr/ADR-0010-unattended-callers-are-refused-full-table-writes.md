@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-14
----
-
 # Unattended callers are refused full-table writes
+
+* Status: accepted
+* Date: 2026-08-14
 
 dbcli is an agent-first tool. Every other decision in this product resolves towards
 "answer the machine": stdout is a parseable envelope, failures carry structured reasons,

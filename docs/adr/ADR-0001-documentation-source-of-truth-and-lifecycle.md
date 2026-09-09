@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-04
----
-
 # Documentation source of truth and lifecycle
+
+* Status: accepted
+* Date: 2026-08-04
 
 The project uses scoped sources of truth: code and tests define actual behavior,
 active specs and user documentation define the current product contract, ADRs

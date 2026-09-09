@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-13
----
-
 # dbcli is a Bun program, and `engines` says so
+
+* Status: accepted
+* Date: 2026-08-13
 
 `package.json` declared `engines.node: ">=18.0.0"` alongside `engines.bun: ">=1.3.3"`
 from the first release. Measured on Node v22.17.1 against the `v1.54.1` `dist/`, none of

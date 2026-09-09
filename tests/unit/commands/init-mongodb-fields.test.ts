@@ -2,7 +2,7 @@
  * MongoDB 逐欄連線設定的 init 互動流程
  *
  * 規格：docs/specs/2026-08-04-mongodb-field-first-connection.md（B 段）
- * 決策：docs/adr/0002-mongodb-connection-field-first-config.md
+ * 決策：docs/adr/ADR-0002-mongodb-connection-field-first-config.md
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'

@@ -1,7 +1,7 @@
 # MongoDB 逐欄連線設定
 
 **狀態**：已於 v1.46.0（2026-08-04）交付；保留為設計記錄
-**決策依據**：`docs/adr/0002-mongodb-connection-field-first-config.md`
+**決策依據**：`docs/adr/ADR-0002-mongodb-connection-field-first-config.md`
 **基準版本**：v1.45.1
 
 讓 MongoDB 的連線設定能像 SQL 一樣逐欄填寫，並把 `dbcli init` 的互動預設

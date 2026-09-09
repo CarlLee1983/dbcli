@@ -323,8 +323,8 @@ ForgeFlow Story DBCLI-001 到 DBCLI-012 全數在 `v7.0.1`（`224ee59d`）之後
 ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫折疊仍然是三套規則。
 這一版把它收成一套，並在收的過程中發現同一份設定還有一條完全繞過它的路——規則從來
 沒有抵達 `dbcli q` 與 `dbcli report` 用的那個 adapter。設計決策記在
-`docs/adr/0020-one-fold-rule-for-every-blacklist-comparison.md` 與
-`docs/adr/0021-connection-only-adapters-say-without-rules.md`。
+`docs/adr/ADR-0020-one-fold-rule-for-every-blacklist-comparison.md` 與
+`docs/adr/ADR-0021-connection-only-adapters-say-without-rules.md`。
 
 2026-09-01 直接呼叫四個比對器量到的起點——除了最後一列，每一列都是「寫入被拒、
 讀取原文回傳」的設定，而操作者確認規則有效的方式，通常就是看寫入被擋下來：
@@ -548,8 +548,8 @@ ADR-0019 在自己的 Consequences 裡寫下這一則：一份設定的大小寫
 ## [6.0.0] - 2026-09-01 - 一份黑名單設定，四個互不相同的比對器
 
 規格 SQL 第 7、8、9 則與 MongoDB 第 3–6 則。設計決策記在
-`docs/adr/0018-a-blacklist-rule-that-does-not-match-fails-loudly.md` 與
-`docs/adr/0019-one-blacklist-rule-one-matcher.md`。
+`docs/adr/ADR-0018-a-blacklist-rule-that-does-not-match-fails-loudly.md` 與
+`docs/adr/ADR-0019-one-blacklist-rule-one-matcher.md`。
 
 SQL 那半：本機 MariaDB、表 `probe_users (id, Password, note)`、值 `s3cret`，八種設定裡七種洩漏，而全部都被設定載入器無聲接受——操作者「規則有效」的唯一證據是 dbcli 沒有抱怨。
 
@@ -589,7 +589,7 @@ MongoDB 那半（本機容器 MongoDB 7.0.31 實測）：同一組規則被四�
 
 ## [5.1.0] - 2026-08-31 - 一次被黑名單擋下的查詢，紀錄裡指向的是沒被擋的那張表
 
-`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 10 則。設計決策記在 `docs/adr/0017-the-audit-target-stays-wrong-and-the-record-stops-depending-on-it.md`。
+`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 10 則。設計決策記在 `docs/adr/ADR-0017-the-audit-target-stays-wrong-and-the-record-stops-depending-on-it.md`。
 
 ### Added
 
@@ -603,7 +603,7 @@ MongoDB 那半（本機容器 MongoDB 7.0.31 實測）：同一組規則被四�
 
 ## [5.0.0] - 2026-08-31 - shell 裡一句真的改了資料的 UPDATE，稽核裡沒有任何一列
 
-`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 11 則自己註明是純讀碼結論、值得先端到端確認。確認了，結論成立，而且比讀碼看到的更嚴重。本機 MariaDB、`read-write` 連線、每次先清空 audit：`dbcli query "SELECT …"` 寫一列，而在 `dbcli>` 提示符打的同一句寫零列；一句帶 WHERE 的 `UPDATE` 走完全程、改掉了資料，同樣零列。設計決策記在 `docs/adr/0016-the-sql-shell-audits-every-statement-in-two-rows.md`。
+`docs/specs/2026-08-30-cross-engine-blacklist-gaps.md` 的 audit 第 11 則自己註明是純讀碼結論、值得先端到端確認。確認了，結論成立，而且比讀碼看到的更嚴重。本機 MariaDB、`read-write` 連線、每次先清空 audit：`dbcli query "SELECT …"` 寫一列，而在 `dbcli>` 提示符打的同一句寫零列；一句帶 WHERE 的 `UPDATE` 走完全程、改掉了資料，同樣零列。設計決策記在 `docs/adr/ADR-0016-the-sql-shell-audits-every-statement-in-two-rows.md`。
 
 ### Changed
 
@@ -783,7 +783,7 @@ Three numbers in this repository disagreed with reality and nothing checked any 
 
 - **`_update_by_query` 從 `read-write` 收緊為 `admin`**：它是獨立的區段，精確比對之下落到破壞性預設，而它確實會改寫索引裡的每一份文件。
 
-- **BREAKING (artifact format): evidence packs and receipts are `version: 2`, and the format version is no longer tied to the package version.** v3.0.0 changed the pack digest input, the id derivation, the `coverage` field and the receipt `observation` while leaving both constants at `1` — ADR-0012 decided to amend the schema in place, which was right about the repairs and wrong about the number. A reader now classifies an artifact by version *and* structure before computing anything: `v1-coverage` (2.1.0 and earlier), `v1-untagged-v3` (3.0.0), current, or unsupported. Both legacy formats stay readable and integrity-checkable through frozen reimplementations of their own digests, and neither is ever `trust: "current-valid"`. There is no migration and cannot be one — a pack's id derives from its digest, so rewriting an old pack would mint a new artifact wearing an old one's provenance, and a v2.1.0 receipt's hashed `observation` can only be "recovered" by inverting it, which is a guess and not a record. Recorded in `docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`, amending ADR-0012.
+- **BREAKING (artifact format): evidence packs and receipts are `version: 2`, and the format version is no longer tied to the package version.** v3.0.0 changed the pack digest input, the id derivation, the `coverage` field and the receipt `observation` while leaving both constants at `1` — ADR-0012 decided to amend the schema in place, which was right about the repairs and wrong about the number. A reader now classifies an artifact by version *and* structure before computing anything: `v1-coverage` (2.1.0 and earlier), `v1-untagged-v3` (3.0.0), current, or unsupported. Both legacy formats stay readable and integrity-checkable through frozen reimplementations of their own digests, and neither is ever `trust: "current-valid"`. There is no migration and cannot be one — a pack's id derives from its digest, so rewriting an old pack would mint a new artifact wearing an old one's provenance, and a v2.1.0 receipt's hashed `observation` can only be "recovered" by inverting it, which is a guess and not a record. Recorded in `docs/adr/ADR-0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`, amending ADR-0012.
 
 - **`evidence validate --format json` distinguishes three answers where it used to give one.** `status` is `current-valid`, `current-references-expired`, `recognized-legacy`, or `unsupported`, with `trust` stating plainly whether the pack may be relied on; `recognized-legacy` also carries `legacyFormat`, `producedBy`, and that format's own `integrity`. An unknown version fails closed. Previously every one of these arrived as `evidence pack digest mismatch`, which tells the holder of a two-week-old file that someone tampered with it.
 
@@ -793,7 +793,7 @@ Three numbers in this repository disagreed with reality and nothing checked any 
 
 ## [3.0.0] - 2026-08-16 - Evidence that could not reproduce itself, and a hash that hid nothing
 
-The evidence subsystem shipped in v1.53.0 and, until this week, nobody had composed a pack outside its own tests. The first real use — a `verify safe-backfill --after-write` against a live PostgreSQL — came back `not_verified` on data that was correct, and the audit that followed found three more defects of the same kind: an evidence pack whose digest covered a random UUID, so the same claims never produced the same pack twice; a receipt "fingerprint" that was an unsalted SHA-256 over eight possible values; and a blacklist comparison with no identifier boundaries, so a protected column named `id` refused any claim containing the word "identifier". Fixing them changes both published formats, which is what makes this a major release: **packs written by 2.x will fail validation under 3.0.0, and `observation.fingerprint` no longer exists.** The reversal that authorized the repairs — known defects get fixed whether or not anyone is using the code — is recorded in `docs/adr/0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md`, superseding ADR 0011.
+The evidence subsystem shipped in v1.53.0 and, until this week, nobody had composed a pack outside its own tests. The first real use — a `verify safe-backfill --after-write` against a live PostgreSQL — came back `not_verified` on data that was correct, and the audit that followed found three more defects of the same kind: an evidence pack whose digest covered a random UUID, so the same claims never produced the same pack twice; a receipt "fingerprint" that was an unsalted SHA-256 over eight possible values; and a blacklist comparison with no identifier boundaries, so a protected column named `id` refused any claim containing the word "identifier". Fixing them changes both published formats, which is what makes this a major release: **packs written by 2.x will fail validation under 3.0.0, and `observation.fingerprint` no longer exists.** The reversal that authorized the repairs — known defects get fixed whether or not anyone is using the code — is recorded in `docs/adr/ADR-0012-known-defects-get-fixed-whether-or-not-anyone-is-using-the-code.md`, superseding ADR 0011.
 
 ### Changed
 
@@ -877,7 +877,7 @@ Three shapes that ran unattended before now exit `1`, all of them full-table wri
 
 ### Changed
 
-- **BREAKING: a statement that is not limited to particular rows is refused when nobody is watching.** `dbcli query "UPDATE users SET banned = 1"` used to execute against any read-write connection without asking anything, and the caller most likely to produce an unqualified `UPDATE` is the agent this product exists to serve. Raw SQL now passes through a two-tier gate before the connection is opened. Tier one is any write — an `INSERT`, an `UPDATE` or `DELETE` that has a `WHERE` or `LIMIT`, a `CREATE`, an `ALTER` — and behaves as it always has for a non-interactive caller; at a terminal it shows what dbcli understood the statement to do and asks, which `--yes` skips. Tier two is `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, several statements in one string — one statement to a classifier reading the leading keyword, two to a driver — and any statement the SQL parser cannot read: at a terminal the operator types the target table name, and **no flag skips it** — not `--yes`, not `--force`. Away from a terminal, or under `--format json`, tier two is refused: exit `1`, a `reason=` a caller can branch on (`no_where`, `ddl_destruction`, `unparseable`, `multiple_statements`), and the statement never sent, because the gate runs before the adapter is built rather than after. A parse failure resolves to tier two rather than tier one; the cost of being wrong is a needlessly typed table name against a needlessly emptied table. The reasoning, the alternatives, and the condition that would falsify it are in `docs/adr/0010-unattended-callers-are-refused-full-table-writes.md` (#70).
+- **BREAKING: a statement that is not limited to particular rows is refused when nobody is watching.** `dbcli query "UPDATE users SET banned = 1"` used to execute against any read-write connection without asking anything, and the caller most likely to produce an unqualified `UPDATE` is the agent this product exists to serve. Raw SQL now passes through a two-tier gate before the connection is opened. Tier one is any write — an `INSERT`, an `UPDATE` or `DELETE` that has a `WHERE` or `LIMIT`, a `CREATE`, an `ALTER` — and behaves as it always has for a non-interactive caller; at a terminal it shows what dbcli understood the statement to do and asks, which `--yes` skips. Tier two is `UPDATE` / `DELETE` with no `WHERE`, `DROP`, `TRUNCATE`, several statements in one string — one statement to a classifier reading the leading keyword, two to a driver — and any statement the SQL parser cannot read: at a terminal the operator types the target table name, and **no flag skips it** — not `--yes`, not `--force`. Away from a terminal, or under `--format json`, tier two is refused: exit `1`, a `reason=` a caller can branch on (`no_where`, `ddl_destruction`, `unparseable`, `multiple_statements`), and the statement never sent, because the gate runs before the adapter is built rather than after. A parse failure resolves to tier two rather than tier one; the cost of being wrong is a needlessly typed table name against a needlessly emptied table. The reasoning, the alternatives, and the condition that would falsify it are in `docs/adr/ADR-0010-unattended-callers-are-refused-full-table-writes.md` (#70).
 
 - **BREAKING: `dbcli update` / `dbcli delete` refuse a `--where` that matches on nothing unique.** Their `WHERE` is mandatory, so "no `WHERE`" cannot happen — but `--where "status=active"` reads like a filter and writes like a full-table statement. When the conditions cover neither the primary key nor any unique index, the same tier-two treatment applies: type the table name, or be refused with `reason=non_unique_where`. The schema needed to tell the two apart is already in hand at that point, so this costs no extra round trip. `--force` is unaffected in what it always did — skip the ordinary confirmation — and does not open this gate (#70).
 
@@ -924,7 +924,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 
 - **A write that fails in a terminal now says so in prose too, on stderr.** Prose covered the endings a person cares least about — a successful write, a cancellation, a dry run — while the two that actually stop you got a raw JSON envelope on stdout: a blacklist refusal and a validation failure (a malformed `--set`, a missing `--where`). Both now go through `printMutationFailure`, which prints the reason as a sentence when somebody is watching and the same envelope, byte for byte, when nobody is. Human-mode failures — including the executor's own `status: "error"` — write to **stderr**, joining the `PermissionError` and `ConnectionError` branches that always did, so every human-facing failure is on the error stream while routine progress stays on stdout. A blacklist refusal gets a hint naming `dbcli blacklist list`; nothing else gets the `--recovery` line, because `--recovery` writes a plan for a statement that failed against the database and a refusal at this stage never reached one (#70).
 
-- **Core modules can no longer write to stdout, and CI fails if one starts.** `DataExecutor` printed the generated SQL and blocked on `promptUser.confirm` from inside `src/core`, on the same stdout that carries the JSON envelope agents parse — and `dist/core.mjs` shipped a real `import("@inquirer/prompts")` so that a library consumer could be handed an interactive prompt it never asked for. Core now describes the pending mutation and asks the caller through a `confirm` callback; `src/commands/mutation-confirm.ts` holds the CLI's implementation. `scripts/check-core-no-stdout.ts` enforces the boundary in CI, with the 16 modules that predate the rule in a ratchet list that can only shrink. The reasoning, its alternatives, and the condition that would falsify it are recorded in `docs/adr/0009-core-does-not-write-to-stdout.md` (#70).
+- **Core modules can no longer write to stdout, and CI fails if one starts.** `DataExecutor` printed the generated SQL and blocked on `promptUser.confirm` from inside `src/core`, on the same stdout that carries the JSON envelope agents parse — and `dist/core.mjs` shipped a real `import("@inquirer/prompts")` so that a library consumer could be handed an interactive prompt it never asked for. Core now describes the pending mutation and asks the caller through a `confirm` callback; `src/commands/mutation-confirm.ts` holds the CLI's implementation. `scripts/check-core-no-stdout.ts` enforces the boundary in CI, with the 16 modules that predate the rule in a ratchet list that can only shrink. The reasoning, its alternatives, and the condition that would falsify it are recorded in `docs/adr/ADR-0009-core-does-not-write-to-stdout.md` (#70).
 
 ### Fixed
 
@@ -976,7 +976,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 
 ### Removed
 
-- **`engines.node` — the runtime declaration now matches the artifact.** `package.json` claimed `node: ">=18.0.0"` since the first release, but measured on Node v22.17.1 against the `v1.54.1` `dist/`, only one published entry point actually loaded. `node dist/cli.mjs` threw `ERR_MODULE_NOT_FOUND` as soon as the launcher reached its dynamic import: `src/cli.ts` keeps the runtime path as a non-literal `'./cli-runtime'` so the `--version` launcher does not inline the heavy runtime, and Bun's resolver appends `.mjs` where Node's ESM resolver requires the extension. `import('dist/core.mjs')` — the `./core` subpath export — threw `Bun is not defined`, the bundle holding 30 Bun global references against `dist/cli-runtime.mjs`'s 143. The `bin` shebang is `#!/usr/bin/env bun` regardless, and the `--version` fast path branches on `import.meta.main`, which is `undefined` before Node 24. `engines` now declares `bun >= 1.3.3` alone. `dist/agent-core.mjs` was and remains Node-importable, and is documented as the one entry point that is. npm and npx stay supported as distribution channels, with the docs stating plainly that the installed executable still runs under Bun. `tests/integration/runtime-contract.test.ts` holds both ends: re-declaring `engines.node` fails unless `dist/cli.mjs` and `dist/core.mjs` really import in a bare Node process, and `dist/agent-core.mjs` must keep importing there whatever else changes. The alternative — `--target node` plus ~169 Bun API replacements in `src/` and a Node runtime CI suite — is rejected and its cost recorded in `docs/adr/0008-dbcli-is-a-bun-program-and-engines-says-so.md` (#65).
+- **`engines.node` — the runtime declaration now matches the artifact.** `package.json` claimed `node: ">=18.0.0"` since the first release, but measured on Node v22.17.1 against the `v1.54.1` `dist/`, only one published entry point actually loaded. `node dist/cli.mjs` threw `ERR_MODULE_NOT_FOUND` as soon as the launcher reached its dynamic import: `src/cli.ts` keeps the runtime path as a non-literal `'./cli-runtime'` so the `--version` launcher does not inline the heavy runtime, and Bun's resolver appends `.mjs` where Node's ESM resolver requires the extension. `import('dist/core.mjs')` — the `./core` subpath export — threw `Bun is not defined`, the bundle holding 30 Bun global references against `dist/cli-runtime.mjs`'s 143. The `bin` shebang is `#!/usr/bin/env bun` regardless, and the `--version` fast path branches on `import.meta.main`, which is `undefined` before Node 24. `engines` now declares `bun >= 1.3.3` alone. `dist/agent-core.mjs` was and remains Node-importable, and is documented as the one entry point that is. npm and npx stay supported as distribution channels, with the docs stating plainly that the installed executable still runs under Bun. `tests/integration/runtime-contract.test.ts` holds both ends: re-declaring `engines.node` fails unless `dist/cli.mjs` and `dist/core.mjs` really import in a bare Node process, and `dist/agent-core.mjs` must keep importing there whatever else changes. The alternative — `--target node` plus ~169 Bun API replacements in `src/` and a Node runtime CI suite — is rejected and its cost recorded in `docs/adr/ADR-0008-dbcli-is-a-bun-program-and-engines-says-so.md` (#65).
 
 ### Added
 
@@ -1258,7 +1258,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 
 ## [1.47.1] - 2026-08-05 - 唯讀保證涵蓋所有執行路徑（安全性修復）
 
-決策記錄：`docs/adr/0004-database-access-stays-a-cli-surface.md`。
+決策記錄：`docs/adr/ADR-0004-database-access-stays-a-cli-surface.md`。
 
 ### Security
 
@@ -1298,7 +1298,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 
 ## [1.47.0] - 2026-08-05 - 連線逾時可設定
 
-決策記錄：`docs/adr/0003-connection-timeout-override-resolved-at-adapter-construction.md`。
+決策記錄：`docs/adr/ADR-0003-connection-timeout-override-resolved-at-adapter-construction.md`。
 
 ### Added
 
@@ -1314,7 +1314,7 @@ Automation that performs unqualified full-table writes stops working. Three shap
 
 ## [1.46.0] - 2026-08-04 - MongoDB 逐欄連線設定
 
-決策記錄：`docs/adr/0002-mongodb-connection-field-first-config.md`；規格：`docs/specs/2026-08-04-mongodb-field-first-connection.md`。
+決策記錄：`docs/adr/ADR-0002-mongodb-connection-field-first-config.md`；規格：`docs/specs/2026-08-04-mongodb-field-first-connection.md`。
 
 ### Changed
 

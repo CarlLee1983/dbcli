@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-31
----
-
 # A blacklist rule the code cannot use says so, and column names fold
+
+* Status: accepted
+* Date: 2026-08-31
 
 ## Context
 

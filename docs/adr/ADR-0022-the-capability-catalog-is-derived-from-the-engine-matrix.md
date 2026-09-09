@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-09-03
----
-
 # The capability catalog is derived from the engine matrix, not declared beside it
+
+* Status: accepted
+* Date: 2026-09-03
 
 An external Skill — a CRUD Skill, a CQRS Skill, a DBA Operator Skill — needs to
 ask dbcli what it can do *before* it starts working, and get an answer it can

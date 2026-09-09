@@ -18,7 +18,7 @@ world — not merely that the current builder agrees with itself.
 
 The v3 files are the reason artifact versioning exists at all: two mutually
 incompatible layouts both claiming `version: 1`. See
-`docs/adr/0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`.
+`docs/adr/ADR-0013-evidence-artifact-format-versions-are-independent-of-the-package-version.md`.
 
 Regenerating a legacy fixture defeats its purpose. If one of these ever needs to
 change, the change is a new fixture with a new name.

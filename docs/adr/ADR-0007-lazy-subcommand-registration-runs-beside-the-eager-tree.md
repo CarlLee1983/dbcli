@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-13
----
-
 # Lazy subcommand registration runs beside the eager tree, not instead of it
+
+* Status: accepted
+* Date: 2026-08-13
 
 `src/program.ts` statically imported about 40 command modules, so every CLI
 invocation paid for all of them. Issue #50 proposed fixing that by making

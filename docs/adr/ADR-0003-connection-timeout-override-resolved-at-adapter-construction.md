@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-05
----
-
 # 連線逾時的覆寫在建立 adapter 時才解析，不進入設定物件
+
+* Status: accepted
+* Date: 2026-08-05
 
 連線逾時有兩個來源：連線設定檔的 `timeout` 欄位（持久）與 root-level 旗標
 `--timeout <ms>`（單次執行）。優先序是 `--timeout` > 設定檔 > 各 adapter 內建的

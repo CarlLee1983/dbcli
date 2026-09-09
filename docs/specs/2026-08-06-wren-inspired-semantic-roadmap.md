@@ -8,7 +8,7 @@ defers it as a settled fail-closed policy, reopened only by an approved product
 and security record clearing that ADR's checklist.
 **Depends on:**
 [`2026-08-06-semantic-context-mvp-design.md`](2026-08-06-semantic-context-mvp-design.md)
-and [`docs/adr/0004-database-access-stays-a-cli-surface.md`](../adr/0004-database-access-stays-a-cli-surface.md).
+and [`docs/adr/ADR-0004-database-access-stays-a-cli-surface.md`](../adr/0004-database-access-stays-a-cli-surface.md).
 
 ## Purpose
 

@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-31
----
-
 # The audit `target` keeps its meaning, and the record says what the blacklist compared
+
+* Status: accepted
+* Date: 2026-08-31
 
 ## Context
 

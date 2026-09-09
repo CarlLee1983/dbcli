@@ -64,7 +64,7 @@ DBCLI-001 的交付狀態已驗證並結案。它跨十份交接紀錄被記為�
 
 ## 流程版本
 
-採用 ForgeFlow 0.6.0。權威記錄是 `specs/.forgeflow-adoption`，這裡只是複述，
+採用 ForgeFlow 0.7.0。權威記錄是 `specs/.forgeflow-adoption`，這裡只是複述，
 而複述正是 DBCLI-013 要修的東西：這段話在 marker 與 `specs/stories/README.md`
 都已經推進到 0.3.2 之後，還原樣說著 0.3.1，跨兩個已合併的 PR 沒有人看。
 
@@ -819,7 +819,7 @@ baseline:
     - specs/stories/DBCLI-020-perf-gates-without-a-clock/story.md
     - specs/stories/DBCLI-020-perf-gates-without-a-clock/acceptance.md
     - specs/stories/DBCLI-020-perf-gates-without-a-clock/task.md
-    - docs/adr/0028-masking-cost-is-observable-without-a-clock.md
+    - docs/adr/ADR-0028-masking-cost-is-observable-without-a-clock.md
     - src/core/blacklist-validator.ts
     - tests/perf/startup.bench.ts
     - tests/perf/query.bench.ts

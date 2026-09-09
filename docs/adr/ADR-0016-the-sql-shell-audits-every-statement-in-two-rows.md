@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-31
----
-
 # The SQL shell audits every statement, in the same two rows the Elasticsearch shell writes
+
+* Status: accepted
+* Date: 2026-08-31
 
 ## Context
 

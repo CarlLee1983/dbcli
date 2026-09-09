@@ -1,9 +1,7 @@
----
-status: accepted
-date: 2026-08-05
----
-
 # Database access stays a CLI surface
+
+* Status: accepted
+* Date: 2026-08-05
 
 dbcli exposes database access as a command-line surface and does not ship an MCP
 server. The reason is not a missing feature in MCP database servers; it is which

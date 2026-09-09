@@ -803,6 +803,82 @@ frontmatter。兩種並存等於一份記錄兩個狀態，所以整批轉成 bu
 呼叫者。一個要人記得設的變數，會讓檢查在本機過而在 CI 紅，或者反過來——那種失敗
 說的是環境，不是這個 repo 的內容。
 
+## DBCLI-022：第一條被拿掉的例外
+
+DBCLI-018 讓 CI 跑上游 ForgeFlow 自己的檢查（ADR-0027），當時有五個已交付的
+Story 落在二十一條 findings 上。那份清單寫著「只能縮短，不能增長」，但在這一輪
+之前沒有縮短過。DBCLI-022 拿掉第一條，也是最小的一條：DBCLI-PLAT-004 只有一條
+`every trust-boundary field must name an exact field, not prose`。
+
+**這條 finding 指的不是排版。** 上游的規則是每個 bullet 要含一段非空的反引號
+（`forgeflow_count_literal_bullets`、`forgeflow_has_literal`），PLAT-004 十個
+bullet 裡只有一個不合：`Serialized stdout bytes — final 65,536-byte limit and
+single-document framing`。替那句話加上反引號就會過，而那正是不該做的事——它根本
+不是欄位，而位元組上限與單一文件框架早就是 R12／R13／R14 並且在 acceptance 被斷言。
+
+拿著程式碼重推那一節，發現兩處宣告不只是不精確：
+
+* **`warnings[].message` 不是 curated 文字。** 原本寫「derived diagnostic
+  vocabulary and curated English text」，但重複需求的警告是
+  `Duplicate capability id '${id}' in --require was ignored.`
+  （`src/core/capabilities/check.ts:70`），內插的是使用者打進來的 id。它安全的
+  理由跟宣告寫的不是同一個：那個 id 在 `validAgentRequirements`
+  （`src/commands/capabilities.ts:129-138`）已經先過了 `CAPABILITY_ID_PATTERN`
+  與 160 字元上限。整合測試裡的 `SELECT * FROM users` 與 `/tmp/secret` 兩列，斷言
+  的就是這個。
+* **`evidence[]` 與 `recovery` 這個 Story 從來不產生。** `toAgentEnvelope` 與
+  `createAgentOutputFailure` 無條件寫 `evidence: []`、`recovery: null`。它們跨界
+  只發生在 `parseOperationEnvelope(unknown)` 裡——那是從 `@carllee1983/dbcli/core`
+  匯出、讀一份它管不到的文件的入口。把它們跟 `argv` 並排列，讀起來像是 dbcli
+  會產生這些值。
+
+所以那一節現在按**邊界**分成兩段，而不是攤平成一張表。同一個欄位名在兩個邊界上
+被約束的理由不同，分不出來的讀者就分不出哪些欄位是 dbcli 自己該負責收斂的。
+
+**沒有動 acceptance。** 重寫後宣告的每個欄位，都已經有一條被接受的 acceptance
+criterion 與一支被引用的測試；為了讓宣告與驗收看起來對稱而改寫人類已核可的驗收
+文字，是動紀錄，不是補檢查。
+
+**沒有動 `src/`。** 這一輪是治理修正，不發布版本。
+
+剩下四個 Story、二十條 findings。其中 PLAT-006 與 PLAT-007 合起來是十六格
+security fixture cells，要從程式碼重推，各自是自己的一輪。
+
+## DBCLI-023：第二條例外，以及最後一個 Classification 矛盾
+
+PLAT-005 是五條裡唯一同時帶兩種 finding 的：一條跟 PLAT-004 同形的
+trust-boundary 散文（`Serialized stdout bytes — must never exceed 65,536 UTF-8
+bytes`），另一條是 `Baseline conformance: no` 卻帶著 `## Superseded Behavior`
+——上游 R8 說宣告 `no` 的 Story 不得帶那一節。
+
+**第二條有兩個出口，而它們不等價。** 翻宣告，或刪那一節；兩者都能讓 checker 閉嘴，
+但一個保住紀錄、一個毀掉紀錄。
+
+判斷的依據不是語感，是同一個 repo 裡的四個兄弟。PLAT-005 那一節寫的是真的：
+PLAT-004 曾把 `operation` 限定在 `capabilities.check`、曾把
+`dbcli --agent-output capabilities` 當成 unsupported operation 拒絕，兩件事
+PLAT-005 都刻意換掉了——正是 template 講的「each existing test or documented
+behavior this Story intentionally replaces」。而 DBCLI-017（`make verify` 步驟
+名冊）、DBCLI-020（十九條絕對時間斷言）、DBCLI-PLAT-011（交付後就會變錯的文件
+句子）、DBCLI-PLAT-012 這四個 Story，全是「改動並取代既有具名行為」這個形狀，
+全都宣告 `yes`。照 `no` 讀，PLAT-005 會是這個形狀裡唯一相反的一個。
+
+所以錯的是宣告，改一個字，兩半都留住。刪掉那一節同樣會過，代價是 PLAT-005
+到底取代了什麼再也沒有任何地方寫著。
+
+trust-boundary 那半重推之後發現剩下的宣告是**單薄**而不是錯的。
+`capabilities.list` 的答案來自 `buildCapabilityCatalog()`，回傳
+`Object.freeze` 過的 `CAPABILITIES`；`src/core/capabilities/` 的整個 import graph
+被斷言不含 `process.env`、`Bun.file(`、`node:fs`、`import(`
+（`tests/contract/capability-contract.test.ts`）。舊宣告把這寫成 catalog「must
+contain no dynamic environment variables, paths, or database credentials」，像是
+一條待辦要求；它其實是程式碼**已經有**而且被結構性檢查釘住的性質。
+
+剩下三個 Story、十八條：十六格 security fixture cells，加上 PLAT-007 與
+PLAT-012 各自的 trust-boundary 一條。Classification 矛盾這一類已經清空。
+
+沒有動 acceptance，沒有動 `src/`。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -847,9 +923,17 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 7fc25ff0a08b8d6ee3b969ecda87b8c935a8e400
+  commit: 01ee82ecab07a7de6f6b870efa927a0e4f473bb7
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-023-faithful-plat-005-classification/story.md
+    - specs/stories/DBCLI-023-faithful-plat-005-classification/acceptance.md
+    - specs/stories/DBCLI-PLAT-005-agent-json-mode/story.md
+    - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/story.md
+    - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/acceptance.md
+    - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/story.md
+    - scripts/lib/forgeflow-contract.ts
+    - tests/unit/scripts/forgeflow-contract.test.ts
     - specs/handoff.md
     - specs/.forgeflow-adoption
     - specs/stories/README.md

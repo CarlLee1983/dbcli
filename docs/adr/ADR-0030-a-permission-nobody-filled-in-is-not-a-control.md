@@ -1,7 +1,16 @@
 # A permission nobody filled in is not a control
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-09
+* Superseded by: ADR-0031
+
+> The decision below — that delivery implies `commit` and `push`, enforced by the
+> handoff gate — is superseded by
+> [ADR-0031](ADR-0031-delivery-does-not-record-who-performed-it.md). Delivery
+> records that a Story reached `main`, not who performed each operation, and an
+> agent that commits locally while a human pushes was refused by name. The
+> measurement below is still current and still accurate; what it was taken to
+> prove is not.
 
 ForgeFlow 0.6.0's `## Authority` section declares, per operation, what a Story is
 permitted to do. AGENTS.md restates the rule that makes it worth having:

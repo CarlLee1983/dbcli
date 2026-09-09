@@ -29,10 +29,8 @@ import {
   formatViolations,
   lifecycleBlock,
   readLifecycle,
-  readAuthority,
   readStoryId,
   reconcile,
-  reconcileDeliveryAuthority,
   shallowCloneRefusal,
   type Exemption,
 } from '../../../scripts/lib/forgeflow-handoff'
@@ -445,68 +443,82 @@ describe('the gate is offline by construction', () => {
   })
 })
 
-describe('reconcileDeliveryAuthority', () => {
+describe('delivery is reconciled; authorization is not derived from it', () => {
+  // The claim `completed_stories` makes is that a Story reached `main`. It does
+  // not say who performed each operation, and in this repository the usual
+  // answer is "not the agent": an agent is granted `modify` and at most a local
+  // `commit`, and a human takes the branch from there. DBCLI-027 read delivery
+  // as proof that the agent was permitted to commit and push, which fails that
+  // flow by name. ADR-0031 withdrew the inference; these tests hold the two
+  // questions apart.
   const AUTHORITY = (commit: string, push: string) =>
-    `# Story: DBCLI-900 T\n\n## Authority\n\n* plan: yes\n* modify: yes\n* commit: ${commit}\n* push: ${push}\n* deploy: no\n\n## Scope\n`
-  const directories = new Map([['DBCLI-900', 'DBCLI-900-t']])
-  const lifecycle = { completedStories: ['DBCLI-900'] }
-  const sourced = (source: string) => [{ directory: 'DBCLI-900-t', source }]
+    `# Story: DBCLI-001 T\n\n## Authority\n\n* plan: yes\n* modify: yes\n* commit: ${commit}\n* push: ${push}\n* deploy: no\n\n## Scope\n`
+  const NO_SECTION = '# Story: DBCLI-001 T\n\n## Scope\n'
+  const delivered = { completedStories: ['DBCLI-001'] }
+  const directory = 'DBCLI-001-contract-absence-and-invalid-drift'
+  const sourced = (source: string) => [{ directory, source }]
 
-  test('reads a declared permission', () => {
-    expect(readAuthority(AUTHORITY('yes', 'no'), 'commit')).toBe('yes')
-    expect(readAuthority(AUTHORITY('yes', 'no'), 'push')).toBe('no')
+  test('a delivered Story whose agent committed locally and left the push to a human', async () => {
+    expect(await reconcile(inputs({ lifecycle: delivered }))).toEqual([])
+    expect(collectStoryIds(sourced(AUTHORITY('yes', 'no'))).get('DBCLI-001')).toBe(directory)
   })
 
-  test('a Story with no Authority section declares nothing', () => {
-    // The section is optional. A Story making no claim has nothing to
-    // contradict, and reporting one would demand a section upstream does not.
-    expect(readAuthority('# Story: DBCLI-900 T\n\n## Scope\n', 'push')).toBeUndefined()
+  test('a delivered Story whose agent did neither, because a human did both', async () => {
+    expect(await reconcile(inputs({ lifecycle: delivered }))).toEqual([])
+    expect(collectStoryIds(sourced(AUTHORITY('no', 'no'))).get('DBCLI-001')).toBe(directory)
   })
 
-  test('a permission absent from a declared section is not a "no"', () => {
-    const partial = '# Story: DBCLI-900 T\n\n## Authority\n\n* plan: yes\n\n## Scope\n'
-
-    expect(readAuthority(partial, 'push')).toBeUndefined()
-    expect(reconcileDeliveryAuthority(lifecycle, directories, sourced(partial))).toEqual([])
-  })
-
-  test('a delivered Story may not declare commit: no or push: no', () => {
-    const failures = reconcileDeliveryAuthority(
-      lifecycle,
-      directories,
-      sourced(AUTHORITY('no', 'no'))
+  test('the Authority text cannot change a delivery verdict', async () => {
+    // Three spellings of the same claim: both permissions granted, both
+    // withheld, and no section at all. A gate that reads none of them cannot
+    // reward the omission — which is the second half of the defect, since
+    // upstream defaults an undeclared operation to `no` and the removed rule
+    // failed the explicit `no` while passing the blank.
+    const verdicts = await Promise.all(
+      [AUTHORITY('yes', 'yes'), AUTHORITY('no', 'no'), NO_SECTION].map(async (source) => ({
+        failures: await reconcile(inputs({ lifecycle: delivered })),
+        index: [...collectStoryIds(sourced(source))],
+      }))
     )
 
-    expect(failures).toHaveLength(2)
-    expect(failures[0]!.reason).toContain('`commit: no`')
-    expect(failures[1]!.reason).toContain('`push: no`')
+    expect(verdicts[1]).toEqual(verdicts[0]!)
+    expect(verdicts[2]).toEqual(verdicts[0]!)
+    expect(verdicts[0]!.failures).toEqual([])
   })
 
-  test('a delivered Story declaring both is clean', () => {
-    expect(
-      reconcileDeliveryAuthority(lifecycle, directories, sourced(AUTHORITY('yes', 'yes')))
-    ).toEqual([])
+  test('an undelivered Story fails however generously it declares Authority', async () => {
+    // The other direction of the same separation: what the gate judges is the
+    // repository's backing for the claim, and a Story granting itself every
+    // permission does not acquire one.
+    const failures = await reconcile(inputs({ lifecycle: delivered, trailers: new Set<string>() }))
+
+    expect(failures.map((failure) => failure.story)).toEqual(['DBCLI-001'])
+    expect(failures[0]!.reason).toMatch(/`Story:` trailer/)
+    expect(collectStoryIds(sourced(AUTHORITY('yes', 'yes'))).get('DBCLI-001')).toBe(directory)
   })
 
-  test('only the two permissions delivery implies are checked', () => {
-    // Authority is per-permission and nothing implies anything else. Delivering
-    // a Story says nothing about whether it was allowed to deploy, so a clean
-    // Story keeps its `deploy: no`.
-    expect(
-      reconcileDeliveryAuthority(lifecycle, directories, sourced(AUTHORITY('yes', 'yes')))
-    ).toEqual([])
-    expect(readAuthority(AUTHORITY('yes', 'yes'), 'deploy')).toBe('no')
+  test('the rules module exposes one delivery verdict and no permission reader', async () => {
+    // Structural, because the defect was structural: the second reconciliation
+    // lived beside the first and a test that only knew about `reconcile` would
+    // have stayed green through all of it. One verdict, and nothing anywhere in
+    // the surface that reads a permission.
+    const rules = await import('../../../scripts/lib/forgeflow-handoff')
+    const exported = Object.keys(rules)
+
+    expect(exported.filter((name) => name.startsWith('reconcile'))).toEqual(['reconcile'])
+    expect(exported.filter((name) => /authority/i.test(name))).toEqual([])
   })
 
-  test('a Story that is not recorded as completed is not checked', () => {
-    // The claim being reconciled is the handoff's, not the Story's. An
-    // in-flight Story has not been delivered and may truthfully say push: no.
-    expect(
-      reconcileDeliveryAuthority(
-        { completedStories: [] },
-        directories,
-        sourced(AUTHORITY('no', 'no'))
-      )
-    ).toEqual([])
+  test('the gate script imports no permission reader either', async () => {
+    // Authority's format, its defaults and which combinations are legal belong
+    // to upstream's checker, run by `bun run forgeflow:contract`. A second
+    // parser here would be a second answer to one question.
+    const source = await Bun.file(
+      new URL('../../../scripts/check-forgeflow-handoff.ts', import.meta.url)
+    ).text()
+    const imported = source.match(/import \{([^}]*)\} from '\.\/lib\/forgeflow-handoff'/)
+
+    expect(imported).not.toBeNull()
+    expect(imported![1]).not.toMatch(/authority/i)
   })
 })

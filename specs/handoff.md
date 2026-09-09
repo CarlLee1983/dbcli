@@ -955,14 +955,45 @@ Authority 記的是核可當下授予了什麼，而改寫已核可 Story 正是
 上游的 checker 只驗值是不是 `yes`／`no`，沒有任何地方問過它是不是真的。一個沒有
 東西去比對的宣告不是控制，措辭再嚴謹都不是。
 
-比對的材料本來就在：`completed_stories` 是這個 repo 自己說某個 Story 進了 main，
-而它只可能是以 commit、經由被 push 的分支進去的。`reconcileDeliveryAuthority`
-現在就檢查這一條，訊息同時指出兩個出口——改宣告，或別再把它記成 completed。
-只檢查 `commit` 與 `push` 兩項：交付不蘊含 `deploy` 或 `migration`，而 Authority
-本來就是逐項授權、彼此不蘊含。決定與失效條件在 ADR-0030。
+比對的材料看起來本來就在：`completed_stories` 是這個 repo 自己說某個 Story 進了
+main，而它只可能是以 commit、經由被 push 的分支進去的。`reconcileDeliveryAuthority`
+當時就檢查這一條。**那一步是錯的，下一節說明並且已經移除。**
 
 順帶對帳出第二件過期：DBCLI-022 到 026 已交付、已合併、已通過 Human Review，卻都
-沒被登進 `completed_stories`。一併補上。
+沒被登進 `completed_stories`。一併補上——這一半站得住，跟 Authority 無關。
+
+### 交付說的是「進了 main」，不是「誰做的」
+
+上一節那條規則活了一天。它擋掉的第一個東西不是漏填的模板，是這個 repo 的正常流程：
+**agent 拿到 `modify`、最多一個本機 `commit`，接手 commit、push、開 PR、合併的是人。**
+交付是完整的，agent 的 `push: no` 從頭到尾都是真的，而 gate 指名拒絕它。
+
+ADR-0030 自己寫的失效條件是「交付不再蘊含被 push 的分支」。交付到今天仍然蘊含一條
+被 push 的分支——它從來沒有蘊含**是 agent** push 的。那一步才是規則真正在做的推論。
+
+第二個症狀指向同一件事：同一個宣告被判兩次不同的結果。上游 0.7.0 的 Execution
+Contract（`protocol/execution.md`，`specs/.forgeflow-adoption` 釘住的 revision）把
+`plan`、`modify` 以外每一項的預設值定為 `no`，並且明說「做得到某件事從來不是被授權
+去做它」。所以省略 `push:` 跟寫 `push: no` 是同一句話；那條規則卻擋顯式的 `no`、
+放行省略的那個——刪掉一行就是穿過去的辦法。
+
+移除的只有那條推論。Story 目錄存在性、`Story:` trailer、`DELIVERED_BEFORE_TRAILERS`
+棘輪、淺複製拒絕、lifecycle 結構檢查全部原封不動，每一條都留著一支會在它消失時變紅
+的測試。DBCLI-027 對的那半句——沒有東西比對過的宣告不是控制——本來就不是在講
+Authority，那是上面那幾條規則已經在做的事。Authority 的格式、預設值與組合合法性由
+`bun run forgeflow:contract` 對著採用的 revision 檢查；它是不是真的，是 Human Review
+的問題。這個 repo 觀察不到指令是誰下的，會猜的 gate 比沒被檢查的宣告更糟，因為它的
+判決長得像證據。
+
+**那八個被改寫的宣告留在原處。** ADR-0030 把 DBCLI-019 到 026 的 `push: no` 改成
+`yes`，其中 019、020、021 的 `commit: no` 也一併改了。查不到任何逐項記錄那八個 Story
+授予了實作 agent 什麼的核可紀錄。改回 `no` 會是同一個錯誤的鏡像——從沒有證據推論
+權限被收回——所以不改。能更正一個歷史宣告的只有核可紀錄，merge 或 push 都不是。
+決定與失效條件在 ADR-0031。
+
+一個順帶的指標修復：上游 `protocol/architecture.md` 明說 `superseded` 的記錄不能當
+依賴，所以 DBCLI-027 的 `Decision:` 改指 ADR-0031，並在該 Story 裡寫明它當初做的
+決定是 ADR-0030。這是指標修復，不是改寫那個 Story 主張過的東西。
 
 ## Lifecycle
 
@@ -1013,9 +1044,16 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 87e8c48aa303dbccdc5c36a6aa0cbe0f35fc7995
+  commit: e709ebe1c55924d898d8a524adb486dd4f2e4b41
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-028-delivery-is-not-authorization/story.md
+    - specs/stories/DBCLI-028-delivery-is-not-authorization/acceptance.md
+    - docs/adr/ADR-0031-delivery-does-not-record-who-performed-it.md
+    - scripts/lib/forgeflow-handoff.ts
+    - scripts/check-forgeflow-handoff.ts
+    - tests/unit/scripts/forgeflow-handoff.test.ts
+    - README.md
     - specs/stories/DBCLI-027-authority-that-matches-delivery/story.md
     - specs/stories/DBCLI-027-authority-that-matches-delivery/acceptance.md
     - docs/adr/ADR-0030-a-permission-nobody-filled-in-is-not-a-control.md

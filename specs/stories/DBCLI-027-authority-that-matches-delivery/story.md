@@ -54,10 +54,15 @@ delivered, merged and approved, and none of them had been added to it.
 ## Architecture
 
 * Impact: medium
-* Decision: `ADR-0030`
+* Decision: `ADR-0031`
 * Boundary: `HandoffContract`
 * Contract: `a delivered Story's Authority agrees with what delivering it required`
 * Owner: `HandoffContract = repository-governance`
+
+The decision this Story made is ADR-0030. It was superseded by ADR-0031
+(DBCLI-028), and upstream rejects a superseded record as a dependency, so the
+reference above points at the record now in force; ADR-0031 carries ADR-0030's
+measurement and links back to it.
 
 ## Risk
 

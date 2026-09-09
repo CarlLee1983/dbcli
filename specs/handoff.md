@@ -995,6 +995,12 @@ Authority，那是上面那幾條規則已經在做的事。Authority 的格式�
 依賴，所以 DBCLI-027 的 `Decision:` 改指 ADR-0031，並在該 Story 裡寫明它當初做的
 決定是 ADR-0030。這是指標修復，不是改寫那個 Story 主張過的東西。
 
+DBCLI-027 與 DBCLI-028 都在合併後補進 `completed_stories`。DBCLI-027 是它自己那一輪
+就漏掉的——它花力氣補上 DBCLI-022 到 026 的同一份清單，沒有把自己放進去；DBCLI-028
+則是在 PR #187 合併的當下補的。兩筆都由自己的 `Story:` trailer 背書。這份清單只有在
+交付之後才登記，而登記這一步沒有任何 gate 會提醒，所以它是這裡最容易再過期一次的
+地方——DBCLI-027 的紀錄裡已經有一次「已交付已合併卻沒登進去」的前例。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -1039,12 +1045,14 @@ workflow:
     - DBCLI-024
     - DBCLI-025
     - DBCLI-026
+    - DBCLI-027
+    - DBCLI-028
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: e709ebe1c55924d898d8a524adb486dd4f2e4b41
+  commit: 1f855384089b21392d4742b8cbe385f15f0f6b53
   dirty_worktree: false
   story_owned_paths:
     - specs/stories/DBCLI-028-delivery-is-not-authorization/story.md

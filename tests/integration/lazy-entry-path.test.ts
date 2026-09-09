@@ -103,8 +103,25 @@ describe('lazy entry path', () => {
     expect(help).toContain('--correlation-id')
   })
 
+  // The three rejected payloads are DBCLI-PLAT-006's security fixture rows 3, 4
+  // and 5. They were fixture rows with nothing asserting them: the connection
+  // string and the statement appeared only in the envelope parser's own test,
+  // which exercises `context.correlationId` — a different source field, and the
+  // one the matrix covers in its own row. DBCLI-025.
   test.each([
     ['invalid value', ['--correlation-id', '../../PLAT006_PATH', 'capabilities']],
+    [
+      'connection string value',
+      [
+        '--correlation-id',
+        'postgresql://plat006:PLAT006_SECRET@db.internal:5432/prod',
+        'capabilities',
+      ],
+    ],
+    [
+      'statement value',
+      ['--correlation-id', "SELECT * FROM users WHERE email='plat006@example.com'", 'capabilities'],
+    ],
     ['missing value', ['--correlation-id']],
     ['after subcommand', ['capabilities', '--correlation-id', 'DBCLI-PLAT-006']],
   ])('normal %s correlation input exits 2', (_name, args) => {

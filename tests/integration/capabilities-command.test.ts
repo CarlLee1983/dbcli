@@ -719,29 +719,37 @@ describe('dbcli --agent-output capabilities check', () => {
     expect(parseOperationEnvelope(envelope).ok).toBe(true)
   })
 
-  test('adds a validated correlation ID only to a non-null agent context', async () => {
-    const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
-    const { stdout, stderr, code } = await run(
-      [
-        '--agent-output',
-        '--correlation-id',
-        'INC-2026.09.05',
-        '--config',
-        configPath,
-        'capabilities',
-        'check',
-        '--require',
-        'schema.read',
-      ],
-      dir
-    )
+  // All three preserved payloads, not one: they are DBCLI-PLAT-006's security
+  // fixture rows 1, 2 and 6, and only `INC-2026.09.05` reached the envelope
+  // here while only `DBCLI-PLAT-006` reached the audit entry in
+  // tests/unit/core/audit/integration-helper.test.ts. `PLAT006_RAW_ERROR_SENTINEL`
+  // appeared in no test at all. Each row claims both halves. DBCLI-025.
+  test.each(['DBCLI-PLAT-006', 'INC-2026.09.05', 'PLAT006_RAW_ERROR_SENTINEL'])(
+    'adds the validated correlation ID %s to a non-null agent context',
+    async (correlationId) => {
+      const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')
+      const { stdout, stderr, code } = await run(
+        [
+          '--agent-output',
+          '--correlation-id',
+          correlationId,
+          '--config',
+          configPath,
+          'capabilities',
+          'check',
+          '--require',
+          'schema.read',
+        ],
+        dir
+      )
 
-    expect(code).toBe(0)
-    expect(stderr).toBe('')
-    const envelope = JSON.parse(stdout)
-    expect(envelope.context.correlationId).toBe('INC-2026.09.05')
-    expect(parseOperationEnvelope(envelope).ok).toBe(true)
-  })
+      expect(code).toBe(0)
+      expect(stderr).toBe('')
+      const envelope = JSON.parse(stdout)
+      expect(envelope.context.correlationId).toBe(correlationId)
+      expect(parseOperationEnvelope(envelope).ok).toBe(true)
+    }
+  )
 
   test('retains bounded result data for unmet requirements and exits 1', async () => {
     const { dir, configPath } = await dirWithConfig('postgresql', 'query-only')

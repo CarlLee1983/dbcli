@@ -1715,6 +1715,74 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release pr
 
 ---
 
+## Governance
+
+For people changing this repository. dbcli itself depends on none of the tools
+below: `package.json` and `src/` never mention them, `.forgepilot/` is
+gitignored local state, and a clone without any of them runs `make verify`
+normally.
+
+### How work is specified and reviewed: ForgeFlow
+
+Each unit of work is a Story under `specs/stories/`, made of a `story.md` (the
+intent boundary) and an `acceptance.md` (the criteria). That shape is not a
+local convention — it is upstream ForgeFlowV2's contract. The adopted version
+and revision are pinned in `specs/.forgeflow-adoption`, and the CI
+`forgeflow-contract` job clones **that exact revision** and runs upstream's own
+checkers against this repository (`bun run forgeflow:contract`, which needs
+`FORGEFLOW_ROOT`). The contract is executed by upstream's code rather than
+reimplemented here, because two implementations of one contract diverge on a
+schedule nobody controls (ADR-0027).
+
+A Story declaring itself security sensitive must enumerate its trust-boundary
+fields and a security fixture matrix, and **every cell must be an exact value**
+rather than prose. That rule catches more than wording: clearing the last of it
+turned up three fixture rows that asserted nothing at all, and one row
+describing a mechanism that does not exist.
+
+The exemption list in `scripts/lib/forgeflow-contract.ts` is a ratchet that may
+shrink and never grow. It is currently empty, so any finding at all fails the
+gate; adding an entry back requires lowering — never raising — the two counts
+beside it, which a test enforces.
+
+### When work is done: ForgePilot and `make verify`
+
+`make verify` is the automated completion authority. Passing it makes work
+*eligible* for human review; it does not approve or merge anything. Do not
+bypass verification or delete failing tests to obtain a pass.
+
+ForgePilot is an operator tool that holds the work queue and the verification
+evidence. It runs this repository's own `make verify` inside a detached worktree
+at an exact commit, so a recorded pass is bound to that revision rather than
+meaning "it passes on a machine that already has everything installed". It has
+no completion command — only a human can approve.
+
+### Where decisions live: `docs/adr/`
+
+A decision that is hard to reverse, surprising without context, or the result of
+a real trade-off gets a record in `docs/adr/`, named `ADR-<digits>-<slug>.md`
+with its status as a `* Status:` bullet rather than front matter. That shape
+exists so a Story's `Decision:` field resolves to it mechanically (ADR-0029).
+Open questions live there as `status: proposed`; undecided is a state that has
+to be storable.
+
+Prefer closing a record with a falsification condition — one sentence saying
+when the decision would no longer hold — naming the files it depends on in
+backticks. Tooling reads the boundary list from those backticks, so the marker
+is load-bearing rather than decorative.
+
+### The principle behind all of it
+
+Every gate here is a variation on one lesson: **a declaration nothing compares
+to anything is not a control.** Delivery claims in the handoff are reconciled
+against commit trailers; a Story's Authority declaration is reconciled against
+the fact of its delivery (ADR-0030); the adopted ForgeFlow version is reconciled
+against every place that restates it. One declaration was wrong in eight
+consecutive Stories without anyone noticing, for the only reason such things
+survive: nothing ever asked whether it was true.
+
+---
+
 ## License
 
 See LICENSE file for details.

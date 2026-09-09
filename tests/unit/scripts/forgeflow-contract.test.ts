@@ -177,6 +177,19 @@ describe('the exemption ratchet', () => {
     expect(findings).toBe(ADMITTED_FINDINGS)
   })
 
+  test('no longer admits anything for DBCLI-PLAT-004', () => {
+    // DBCLI-022 re-derived that Story's trust-boundary declarations against the
+    // code, so upstream reports nothing for it. The counts above would still
+    // agree if the entry were merely renamed or traded for another, which is
+    // what this names outright.
+    expect([...PREDATING_FINDINGS.keys()]).toEqual([
+      'DBCLI-PLAT-005-agent-json-mode',
+      'DBCLI-PLAT-006-correlation-id',
+      'DBCLI-PLAT-007-bounded-evidence-receipts',
+      'DBCLI-PLAT-012-schema-cache-write-boundary',
+    ])
+  })
+
   test('admits no duplicate finding within one Story', () => {
     // A repeated string would satisfy the count while admitting one fewer real
     // finding than it appears to.

@@ -202,22 +202,71 @@ must address keys by name rather than depend on ordering.
 
 ## Trust Boundary Fields
 
-* `argv[]` — identifies the exact opt-in token, placement, operation, and
-  conflicting user-supplied output options before Commander may emit prose.
-* `--require <ids>` — user-controlled capability ids projected into bounded
-  `required` and `results` arrays.
-* `context.connectionName` — config-derived label projected through the existing
-  bound; connection credentials and endpoints are never accepted.
-* `context.engine`, `context.permission`, and `context.agentMode` — externally
-  derived evaluation context constrained to existing vocabularies.
-* `data` — operation-owned result projection constrained by the
-  `capabilities.check` strict schema.
-* `warnings[].code` and `warnings[].message` — derived diagnostic vocabulary and
-  curated English text.
-* `evidence[].kind`, `evidence[].id`, and `evidence[].digest` — external artifact
-  references stripped of paths and embedded bodies.
-* `recovery` — existing strict recovery data; its error must agree with the
-  enclosing envelope.
-* `error.code` and `error.message` — stable classification and curated text;
-  arbitrary exception details never cross the boundary.
-* Serialized stdout bytes — final 65,536-byte limit and single-document framing.
+Two boundaries carry values into this contract, and the same field name means a
+different thing at each. dbcli *builds* an envelope from `argv`, the environment
+and `config.json`; `parseOperationEnvelope(unknown)`, exported through
+`@carllee1983/dbcli/core`, *reads* a whole document from a producer it does not
+control. A field listed only under the second is one this Story never populates.
+
+Entering from `argv`, the environment, or `config.json`:
+
+* `process.argv` — scanned by `inspectAgentOutputInvocation` before Commander
+  runs, to find the exact `--agent-output` token, its placement relative to the
+  subcommand, the operation, and a conflicting explicit `--format` or
+  `--for-agent`. No argv token is ever copied into the envelope.
+* `data.required[]` and `data.results[].id` — the ids from `--require`, split
+  and de-duplicated by `parseRequirements`, then admitted only if every id
+  matches `CAPABILITY_ID_PATTERN` and is at most 160 characters and there are at
+  most 128 of them (`validAgentRequirements`). Anything else becomes
+  `INVALID_CAPABILITY_REQUIREMENTS` with `data: null` and the rejected text
+  absent from stdout.
+* `warnings[].message` — the duplicate-requirement warning interpolates the id
+  the user typed. It is safe because that id has already passed
+  `validAgentRequirements`, not because the text is curated; the other three
+  warning messages are fixed English.
+* `context.connectionName` — `config.effectiveConnectionName` read from
+  `config.json`, truncated to 200 characters by the resolver and then refused
+  outright above 160, which emits `AGENT_OUTPUT_INTERNAL_ERROR` and exit `1`
+  rather than a shortened label.
+* `context.engine` and `context.permission` — `config.connection.system` and
+  `config.permission` from `config.json`, each admitted only as a member of its
+  closed vocabulary; a value outside it resolves to no context at all rather
+  than to a reported one.
+* `context.agentMode` — the boolean `process.env.DBCLI_AGENT_MODE === '1'`. The
+  variable is never echoed.
+
+Entering through `parseOperationEnvelope(unknown)`, which trusts no key of the
+document it is handed:
+
+* `schemaVersion` — accepted only as the literal `1`; every other value,
+  including a later one, is rejected rather than parsed optimistically.
+* `operation` — accepted only from the registered enum, which is additionally
+  held to the dotted-identifier pattern and the 160-character bound, so no raw
+  argv, SQL, or path can occupy it.
+* `ok` and `status` — a closed pair; `ok` must equal `status === "succeeded"`,
+  so a document cannot claim success in one and failure in the other.
+* `data` — accepted only as the strict per-operation projection, capped at 128
+  `required` and 128 `results` that must agree in order, or as `null`. Unknown
+  keys, including nested ones, are rejected, which is what refuses `data.rows`
+  and `data.sql`.
+* `warnings[].code` and `error.code` — bounded uppercase snake-case identifiers
+  of at most 160 characters, an extensible grammar rather than a closed enum.
+* `error.message` — at most 2,000 characters. An unexpected exception never
+  reaches it: the presentation path substitutes the fixed
+  `Agent output failed safely.` and the raw `Error.message` is discarded.
+* `evidence[].kind`, `evidence[].id`, and `evidence[].digest` — references only:
+  `kind` from the three-member enum, `id` matching
+  `^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$`, an optional digest matching
+  `^sha256:[a-f0-9]{64}$`, at most 16 entries, and no key that could carry a
+  path or an embedded body. This Story always emits `evidence: []`.
+* `recovery` — `null`, or a document the existing strict Recovery Envelope
+  parser accepts whose error code and message match the enclosing error exactly
+  and whose every nested string is within the 2,000-character bound. This Story
+  always emits `recovery: null`.
+* `context` — the same four fields as above plus nothing else; `context.password`,
+  `context.connectionString` and `context.configPath` are refused as unknown
+  keys, which is what the security fixture matrix asserts.
+
+The 65,536-byte cap on the serialized document and its single-document,
+single-trailing-newline framing are not fields and are stated as R12, R13 and
+R14.

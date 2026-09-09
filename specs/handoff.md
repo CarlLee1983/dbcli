@@ -803,6 +803,47 @@ frontmatter。兩種並存等於一份記錄兩個狀態，所以整批轉成 bu
 呼叫者。一個要人記得設的變數，會讓檢查在本機過而在 CI 紅，或者反過來——那種失敗
 說的是環境，不是這個 repo 的內容。
 
+## DBCLI-022：第一條被拿掉的例外
+
+DBCLI-018 讓 CI 跑上游 ForgeFlow 自己的檢查（ADR-0027），當時有五個已交付的
+Story 落在二十一條 findings 上。那份清單寫著「只能縮短，不能增長」，但在這一輪
+之前沒有縮短過。DBCLI-022 拿掉第一條，也是最小的一條：DBCLI-PLAT-004 只有一條
+`every trust-boundary field must name an exact field, not prose`。
+
+**這條 finding 指的不是排版。** 上游的規則是每個 bullet 要含一段非空的反引號
+（`forgeflow_count_literal_bullets`、`forgeflow_has_literal`），PLAT-004 十個
+bullet 裡只有一個不合：`Serialized stdout bytes — final 65,536-byte limit and
+single-document framing`。替那句話加上反引號就會過，而那正是不該做的事——它根本
+不是欄位，而位元組上限與單一文件框架早就是 R12／R13／R14 並且在 acceptance 被斷言。
+
+拿著程式碼重推那一節，發現兩處宣告不只是不精確：
+
+* **`warnings[].message` 不是 curated 文字。** 原本寫「derived diagnostic
+  vocabulary and curated English text」，但重複需求的警告是
+  `Duplicate capability id '${id}' in --require was ignored.`
+  （`src/core/capabilities/check.ts:70`），內插的是使用者打進來的 id。它安全的
+  理由跟宣告寫的不是同一個：那個 id 在 `validAgentRequirements`
+  （`src/commands/capabilities.ts:129-138`）已經先過了 `CAPABILITY_ID_PATTERN`
+  與 160 字元上限。整合測試裡的 `SELECT * FROM users` 與 `/tmp/secret` 兩列，斷言
+  的就是這個。
+* **`evidence[]` 與 `recovery` 這個 Story 從來不產生。** `toAgentEnvelope` 與
+  `createAgentOutputFailure` 無條件寫 `evidence: []`、`recovery: null`。它們跨界
+  只發生在 `parseOperationEnvelope(unknown)` 裡——那是從 `@carllee1983/dbcli/core`
+  匯出、讀一份它管不到的文件的入口。把它們跟 `argv` 並排列，讀起來像是 dbcli
+  會產生這些值。
+
+所以那一節現在按**邊界**分成兩段，而不是攤平成一張表。同一個欄位名在兩個邊界上
+被約束的理由不同，分不出來的讀者就分不出哪些欄位是 dbcli 自己該負責收斂的。
+
+**沒有動 acceptance。** 重寫後宣告的每個欄位，都已經有一條被接受的 acceptance
+criterion 與一支被引用的測試；為了讓宣告與驗收看起來對稱而改寫人類已核可的驗收
+文字，是動紀錄，不是補檢查。
+
+**沒有動 `src/`。** 這一輪是治理修正，不發布版本。
+
+剩下四個 Story、二十條 findings。其中 PLAT-006 與 PLAT-007 合起來是十六格
+security fixture cells，要從程式碼重推，各自是自己的一輪。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -847,9 +888,14 @@ workflow:
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 7fc25ff0a08b8d6ee3b969ecda87b8c935a8e400
+  commit: 8334517bb5c5fb4babf234b1ec87a1ac4a471bdd
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/story.md
+    - specs/stories/DBCLI-022-faithful-plat-004-trust-boundary/acceptance.md
+    - specs/stories/DBCLI-PLAT-004-operation-envelope-v1/story.md
+    - scripts/lib/forgeflow-contract.ts
+    - tests/unit/scripts/forgeflow-contract.test.ts
     - specs/handoff.md
     - specs/.forgeflow-adoption
     - specs/stories/README.md

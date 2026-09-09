@@ -29,8 +29,10 @@ import {
   formatViolations,
   lifecycleBlock,
   readLifecycle,
+  readAuthority,
   readStoryId,
   reconcile,
+  reconcileDeliveryAuthority,
   shallowCloneRefusal,
   type Exemption,
 } from '../../../scripts/lib/forgeflow-handoff'
@@ -440,5 +442,71 @@ describe('the gate is offline by construction', () => {
     ).text()
     expect(source).not.toMatch(/^\s*import\s/m)
     expect(source).not.toMatch(/\bfetch\s*\(|\brequire\s*\(/)
+  })
+})
+
+describe('reconcileDeliveryAuthority', () => {
+  const AUTHORITY = (commit: string, push: string) =>
+    `# Story: DBCLI-900 T\n\n## Authority\n\n* plan: yes\n* modify: yes\n* commit: ${commit}\n* push: ${push}\n* deploy: no\n\n## Scope\n`
+  const directories = new Map([['DBCLI-900', 'DBCLI-900-t']])
+  const lifecycle = { completedStories: ['DBCLI-900'] }
+  const sourced = (source: string) => [{ directory: 'DBCLI-900-t', source }]
+
+  test('reads a declared permission', () => {
+    expect(readAuthority(AUTHORITY('yes', 'no'), 'commit')).toBe('yes')
+    expect(readAuthority(AUTHORITY('yes', 'no'), 'push')).toBe('no')
+  })
+
+  test('a Story with no Authority section declares nothing', () => {
+    // The section is optional. A Story making no claim has nothing to
+    // contradict, and reporting one would demand a section upstream does not.
+    expect(readAuthority('# Story: DBCLI-900 T\n\n## Scope\n', 'push')).toBeUndefined()
+  })
+
+  test('a permission absent from a declared section is not a "no"', () => {
+    const partial = '# Story: DBCLI-900 T\n\n## Authority\n\n* plan: yes\n\n## Scope\n'
+
+    expect(readAuthority(partial, 'push')).toBeUndefined()
+    expect(reconcileDeliveryAuthority(lifecycle, directories, sourced(partial))).toEqual([])
+  })
+
+  test('a delivered Story may not declare commit: no or push: no', () => {
+    const failures = reconcileDeliveryAuthority(
+      lifecycle,
+      directories,
+      sourced(AUTHORITY('no', 'no'))
+    )
+
+    expect(failures).toHaveLength(2)
+    expect(failures[0]!.reason).toContain('`commit: no`')
+    expect(failures[1]!.reason).toContain('`push: no`')
+  })
+
+  test('a delivered Story declaring both is clean', () => {
+    expect(
+      reconcileDeliveryAuthority(lifecycle, directories, sourced(AUTHORITY('yes', 'yes')))
+    ).toEqual([])
+  })
+
+  test('only the two permissions delivery implies are checked', () => {
+    // Authority is per-permission and nothing implies anything else. Delivering
+    // a Story says nothing about whether it was allowed to deploy, so a clean
+    // Story keeps its `deploy: no`.
+    expect(
+      reconcileDeliveryAuthority(lifecycle, directories, sourced(AUTHORITY('yes', 'yes')))
+    ).toEqual([])
+    expect(readAuthority(AUTHORITY('yes', 'yes'), 'deploy')).toBe('no')
+  })
+
+  test('a Story that is not recorded as completed is not checked', () => {
+    // The claim being reconciled is the handoff's, not the Story's. An
+    // in-flight Story has not been delivered and may truthfully say push: no.
+    expect(
+      reconcileDeliveryAuthority(
+        { completedStories: [] },
+        directories,
+        sourced(AUTHORITY('no', 'no'))
+      )
+    ).toEqual([])
   })
 })

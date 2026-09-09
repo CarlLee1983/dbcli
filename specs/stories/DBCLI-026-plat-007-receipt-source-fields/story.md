@@ -62,7 +62,7 @@ in.
 * add_dependency: no
 * migration: no
 * commit: yes
-* push: no
+* push: yes
 * deploy: no
 
 ## Architecture

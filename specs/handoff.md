@@ -938,12 +938,31 @@ row 10 的 persisted locations 原本寫 `stderr, audit entry`，那是**替代�
 `PREDATING_FINDINGS` 與兩個計數留著。空的意思是棘輪到底了：任何一條 finding 現在
 都會讓 gate 紅，而要加回一條就得**調低**——不能調高——那兩個數字。
 
-### 一個沒有修的落差
+### 那個落差修掉了，理由跟原本的判斷相反
 
-DBCLI-022／023 的 `## Authority` 都宣告 `push: no`，實際上那個分支被 push 了，因為
-人類當場授權。沒有回頭改那兩份 Story：Authority 記的是核可當下授予了什麼，不是後
-來發生了什麼，而改寫已核可 Story 的內文正是 DBCLI-021 自己 Out of Scope 拒絕的事。
-記在這裡，讓落差有地方可查。
+上一節原本記著：DBCLI-022／023 宣告 `push: no` 而分支被 push 了，不回頭改，因為
+Authority 記的是核可當下授予了什麼，而改寫已核可 Story 正是 DBCLI-021 拒絕的事。
+
+**量一下就翻案了。** 這個 repo 裡所有曾經宣告 `## Authority` 的 Story 共八個，
+**八個全部**寫 `push: no`，而八個全部都經由合併的 PR 進了 main；其中三個還寫
+`commit: no`，而它們帶著自己 `Story:` trailer 的 commit 就在 main 上。
+
+八分之八不是決定的紀錄，是模板預設值被抄了八次沒填。改它不會毀掉任何決定，因為
+從來沒有人做過那個陳述。原本的推理對「已核可的紀錄不要動」是對的，錯在把這件事
+歸成那一類。
+
+真正有用的是另一半：**它能活過八個 Story，是因為沒有東西拿它跟任何東西比對。**
+上游的 checker 只驗值是不是 `yes`／`no`，沒有任何地方問過它是不是真的。一個沒有
+東西去比對的宣告不是控制，措辭再嚴謹都不是。
+
+比對的材料本來就在：`completed_stories` 是這個 repo 自己說某個 Story 進了 main，
+而它只可能是以 commit、經由被 push 的分支進去的。`reconcileDeliveryAuthority`
+現在就檢查這一條，訊息同時指出兩個出口——改宣告，或別再把它記成 completed。
+只檢查 `commit` 與 `push` 兩項：交付不蘊含 `deploy` 或 `migration`，而 Authority
+本來就是逐項授權、彼此不蘊含。決定與失效條件在 ADR-0030。
+
+順帶對帳出第二件過期：DBCLI-022 到 026 已交付、已合併、已通過 Human Review，卻都
+沒被登進 `completed_stories`。一併補上。
 
 ## Lifecycle
 
@@ -984,14 +1003,25 @@ workflow:
     - DBCLI-019
     - DBCLI-020
     - DBCLI-021
+    - DBCLI-022
+    - DBCLI-023
+    - DBCLI-024
+    - DBCLI-025
+    - DBCLI-026
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: 38f6241e0d5bc620ed4cae918ebf3fee05a73b57
+  commit: 87e8c48aa303dbccdc5c36a6aa0cbe0f35fc7995
   dirty_worktree: false
   story_owned_paths:
+    - specs/stories/DBCLI-027-authority-that-matches-delivery/story.md
+    - specs/stories/DBCLI-027-authority-that-matches-delivery/acceptance.md
+    - docs/adr/ADR-0030-a-permission-nobody-filled-in-is-not-a-control.md
+    - scripts/lib/forgeflow-handoff.ts
+    - scripts/check-forgeflow-handoff.ts
+    - tests/unit/scripts/forgeflow-handoff.test.ts
     - specs/stories/DBCLI-024-plat-012-cache-write-failure-field/story.md
     - specs/stories/DBCLI-024-plat-012-cache-write-failure-field/acceptance.md
     - specs/stories/DBCLI-025-plat-006-verification-that-exists/story.md

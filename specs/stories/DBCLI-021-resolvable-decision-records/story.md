@@ -50,8 +50,8 @@ out `specs/decisions/` in the first place.
 * modify: yes
 * add_dependency: no
 * migration: no
-* commit: no
-* push: no
+* commit: yes
+* push: yes
 * deploy: no
 
 ## Architecture

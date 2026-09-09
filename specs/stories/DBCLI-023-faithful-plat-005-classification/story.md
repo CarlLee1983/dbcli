@@ -61,7 +61,7 @@ a requirement the catalog "must" meet. It is a property the code already has.
 * add_dependency: no
 * migration: no
 * commit: yes
-* push: no
+* push: yes
 * deploy: no
 
 ## Architecture

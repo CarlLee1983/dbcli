@@ -26,6 +26,7 @@ import {
   lifecycleBlock,
   readLifecycle,
   reconcile,
+  reconcileDeliveryAuthority,
   shallowCloneRefusal,
   type Exemption,
 } from './lib/forgeflow-handoff'
@@ -101,13 +102,18 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
+const sources = await storySources()
+const directories = collectStoryIds(sources)
+
 const failures = await reconcile({
   lifecycle,
-  directories: collectStoryIds(await storySources()),
+  directories,
   trailers: await storiesWithTrailers(),
   exemptions: DELIVERED_BEFORE_TRAILERS,
   commitExists,
 })
+
+failures.push(...reconcileDeliveryAuthority(lifecycle, directories, sources))
 
 if (failures.length > 0) {
   console.error(formatFailures(failures))

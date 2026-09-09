@@ -148,19 +148,25 @@ describe('writeAuditEntry return value (Phase 25 D-K)', () => {
     expect(JSON.stringify(last.metadata)).not.toContain('password')
   })
 
-  test('persists only the validated invocation correlation ID', async () => {
-    setGlobalCorrelationId('DBCLI-PLAT-006')
-    await writeAuditEntry(
-      makeConfig(true),
-      'query',
-      { config: workDir },
-      { success: true, target: 'users', metadata: { correlation_id: '../../untrusted' } }
-    )
+  // All three preserved payloads, not one: DBCLI-PLAT-006's security fixture
+  // rows 1, 2 and 6 each claim the value reaches `audit.metadata.correlation_id`
+  // as well as the envelope, and only this payload was asserted here. DBCLI-025.
+  test.each(['DBCLI-PLAT-006', 'INC-2026.09.05', 'PLAT006_RAW_ERROR_SENTINEL'])(
+    'persists only the validated invocation correlation ID %s',
+    async (correlationId) => {
+      setGlobalCorrelationId(correlationId)
+      await writeAuditEntry(
+        makeConfig(true),
+        'query',
+        { config: workDir },
+        { success: true, target: 'users', metadata: { correlation_id: '../../untrusted' } }
+      )
 
-    const raw = await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).text()
-    const last = JSON.parse(raw.trim().split('\n').pop()!)
-    expect(last.metadata.correlation_id).toBe('DBCLI-PLAT-006')
-  })
+      const raw = await Bun.file(join(workDir, '.dbcli', 'audit', 'default.jsonl')).text()
+      const last = JSON.parse(raw.trim().split('\n').pop()!)
+      expect(last.metadata.correlation_id).toBe(correlationId)
+    }
+  )
 
   test('does not persist an outcome-provided correlation ID without a root option', async () => {
     await writeAuditEntry(

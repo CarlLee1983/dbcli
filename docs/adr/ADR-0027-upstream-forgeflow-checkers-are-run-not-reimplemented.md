@@ -1,6 +1,6 @@
 # Upstream ForgeFlow's checkers are run, not reimplemented
 
-* Status: proposed
+* Status: accepted
 * Date: 2026-09-08
 
 DBCLI-018 moved the adopted contract from 0.3.2 to 0.6.0, which brings

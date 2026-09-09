@@ -79,7 +79,7 @@
 | `schema` table name | `"users; DROP TABLE x"` | preserve | `config.json` `schema` key | `tests/unit/core/schema-cache-persistence.test.ts` |
 | `.env.local` on disk | `DB_PASSWORD=untouched` | preserve | `.env.local` | `tests/unit/core/schema-cache-persistence.test.ts` |
 | `connection.password` on disk | `"testpass"` | preserve | `config.json` `connection.password` | `tests/unit/core/schema-cache-persistence.test.ts` |
-| cache-write failure message | `"EACCES: permission denied, open '/Users/someone/.config/dbcli/config.json'"` | redact | stderr, audit entry | `tests/integration/schema-cache-agent-mode.test.ts` |
+| `error.message` | `"EACCES: permission denied, open '/Users/someone/.config/dbcli/config.json'"` | redact | `none` | `tests/integration/schema-cache-agent-mode.test.ts` |
 
 `preserve` on the `schema` table-name row is deliberate: a table name is data read
 back from the database the config already points at, and rewriting it would make

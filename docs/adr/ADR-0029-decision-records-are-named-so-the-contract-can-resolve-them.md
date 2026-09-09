@@ -1,6 +1,6 @@
 # Decision records are named so the contract can resolve them
 
-* Status: proposed
+* Status: accepted
 * Date: 2026-09-09
 
 ADR-0027 decided that upstream ForgeFlow's rules are run, not reimplemented: CI

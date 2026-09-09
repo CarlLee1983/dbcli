@@ -27,14 +27,14 @@
 
 | Source field | Payload | Expected result | Persisted locations | Verification |
 | --- | --- | --- | --- | --- |
-| command rows | `[{"email":"PLAT007_ROW_SENTINEL"}]` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command credential | `PLAT007_PASSWORD_SENTINEL` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command connection string | `postgresql://plat007:PLAT007_SECRET@db.internal:5432/prod` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command SQL | `SELECT * FROM users WHERE email='plat007@example.com'` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command error | `PLAT007_RAW_ERROR_SENTINEL` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command session secret | `PLAT007_SESSION_SECRET` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command absolute path | `/private/PLAT007_ABSOLUTE_PATH` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
-| command stdout/stderr | `PLAT007_UNBOUNDED_OUTPUT` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ReportFinding.rows` | `[{"email":"PLAT007_ROW_SENTINEL"}]` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ConnectionOptions.password` | `PLAT007_PASSWORD_SENTINEL` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ConnectionOptions.uri` | `postgresql://plat007:PLAT007_SECRET@db.internal:5432/prod` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `LintReport.sql` | `SELECT * FROM users WHERE email='plat007@example.com'` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ConnectionError.message` | `PLAT007_RAW_ERROR_SENTINEL` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ProxyEvent.sessionId` | `PLAT007_SESSION_SECRET` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `DesignValidationError.filePath` | `/private/PLAT007_ABSOLUTE_PATH` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
+| `ReportFinding.rows` | `PLAT007_UNBOUNDED_OUTPUT` | omit | `none` | `tests/integration/command-evidence-receipts.test.ts` |
 
 ## Verification Notes
 

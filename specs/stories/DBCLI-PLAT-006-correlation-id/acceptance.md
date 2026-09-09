@@ -32,12 +32,12 @@
 
 | Source field | Payload | Expected result | Persisted locations | Verification |
 | --- | --- | --- | --- | --- |
-| `argv --correlation-id` | `DBCLI-PLAT-006` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | focused audit and envelope tests |
-| `argv --correlation-id` | `INC-2026.09.05` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | focused audit and envelope tests |
-| `argv --correlation-id` | `../../PLAT006_PATH` | reject | `none` | root-option validation test |
-| `argv --correlation-id` | `postgresql://plat006:PLAT006_SECRET@db.internal:5432/prod` | reject | `none` | root-option validation test |
-| `argv --correlation-id` | `SELECT * FROM users WHERE email='plat006@example.com'` | reject | `none` | root-option validation test |
-| `argv --correlation-id` | `PLAT006_RAW_ERROR_SENTINEL` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | focused audit and envelope tests |
+| `argv --correlation-id` | `DBCLI-PLAT-006` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | `tests/unit/core/audit/integration-helper.test.ts`, `tests/integration/capabilities-command.test.ts` |
+| `argv --correlation-id` | `INC-2026.09.05` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | `tests/unit/core/audit/integration-helper.test.ts`, `tests/integration/capabilities-command.test.ts` |
+| `argv --correlation-id` | `../../PLAT006_PATH` | reject | `none` | `tests/integration/lazy-entry-path.test.ts` |
+| `argv --correlation-id` | `postgresql://plat006:PLAT006_SECRET@db.internal:5432/prod` | reject | `none` | `tests/integration/lazy-entry-path.test.ts` |
+| `argv --correlation-id` | `SELECT * FROM users WHERE email='plat006@example.com'` | reject | `none` | `tests/integration/lazy-entry-path.test.ts` |
+| `argv --correlation-id` | `PLAT006_RAW_ERROR_SENTINEL` | preserve | `audit.metadata.correlation_id`, `OperationEnvelope.context.correlationId` | `tests/unit/core/audit/integration-helper.test.ts`, `tests/integration/capabilities-command.test.ts` |
 | `OperationEnvelope.context.correlationId` | `../../PLAT006_PATH` | reject | `none` | `tests/unit/core/operation-envelope.test.ts` |
 | `evidence[0]` | `{ "kind": "receipt", "id": "DBCLI-PLAT-006", "correlationId": "DBCLI-PLAT-006" }` | reject | `none` | `tests/unit/core/operation-envelope.test.ts` |
 

@@ -7,12 +7,7 @@ import crypto from 'node:crypto'
 import { t, t_vars } from '@/i18n/message-loader'
 import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
 import { presentConnectionError } from '@/utils/connection-error-message'
-import {
-  AdapterFactory,
-  ConnectionError,
-  type ConnectionOptions,
-  type SqlConnectionOptions,
-} from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { confirmDirectMutation, confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { auditOutcomeForMutation } from '@/commands/mutation-audit'
@@ -35,13 +30,7 @@ import { previewUpdate } from '@/core/mongo/dry-run-formatter'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
-
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 /**
  * Update command action handler

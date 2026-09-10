@@ -19,13 +19,33 @@ needs. `init.ts` also carries its own hardcoded copy of the engine list at
 `:257`, which is a third roster beside `DATABASE_SYSTEMS` and the config
 schemas and will not know about `sqlite` unless it is told.
 
-The v1→v2 migration is the trap. `src/core/config-v2-mutations.ts:51-58`
-refuses anything that is not a SQL engine — and DBCLI-034 puts `sqlite` in
-`SqlDatabaseSystem`, so the refusal no longer fires and the connection falls
-into a migration path whose field-copying is written for host, port, user and
-password. A v1 configuration naming SQLite cannot exist, because v1 predates
-the engine entirely; the honest behaviour is an explicit refusal that says so,
-not a silent traversal of a path built for a different shape.
+The v1→v2 migration needs a smaller repair than it first appears to.
+`src/core/config-v2-mutations.ts:53` refuses anything outside `SQL_SYSTEMS`,
+and that constant is a three-member array declared in that file — it is not
+`SqlDatabaseSystem`, so DBCLI-034 classifying SQLite as SQL did not change what
+the gate admits. Measured: `migrateV1ToV2` given `system: 'sqlite'` still
+throws.
+
+What did change is that the refusal now contradicts itself. It says the upgrade
+"only supports SQL connections (mysql/postgresql/mariadb)", and SQLite is a SQL
+connection in dbcli's own vocabulary. The behaviour is right and the sentence
+explaining it is not, which is the harder half to notice.
+
+A v1 configuration cannot name SQLite in any case: v1 predates the engine. So
+the message should say that, rather than describing a category SQLite belongs
+to.
+
+The larger surprise was measured after DBCLI-035 landed, not predicted. Every
+SQL-shaped command re-declares its own `requireSqlConnection` with a hardcoded
+`['postgresql', 'mysql', 'mariadb']`, so `list`, `query`, `insert`, `update`,
+`delete` and `export` all refused a working SQLite connection at the CLI while
+the capability matrix said they were supported. Nothing failed to compile:
+`SqlDatabaseSystem` gained `sqlite` and `SqlConnectionOptions` widened with it,
+but a string literal is not a union. DBCLI-034's and DBCLI-035's tests were
+adapter- and executor-level, so neither could see it. Repairing it is in scope
+here because AC-001 requires `dbcli list` to work on a connection `init` just
+wrote, and because a matrix that claims a command the command refuses is worse
+than one that claims nothing.
 
 `dbcli use` needs nothing new — it already nulls empty host and port for
 display (`src/commands/use.ts:83-96`) — but it has never displayed a path, and
@@ -35,7 +55,7 @@ field for the same purpose that `file` will now need.
 ## Classification
 
 * Security sensitive: yes
-* Baseline conformance: no
+* Baseline conformance: yes
 * Task mode: execution
 
 ## Authority
@@ -58,10 +78,11 @@ field for the same purpose that `file` will now need.
 
 ## Risk
 
-* Level: medium
-* Reason: `silent-migration-path`
+* Level: low
+* Reason: `misleading-refusal-text`
 
-A migration gate that stops refusing does not announce that it stopped.
+The gate was measured before the Story was believed: it still refuses. What is
+wrong is the sentence, not the behaviour.
 
 ## Scope
 
@@ -74,13 +95,28 @@ A migration gate that stops refusing does not announce that it stopped.
   created.
 * `init.ts:257`'s engine list gains `sqlite`, and a test asserts that list
   against `DATABASE_SYSTEMS` so a fourth roster cannot drift again.
-* `config-v2-mutations.ts` refuses `system: sqlite` explicitly, with a message
-  saying a v1 configuration cannot have named this engine.
+* `config-v2-mutations.ts` keeps refusing `system: sqlite` — the gate is
+  already correct — and its message stops saying SQLite is not a SQL
+  connection. It says a v1 configuration predates the engine and therefore
+  cannot name it.
 * `dbcli use` and `dbcli status` display the file path where they display a
   host, and `listConnections` carries `file`.
 * `dbcli doctor` checks a SQLite connection: the file exists, is readable, and
   — where the permission is not `query-only` — is writable.
 * `dbcli export` and `dbcli queries` / `q @name` against SQLite.
+* The command-layer SQL gate. Seven commands — `list`, `query`, `export`,
+  `doctor`, `insert`, `update`, `delete` — each carried a private
+  `['postgresql', 'mysql', 'mariadb']` literal in a local
+  `requireSqlConnection`, and all seven refused SQLite at the CLI while
+  `ENGINE_CAPABILITIES` said they supported it. Measured after DBCLI-035:
+  `dbcli query 'SELECT * FROM users'` on a working SQLite connection printed
+  `This command requires a SQL connection, got: sqlite`. The seven read one
+  shared guard now, over a `SQL_DATABASE_SYSTEMS` roster tied to
+  `SqlDatabaseSystem` by `satisfies`.
+* The snippet engine roster. `EngineTag`, the parser's validator, `queries
+  search --engine` and `queries suggest --engine` each declared the engine
+  names separately; `EngineTag` is derived from one frozen `ENGINE_TAGS` array
+  and the two `--engine` filters read it.
 * `ENGINE_CAPABILITIES` rows for `init`, `use`, `status`, `doctor`, `export`,
   `queries`.
 * Documentation parity for what this Story delivers.
@@ -89,6 +125,10 @@ A migration gate that stops refusing does not announce that it stopped.
 
 * `migrate`, `diff`, `report`, `inspect`, `shell` for SQLite. Each stays
   `unsupported` in the matrix, and extending any of them is its own Story.
+  Their own `requireSqlConnection` copies stay untouched: they refuse SQLite
+  for reasons of their own — no DDL generator, no snapshot support, no REPL —
+  rather than because SQLite is not SQL, and folding them into the shared guard
+  would silently claim them.
 * A `--file` flag on `query` or any other command. The path comes from the
   configuration; a per-invocation path would make dbcli a file reader pointed
   by its caller, which is the boundary DBCLI-034 spent its Security section
@@ -116,14 +156,18 @@ A migration gate that stops refusing does not announce that it stopped.
 * R2: A path that does not exist, or is not readable, is refused before
   anything is written to `config.json`.
 * R3: `dbcli init` never creates a database file.
-* R4: A v1 configuration naming `system: sqlite` is refused by the migration
-  with a message naming the reason, not carried through the SQL path.
+* R4: A v1 configuration naming `system: sqlite` is refused by the migration,
+  as it already is, and the message names the real reason rather than
+  describing SQLite as a non-SQL connection.
 * R5: `init.ts`'s engine list equals `DATABASE_SYSTEMS`, asserted by a test.
 * R6: `dbcli use` and `dbcli status` show the path, and never an empty host and
   port pair.
 * R7: `dbcli doctor` reports a missing or unreadable file as a failure, and an
   unwritable file as a failure only when the permission implies writing.
 * R8: No command accepts a SQLite path outside the configuration.
+* R9: A command marked `supported` for SQLite in `ENGINE_CAPABILITIES` runs
+  against a SQLite connection when spawned as a CLI process, not only when its
+  exported function is called.
 
 ## Expected Errors
 
@@ -141,6 +185,23 @@ A migration gate that stops refusing does not announce that it stopped.
 
 * `init-sqlite.ts` follows `init-mongodb.ts`'s shape rather than inventing one.
 * No new prompt library, no new dependency.
+
+## Superseded Behavior
+
+* `tests/integration/lazy-entry-path.test.ts` — the three capability-catalog
+  cases, for the third time on this branch and for the same structural reason:
+  the catalog is derived from `ENGINE_CAPABILITIES` (ADR-0022), so claiming
+  `init`, `use`, `doctor`, `export` and `queries` for SQLite necessarily
+  changes all three renderings. Only the three `stdoutSha256` values in
+  `tests/fixtures/plat004/legacy-surface-baseline.json` change;
+  `baselineCommit` and its assertion do not. Whether that guard should exist in
+  this shape is DBCLI-038's question, not this Story's.
+
+* `tests/unit/core/migrate-v1-to-v2.test.ts` — the non-SQL refusal case
+  asserted the message text `僅支援 SQL`. DBCLI-034 made that sentence false by
+  classifying SQLite as SQL, which is exactly what AC-010 exists to repair, so
+  the assertion moves to the engine names the gate actually admits. The gate
+  refuses the same set of engines before and after; only the wording changes.
 
 ## Trust Boundary Fields
 

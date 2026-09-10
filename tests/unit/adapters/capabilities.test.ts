@@ -95,6 +95,32 @@ describe('engine capability registry', () => {
     expect(ENGINE_CAPABILITIES).toBeDefined()
   })
 
+  /**
+   * AC-007：DBCLI-036 認領的六格，與刻意留著不認領的五格。
+   *
+   * sqlite-roster.test.ts 用推導檢查同一件事，而推導的盲點正好是這裡要補的：
+   * 它問「未認領的是不是 unsupported」，答案會隨認領清單一起改。這條把兩邊都
+   * 寫成字面量，所以把一格從 unsupported 改成 supported 而忘了 Story，會在這裡
+   * 停下來。
+   */
+  test('sqlite claims init/use/status/doctor/export/queries and no more', () => {
+    for (const key of ['init', 'use', 'status', 'doctor', 'export', 'queries'] as const) {
+      expect([key, ENGINE_CAPABILITIES.sqlite[key].status]).toEqual([key, 'supported'])
+    }
+
+    for (const key of ['migrate', 'diff', 'report', 'inspect', 'shell'] as const) {
+      expect([key, ENGINE_CAPABILITIES.sqlite[key].status]).toEqual([key, 'unsupported'])
+    }
+  })
+
+  test('every sqlite row that claims support says what it supports', () => {
+    for (const key of COMMAND_CAPABILITY_KEYS) {
+      const row = ENGINE_CAPABILITIES.sqlite[key]
+      if (row.status !== 'supported' && row.status !== 'limited') continue
+      expect([key, row.note.length > 0]).toEqual([key, true])
+    }
+  })
+
   test('feature matrix points maintainers to the capability registry', async () => {
     const text = await Bun.file('docs/feature-matrix.md').text()
     expect(text).toContain('src/adapters/capabilities.ts')

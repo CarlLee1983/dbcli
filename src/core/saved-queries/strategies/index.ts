@@ -8,7 +8,7 @@ import type { EngineFamily, EngineStrategy } from './types'
 export * from './types'
 
 export function engineFamily(engine: EngineTag): EngineFamily {
-  if (engine === 'postgres' || engine === 'mysql') return 'sql'
+  if (engine === 'postgres' || engine === 'mysql' || engine === 'sqlite') return 'sql'
   if (engine === 'elasticsearch') return 'es'
   if (engine === 'redis') return 'redis'
   if (engine === 'mongodb') return 'mongo'

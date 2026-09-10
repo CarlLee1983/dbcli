@@ -22,6 +22,7 @@ import { promptUser } from '@/utils/prompts'
 import { redactSecretsForDisplay } from '@/utils/redaction'
 import type { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
+import { DATABASE_SYSTEMS, type DatabaseSystem } from '@/adapters/types'
 import type { DbcliConfigV2 } from '@/utils/validation'
 import { resolveConfigPath } from '@/utils/config-path'
 import {
@@ -33,6 +34,20 @@ import {
 } from '@/core/config-binding'
 import { checkOverwrite, writeV2InitConfig } from './init-shared'
 import { handleMongoDBInit } from './init-mongodb'
+import { handleSQLiteInit } from './init-sqlite'
+
+/**
+ * The engines `dbcli init` offers, in the order it offers them.
+ *
+ * This was a fourth independent declaration of the engine names — beside the
+ * `DatabaseSystem` union, `DATABASE_SYSTEMS` and the config schemas — and it
+ * was the one that would not have learned about SQLite, because nothing ties a
+ * string literal to a union. It is the published roster itself now, and
+ * `tests/unit/commands/init-engine-roster.test.ts` asserts both that it stays
+ * equal to `DATABASE_SYSTEMS` and that no literal roster reappears in this
+ * file.
+ */
+export const INIT_SYSTEM_CHOICES: readonly DatabaseSystem[] = DATABASE_SYSTEMS
 
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
 
@@ -131,6 +146,7 @@ export const initCommand = new Command('init')
     '--system <system>',
     'Database system (postgresql, mysql, mariadb, mongodb, redis, elasticsearch)'
   )
+  .option('--file <path>', 'SQLite database file path (the database must already exist)')
   .option('--cloud-id <id>', 'Elasticsearch Cloud ID')
   .option('--api-key <key>', 'Elasticsearch API Key')
   .option(
@@ -243,26 +259,33 @@ async function initCommandHandler(
 
   // Only prompt when prompting is needed and no system value was provided
   if (shouldPrompt && !options.system && !envConfig?.system) {
-    system = await promptUser.select(t('init.select_system'), [
-      'postgresql',
-      'mysql',
-      'mariadb',
-      'mongodb',
-      'redis',
-      'elasticsearch',
-    ])
+    system = await promptUser.select(t('init.select_system'), [...INIT_SYSTEM_CHOICES])
   }
 
   // Validate system value
-  if (!['postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch'].includes(system)) {
+  if (!DATABASE_SYSTEMS.includes(system as DatabaseSystem)) {
     throw new Error(t_vars('errors.invalid_system', { system }))
+  }
+
+  // 4a. SQLite: a file path is the whole interview, so it never reaches the
+  // host/port/user/password questions below.
+  if (system === 'sqlite') {
+    await handleSQLiteInit({
+      options,
+      configPath,
+      connectionName,
+      isV2Init,
+      existingConfig,
+      shouldPrompt,
+    })
+    return
   }
 
   const defaults = getDefaultsForSystem(
     system as 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
   )
 
-  // 4a. MongoDB: handle separately and return early
+  // 4b. MongoDB: handle separately and return early
   if (system === 'mongodb') {
     await handleMongoDBInit({
       options,

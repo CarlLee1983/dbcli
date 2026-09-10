@@ -5,7 +5,7 @@
 
 import crypto from 'node:crypto' // Phase 25 D-51
 import { sideEffectTierForStatement } from '@/utils/engine-hints'
-import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { DEFAULT_TABLE_CELL_LIMIT } from '@/formatters/query-result-formatter'
 import { MultiQueryResultFormatter } from '@/formatters/multi-query-result-formatter'
@@ -59,13 +59,7 @@ import {
 } from '@/core/query-fanout'
 import { enforceElasticsearchPermission } from '@/core/permission/elasticsearch'
 import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
-
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 

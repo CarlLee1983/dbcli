@@ -29,9 +29,13 @@
 * [ ] AC-009: `dbcli init` given `:memory:` at the prompt refuses, naming the
       same reason the schema gives.
 * [ ] AC-010: A v1 configuration naming `system: sqlite` is refused by the
-      migration with a message saying v1 could not have named this engine.
+      migration — as it already is — and the message says a v1 configuration
+      predates the engine, without claiming SQLite is not a SQL connection.
 * [ ] AC-011: `dbcli doctor` reports a missing file and an unreadable file as
       distinct failures.
+* [ ] AC-017: Every command the matrix marks `supported` for SQLite runs
+      against a SQLite connection as a spawned CLI process, not merely as an
+      exported function.
 
 ## Regression Requirements
 
@@ -50,20 +54,21 @@
 | --- | --- | --- | --- | --- |
 | `AC-001` | test | `tests/integration/sqlite-init.test.ts` | `scripted prompts and a temporary file` | `two prompts, a usable v2 connection` |
 | `AC-002` | test | `tests/integration/sqlite-init.test.ts` | `a configured SQLite connection` | `path shown, no host or port` |
-| `AC-003` | test | `tests/integration/sqlite-read.test.ts` | `a saved snippet and an export target` | `rows in json, csv and table` |
+| `AC-003` | test | `tests/integration/sqlite-init.test.ts` | `a saved snippet and an export target` | `rows in json, csv and table` |
 | `AC-004` | test | `tests/unit/commands/init-engine-roster.test.ts` | `init.ts's list and DATABASE_SYSTEMS` | `exact equality` |
 | `AC-005` | test | `tests/unit/core/config-v2.test.ts` | `a SQLite connection in a v2 config` | `file present in the listing` |
 | `AC-006` | test | `tests/integration/sqlite-doctor.test.ts` | `a read-only file under data-admin` | `failure naming writability` |
 | `AC-007` | test | `tests/unit/adapters/capabilities.test.ts` | `the sqlite matrix rows` | `the six added, the five still unsupported` |
 | `AC-008` | test | `tests/integration/sqlite-init.test.ts` | `a path under a temporary directory that does not exist` | `refusal, no config written, no file created` |
 | `AC-009` | test | `tests/integration/sqlite-init.test.ts` | `:memory: typed at the prompt` | `refusal naming the same reason as the schema` |
-| `AC-010` | test | `tests/unit/core/config-v2-mutations.test.ts` | `a v1 config with system sqlite` | `refusal naming v1` |
+| `AC-010` | test | `tests/unit/core/migrate-v1-to-v2.test.ts` | `a v1 config with system sqlite` | `refusal whose text names v1, not the SQL category` |
 | `AC-011` | test | `tests/integration/sqlite-doctor.test.ts` | `a missing file and a chmod 000 file` | `two distinct failures` |
 | `AC-012` | test | `bun test tests/unit/commands/init` | `the existing init fixtures` | `unchanged behaviour` |
-| `AC-013` | test | `tests/unit/core/config-v2-mutations.test.ts` | `the existing non-SQL refusal fixtures` | `unchanged refusals` |
+| `AC-013` | test | `tests/unit/core/migrate-v1-to-v2.test.ts` | `the existing non-SQL refusal fixtures` | `unchanged refusals` |
 | `AC-014` | command | `bun run src/cli.ts query --help` | `repository checkout` | `no file or db path option` |
 | `AC-015` | command | `bun run docs:check` | `repository checkout` | `exit 0` |
 | `AC-016` | command | `make verify` | `repository checkout` | `exit 0` |
+| `AC-017` | test | `tests/integration/sqlite-init.test.ts` | `a configured SQLite connection driven through spawned CLI runs` | `list, query, export and q all exit 0` |
 
 ## Security Fixture Matrix
 
@@ -72,14 +77,14 @@
 | `init.prompt.file` | `:memory:` | reject | `config.json` | `tests/integration/sqlite-init.test.ts` |
 | `init.prompt.file` | `/tmp/does-not-exist.sqlite` | reject | `config.json` | `tests/integration/sqlite-init.test.ts` |
 | `init.prompt.file` | `/etc/passwd` | reject | `config.json` | `tests/integration/sqlite-init.test.ts` |
-| `v1.connection.system` | `sqlite` | reject | `config.json` | `tests/unit/core/config-v2-mutations.test.ts` |
+| `v1.connection.system` | `sqlite` | reject | `config.json` | `tests/unit/core/migrate-v1-to-v2.test.ts` |
 
 ## Verification Notes
 
 ```sh
 bun test tests/integration/sqlite-init.test.ts tests/integration/sqlite-doctor.test.ts
 bun test tests/unit/commands/init-engine-roster.test.ts
-bun test tests/unit/core/config-v2-mutations.test.ts
+bun test tests/unit/core/migrate-v1-to-v2.test.ts
 make verify
 ```
 
@@ -96,3 +101,5 @@ database, and it stands for the general case: `init` validating readability is
 not validating that the target is a database, so the failure must come from the
 adapter's open with a message that says what was wrong, not from a corrupted
 read.
+
+Superseded behavior is recorded once, in `story.md`.

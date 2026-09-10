@@ -50,6 +50,26 @@ export type SqlDatabaseSystem = Extract<
   'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
 >
 
+/**
+ * The runtime half of `SqlDatabaseSystem`.
+ *
+ * Seven commands each carried their own `['postgresql', 'mysql', 'mariadb']`
+ * literal to decide whether a connection was SQL enough to run on. Adding
+ * SQLite to the union left all seven refusing it, and nothing failed to
+ * compile: a literal array is not the union. This is the one roster they now
+ * read, guarded the same way `DATABASE_SYSTEMS` is.
+ */
+export const SQL_DATABASE_SYSTEMS = Object.freeze([
+  'postgresql',
+  'mysql',
+  'mariadb',
+  'sqlite',
+] as const) satisfies readonly SqlDatabaseSystem[]
+
+export type SqlDatabaseSystemRosterIsExhaustive = AssertNever<
+  Exclude<SqlDatabaseSystem, (typeof SQL_DATABASE_SYSTEMS)[number]>
+>
+
 export type SqlExecutionMode = 'normal' | 'native-read-only'
 
 export type QueryableDatabaseSystem = Exclude<DatabaseSystem, SqlDatabaseSystem>

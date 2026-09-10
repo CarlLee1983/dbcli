@@ -17,6 +17,7 @@ import {
   SavedQueryError,
   SUPPORTED_CHART_TYPES,
   type ChartType,
+  ENGINE_TAGS,
   type EngineTag,
   type ParamSpec,
   type ParamType,
@@ -28,11 +29,11 @@ import {
 
 const MAX_BYTES = 64 * 1024
 const VALID_TYPES: ParamType[] = ['int', 'string', 'float', 'bool', 'date', 'datetime']
-const VALID_ENGINES: EngineTag[] = ['postgres', 'mysql', 'elasticsearch', 'redis', 'mongodb']
+const VALID_ENGINES: readonly EngineTag[] = ENGINE_TAGS
 const INTENT_RE = /^[a-z][a-z0-9.-]*$/
 
 function familyOf(engine: EngineTag): 'sql' | 'es' | 'redis' | 'mongo' {
-  if (engine === 'postgres' || engine === 'mysql') return 'sql'
+  if (engine === 'postgres' || engine === 'mysql' || engine === 'sqlite') return 'sql'
   if (engine === 'elasticsearch') return 'es'
   if (engine === 'mongodb') return 'mongo'
   return 'redis'
@@ -50,6 +51,7 @@ const ENGINE_DIALECT: Record<string, SqlDialect> = {
   postgresql: 'postgresql',
   mysql: 'mysql',
   mariadb: 'mariadb',
+  sqlite: 'sqlite',
 }
 
 /**

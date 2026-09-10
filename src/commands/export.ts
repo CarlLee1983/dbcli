@@ -6,7 +6,7 @@
 
 import crypto from 'node:crypto'
 import { t_vars } from '@/i18n/message-loader'
-import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { QueryResultFormatter } from '@/formatters'
 import { generateHtmlReport } from '@/formatters/html-formatter'
 import { boundedDashboardDescription } from '@/core/dashboard/display'
@@ -28,13 +28,7 @@ import {
   findMongoCollectionScopes,
 } from '@/core/mongo/collection-references'
 import type { DbcliConfig } from '@/utils/validation'
-
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 const SQL_PATTERN = /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE)\b/i
 

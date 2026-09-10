@@ -6,20 +6,14 @@
 
 import { Command } from 'commander'
 import { t } from '@/i18n/message-loader'
-import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
+import { AdapterFactory, type ConnectionOptions } from '@/adapters'
 import { REDIS_LIST_KEY_LIMIT } from '@/adapters/redis-adapter'
 import { TableListFormatter } from '@/formatters'
 import { configModule } from '@/core/config'
 import { resolveConfigPath } from '@/utils/config-path'
 import { validateFormat } from '@/utils/validation'
 import { createConnectionSelectorOption } from '@/core/connection-selector'
-
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 const ALLOWED_FORMATS = ['table', 'json'] as const
 

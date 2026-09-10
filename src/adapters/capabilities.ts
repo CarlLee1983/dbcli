@@ -376,26 +376,30 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
     sqlite: Object.freeze({
       ...SQL_BASE,
       init: cap(
-        'unsupported',
-        'none',
-        'No SQLite init flow yet; the connection is configured by hand.'
+        'supported',
+        'local-write',
+        'Asks for a file path and a permission; the file must already exist.'
       ),
-      use: cap(
-        'unsupported',
-        'none',
-        'Connection switching does not display a SQLite file target yet.'
-      ),
+      use: cap('supported', 'local-write', 'Switches connections and displays the file path.'),
       schemaFullScan: cap(
         'unsupported',
         'none',
         'Full schema cache scan is not implemented for SQLite.'
       ),
       lint: cap('unsupported', 'none', 'Static lint is not enabled for the SQLite dialect yet.'),
-      queries: cap('unsupported', 'none', 'Snippet management is not enabled for SQLite yet.'),
+      queries: cap(
+        'supported',
+        'local-write',
+        'Snippets may declare `engine: sqlite` and bind with `?` placeholders.'
+      ),
       insert: cap('supported', 'db-write', 'Row insert through the shared data-executor path.'),
       update: cap('supported', 'db-write', 'Row update with a mandatory --where clause.'),
       delete: cap('supported', 'db-write', 'Row delete with a mandatory --where clause.'),
-      export: cap('unsupported', 'none', 'Export is not enabled for SQLite yet.'),
+      export: cap(
+        'supported',
+        'local-write',
+        'Exports SELECT results to json, csv or html through the shared query path.'
+      ),
       check: cap('unsupported', 'none', 'Data health check is not enabled for SQLite.'),
       diff: cap('unsupported', 'none', 'Schema snapshots are not enabled for SQLite.'),
       migrate: cap(
@@ -404,7 +408,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'SQLite ALTER TABLE covers few operations and a column change is a table rebuild; no DDL generator exists.'
       ),
       shell: cap('unsupported', 'none', 'The REPL is not enabled for SQLite.'),
-      doctor: cap('unsupported', 'none', 'SQLite connection diagnostics are not implemented yet.'),
+      doctor: cap(
+        'supported',
+        'readonly',
+        'Checks the file exists, is readable, and is writable when the permission allows writes.'
+      ),
       inspect: cap('unsupported', 'none', 'Inspection collectors are not enabled for SQLite.'),
       report: cap(
         'unsupported',

@@ -1201,7 +1201,7 @@ Applied Limit 一定與上方的截斷警示一致；兩者矛盾的 dashboard �
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | 基礎查詢 | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Schema 快取 | ✅ | ❌ | ✅ | ❌ | ✅ |
-| 儲存 Snippets | ✅ | ⚠️（執行 `q @name`可用；`queries` 管理指令尚未支援） | ✅ | ✅ | ✅ |
+| 儲存 Snippets | ✅ | ✅（片段宣告 `engine: sqlite`） | ✅ | ✅ | ✅ |
 | 寫入操作 (DML) | ✅ | ✅ | ✅ | ✅ (透過 query) | ❌ |
 | 結構變更 (DDL) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 互動式 UI | ✅ | ❌ | ✅ | ✅ | ✅ |
@@ -1233,7 +1233,23 @@ SQLite 連線指名的是一個資料庫**檔案**，不是主機。唯一有意
 
 **`ATTACH` 與 `DETACH` 在所有權限層級都會被拒絕，包含 `admin`**，因為它們會碰到連線所指名之外的另一個資料庫檔案，這是連線邊界的問題，不是權限層級的問題。需要的話請改設定第二條連線。
 
-目前可用的指令是 `list`、`schema`、`query`、`q`、`status`、`insert`、`update` 與 `delete`。寫入走的是與其他 SQL 引擎相同的權限階梯與 `--dry-run`，生成的 SQL 使用 SQLite 標準的雙引號識別字與 `?` 佔位符。`REPLACE INTO` 需要 `data-admin` 而非 `read-write`——它會先移除衝突的列再寫入替代值；`PRAGMA`、`VACUUM` 與 `REINDEX` 需要 `admin`。`init` 還沒有 SQLite 的精靈流程，請直接編輯 `config.json` 來設定連線。`export`、`migrate`、`diff`、`shell`、`doctor` 與 `report` 目前都還不支援 SQLite。
+### 建立 SQLite 連線
+
+`dbcli init --system sqlite` 只問兩件事——資料庫檔案路徑與權限——不會問 host、port、user、password 或資料庫名稱，因為 SQLite 連線根本沒有這些東西。非互動模式下把路徑寫在 `--file`：
+
+```bash
+dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive
+```
+
+**路徑會在任何東西被寫出去之前先檢查。** 不存在的路徑、不是 SQLite 資料庫的檔案、以及任何形式的 in-memory 目標都會被拒絕，而 `config.json` 原封不動——dbcli 不會替你把資料庫建出來。
+
+`dbcli use` 與 `dbcli status` 會在其他引擎顯示 host 的位置顯示檔案路徑，所以 SQLite 連線不會被印成一個空的 `:0/` 端點。
+
+`dbcli doctor` 檢查的是檔案而不是網路端點：檔案存不存在、讀不讀得到，以及——只有在權限允許寫入時——寫不寫得進去。`query-only` 連線指向一個唯讀檔案是正確的設定，doctor 會照實這樣報告，而不是報成失敗。
+
+**既有的 v1 設定無法升級成 SQLite 連線。** v1 這個格式早於這個引擎，所以 dbcli 會拒絕這個遷移，並指向 `dbcli init --system sqlite`。
+
+目前可用的指令是 `init`、`use`、`status`、`list`、`schema`、`query`、`q`、`queries`、`export`、`doctor`、`insert`、`update` 與 `delete`。寫入走的是與其他 SQL 引擎相同的權限階梯與 `--dry-run`，生成的 SQL 使用 SQLite 標準的雙引號識別字與 `?` 佔位符。`REPLACE INTO` 需要 `data-admin` 而非 `read-write`——它會先移除衝突的列再寫入替代值；`PRAGMA`、`VACUUM` 與 `REINDEX` 需要 `admin`。`migrate`、`diff`、`shell`、`inspect` 與 `report` 目前都還不支援 SQLite。
 
 ### MongoDB 連線設定
 

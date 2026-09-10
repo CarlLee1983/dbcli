@@ -1335,7 +1335,7 @@ Direct-query dashboards (`dbcli query --ui`, `dbcli export --format html`) are u
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | Basic Querying | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Schema Caching | ✅ | ❌ | ✅ | ❌ | ✅ |
-| Saved Snippets | ✅ | ⚠️ (`q @name` works; `queries` management does not yet) | ✅ | ✅ | ✅ |
+| Saved Snippets | ✅ | ✅ (declare `engine: sqlite`) | ✅ | ✅ | ✅ |
 | DML (Insert/Update) | ✅ | ✅ | ✅ | ✅ (via query) | ❌ |
 | DDL (Migrate) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Interactive UI | ✅ | ❌ | ✅ | ✅ | ✅ |
@@ -1367,7 +1367,23 @@ dbcli never creates a database file. A `file` path that does not exist fails at 
 
 `ATTACH` and `DETACH` are refused at every permission level, `admin` included, because they reach a database file outside the one the connection names — a connection-boundary question rather than a permission tier. Configure a second connection instead.
 
-Today, `list`, `schema`, `query`, `q`, `status`, `insert`, `update`, and `delete` work against a SQLite connection. Writes go through the same permission ladder and the same `--dry-run` as the other SQL engines, and the SQL they generate uses SQLite's standard double-quoted identifiers and `?` placeholders. `REPLACE INTO` requires `data-admin` rather than `read-write`, because it removes a conflicting row before writing the replacement; `PRAGMA`, `VACUUM` and `REINDEX` require `admin`. `init` has no SQLite flow yet, so configure the connection by editing `config.json` directly. `export`, `migrate`, `diff`, `shell`, `doctor`, and `report` are not supported for SQLite yet.
+### Creating a SQLite connection
+
+`dbcli init --system sqlite` asks two questions — the database file path and the permission — and nothing about a host, port, user, password or database name, because a SQLite connection has none of them. Non-interactively, pass the path as `--file`:
+
+```bash
+dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive
+```
+
+The path is checked before anything is written. A path that does not exist, a path that is not a SQLite database, and any in-memory form are all refused with `config.json` left untouched — dbcli does not create the database for you.
+
+`dbcli use` and `dbcli status` display the file path where they display a host for the other engines, so a SQLite connection never renders as an empty `:0/` endpoint.
+
+`dbcli doctor` checks the file rather than a network endpoint: that it exists, that it is readable, and — only where the permission allows writes — that it is writable. A read-only file under a `query-only` connection is correctly configured and is reported as such, not as a failure.
+
+Existing v1 configurations cannot be upgraded to name SQLite. The v1 format predates the engine, so `dbcli` refuses the migration and points at `dbcli init --system sqlite` instead.
+
+Today, `init`, `use`, `status`, `list`, `schema`, `query`, `q`, `queries`, `export`, `doctor`, `insert`, `update`, and `delete` work against a SQLite connection. Writes go through the same permission ladder and the same `--dry-run` as the other SQL engines, and the SQL they generate uses SQLite's standard double-quoted identifiers and `?` placeholders. `REPLACE INTO` requires `data-admin` rather than `read-write`, because it removes a conflicting row before writing the replacement; `PRAGMA`, `VACUUM` and `REINDEX` require `admin`. `migrate`, `diff`, `shell`, `inspect`, and `report` are not supported for SQLite yet.
 
 ### MongoDB connection configuration
 

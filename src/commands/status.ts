@@ -33,9 +33,17 @@ export const statusCommand = new Command('status')
         0
       )
 
+      // A SQLite connection's target is a path, and `status` says where a
+      // connection points for every other engine by naming the system alone —
+      // there is no host to omit here, so omitting the path would leave the
+      // command unable to distinguish two SQLite connections. A path is not a
+      // credential; this command still exposes none.
+      const file = (config.connection as { file?: string }).file
+
       const status = {
         permission: config.permission,
         system: config.connection.system,
+        ...(file !== undefined && { file }),
         blacklist: {
           tables: blacklistTables.length,
           columns: columnCount,
@@ -46,6 +54,7 @@ export const statusCommand = new Command('status')
       if (options.format === 'text') {
         console.log(`Permission: ${status.permission}`)
         console.log(`System:     ${status.system}`)
+        if (file !== undefined) console.log(`File:       ${file}`)
         console.log(
           `Blacklist:  ${status.blacklist.tables} table(s), ${status.blacklist.columns} column(s)`
         )

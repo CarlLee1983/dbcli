@@ -13,7 +13,7 @@ import { SQL_DIALECTS } from '@/core/permission-guard'
 import { AdapterFactory } from '@/adapters/factory'
 import { SQLiteAdapter } from '@/adapters/sqlite-adapter'
 
-/** DBCLI-034 認領的格子；其餘 engine-facing 的一律 unsupported。 */
+/** DBCLI-034 起各張 Story 認領的格子；其餘 engine-facing 的一律 unsupported。 */
 const SUPPORTED_IN_THIS_STORY = new Set([
   'list',
   'schema',
@@ -27,6 +27,12 @@ const SUPPORTED_IN_THIS_STORY = new Set([
   'insert',
   'update',
   'delete',
+  // DBCLI-036
+  'init',
+  'use',
+  'doctor',
+  'export',
+  'queries',
 ])
 
 /**

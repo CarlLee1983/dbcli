@@ -280,6 +280,7 @@ export function listConnections(config: DbcliConfigV2): Array<{
   port: number | { $env: string }
   database: string | { $env: string }
   uri?: string | { $env: string }
+  file?: string | { $env: string }
   isDefault: boolean
 }> {
   return Object.entries(config.connections).map(([name, conn]) => {
@@ -288,6 +289,7 @@ export function listConnections(config: DbcliConfigV2): Array<{
       port?: number | { $env: string }
       database?: string | { $env: string }
       uri?: string | { $env: string }
+      file?: string | { $env: string }
     }
     return {
       name,
@@ -296,6 +298,10 @@ export function listConnections(config: DbcliConfigV2): Array<{
       port: c.port ?? 27017,
       database: c.database ?? '',
       ...(c.uri !== undefined && { uri: c.uri }),
+      // A SQLite connection's target is this, and nothing else. Carried for the
+      // same reason `uri` is: the listing has to be able to say where a
+      // connection points when it does not point at a host.
+      ...(c.file !== undefined && { file: c.file }),
       isDefault: name === config.default,
     }
   })

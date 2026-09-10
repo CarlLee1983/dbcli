@@ -1049,12 +1049,13 @@ workflow:
     - DBCLI-028
     - DBCLI-029
     - DBCLI-030
+    - DBCLI-031
   status: done
 
 baseline:
   repository: CarlLee1983/dbcli
   branch: main
-  commit: d387498bb32e8e2e18ca5f0289db9a08cdc73bb1
+  commit: bbcdd4540028823a2098084dccf5d07544ea09a2
   dirty_worktree: false
   story_owned_paths:
     - specs/stories/DBCLI-028-delivery-is-not-authorization/story.md

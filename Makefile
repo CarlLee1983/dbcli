@@ -27,14 +27,18 @@
 # It passed locally only because macOS `/bin/sh` is bash. Nothing here pipes
 # anything, so `pipefail` was a fatal no-op.
 #
-# One thing was lost and is only half recovered: each step used to be its own
-# recipe line, so make echoed it and a CI log showed which of the checks was
-# running and which one failed. Joined and prefixed with `@`, it does not.
-# DBCLI-030 recovered the half that matters after the fact — the attestation
-# names the failing step — and left the half that matters during the run, a live
-# log saying which step is executing and how long it took. That still means
-# echoing each step with its own timing, and it is recorded here rather than
-# rediscovered.
+# What joining the steps cost is now paid in full. Each step used to be its own
+# recipe line, so make echoed it and a log showed which check was running and
+# which one failed; joined and prefixed with `@`, it did not. DBCLI-030 recovered
+# the half read afterwards — the attestation names the failing step — and
+# DBCLI-031 the half read during: `run` prints each step's number and name before
+# it runs and its elapsed seconds and status after.
+#
+# `run` executes `eval "$$step"`, so a step's label and its command are one
+# string rather than two copies that can disagree. The input is the single-quoted
+# literal on the line above, pinned character-for-character by
+# `tests/contract/forgepilot-boundary.test.ts`, which also refuses a `;` anywhere
+# in a step. ADR-0034.
 #
 # Neither attestation phase can decide the verdict, which is the point of the
 # `|| run=''` and the `|| true`: `begin` failing leaves `run` empty so `finish`
@@ -44,31 +48,36 @@
 # cannot leave state for the next run to pick up and describe as its own.
 # DBCLI-017, and `scripts/write-attestation.ts` for what the record says.
 verify:
-	@run=$$(bun run scripts/write-attestation.ts begin) || run=''; \
-	step='bun install --frozen-lockfile' && bun install --frozen-lockfile && \
-	step='bun run services:check' && bun run services:check && \
-	step='bun run audit' && bun run audit && \
-	step='bun run format:check' && bun run format:check && \
-	step='bun run agent-core:check' && bun run agent-core:check && \
-	step='bun run core-stdout:check' && bun run core-stdout:check && \
-	step='bun run typecheck' && bun run typecheck && \
-	step='bun run typecheck:tests' && bun run typecheck:tests && \
-	step='bun run lint' && bun run lint && \
-	step='SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test' && SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test && \
-	step='bun run build' && bun run build && \
-	step='bun run build:determinism' && bun run build:determinism && \
-	step='bun run dev -- --help' && bun run dev -- --help && \
-	step='bun run dev -- --version' && bun run dev -- --version && \
-	step='./dist/cli.mjs --help' && ./dist/cli.mjs --help && \
-	step='./dist/cli.mjs --version' && ./dist/cli.mjs --version && \
-	step='bun run test:perf' && bun run test:perf && \
-	step='bun run platform:check' && bun run platform:check && \
-	step='bun run plugin:check' && bun run plugin:check && \
-	step='bun run manifest:check' && bun run manifest:check && \
-	step='bun run docs:check' && bun run docs:check && \
-	step='bun run contract:check' && bun run contract:check && \
-	step='bun run plan:check' && bun run plan:check && \
-	step='bun run forgeflow:check' && bun run forgeflow:check; \
+	@started=$$(bun run scripts/write-attestation.ts begin) || started=''; \
+	run() { count=$$((count+1)); at=$$(date +%s); \
+		printf '==> [%s] %s\n' "$$count" "$$step"; \
+		eval "$$step"; code=$$?; \
+		printf '<== [%s] %s %ss exit %s\n' "$$count" "$$step" "$$(($$(date +%s)-at))" "$$code"; \
+		return $$code; }; \
+	step='bun install --frozen-lockfile' && run && \
+	step='bun run services:check' && run && \
+	step='bun run audit' && run && \
+	step='bun run format:check' && run && \
+	step='bun run agent-core:check' && run && \
+	step='bun run core-stdout:check' && run && \
+	step='bun run typecheck' && run && \
+	step='bun run typecheck:tests' && run && \
+	step='bun run lint' && run && \
+	step='SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test' && run && \
+	step='bun run build' && run && \
+	step='bun run build:determinism' && run && \
+	step='bun run dev -- --help' && run && \
+	step='bun run dev -- --version' && run && \
+	step='./dist/cli.mjs --help' && run && \
+	step='./dist/cli.mjs --version' && run && \
+	step='bun run test:perf' && run && \
+	step='bun run platform:check' && run && \
+	step='bun run plugin:check' && run && \
+	step='bun run manifest:check' && run && \
+	step='bun run docs:check' && run && \
+	step='bun run contract:check' && run && \
+	step='bun run plan:check' && run && \
+	step='bun run forgeflow:check' && run; \
 	status=$$?; \
-	bun run scripts/write-attestation.ts finish $$status $$run "$$step" || true; \
+	bun run scripts/write-attestation.ts finish $$status $$started "$$step" || true; \
 	exit $$status

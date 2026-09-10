@@ -19,6 +19,9 @@ import {
 
 const REVISION = '980cc078b850f799615dce51b2993141b85c40c7'
 
+/** A real step, spelled as the recipe spells it. */
+const FAILED_STEP = 'bun run services:check'
+
 const INPUT: AttestationInput = {
   revision: REVISION,
   dirtyWorktree: false,
@@ -42,7 +45,7 @@ describe('buildAttestation', () => {
   })
 
   test('a non-zero exit is a FAIL, and the code is kept', () => {
-    const attestation = buildAttestation({ ...INPUT, exitCode: 2 })
+    const attestation = buildAttestation({ ...INPUT, exitCode: 2, failedStep: FAILED_STEP })
 
     expect(attestation.result).toBe('FAIL')
     expect(attestation.exit_code).toBe(2)
@@ -60,7 +63,17 @@ describe('buildAttestation', () => {
 
     expect(hash).toMatch(/^sha256:[a-f0-9]{64}$/)
     expect(buildAttestation(INPUT).attestation_hash).toBe(hash)
-    expect(buildAttestation({ ...INPUT, exitCode: 1 }).attestation_hash).not.toBe(hash)
+    expect(
+      buildAttestation({ ...INPUT, exitCode: 1, failedStep: FAILED_STEP }).attestation_hash
+    ).not.toBe(hash)
+
+    // The step is inside the hash, not beside it: two FAILs that stopped at
+    // different steps are different documents.
+    expect(
+      buildAttestation({ ...INPUT, exitCode: 1, failedStep: 'bun run lint' }).attestation_hash
+    ).not.toBe(
+      buildAttestation({ ...INPUT, exitCode: 1, failedStep: FAILED_STEP }).attestation_hash
+    )
   })
 
   test('nothing the repository cannot verify for itself gets in', () => {
@@ -83,6 +96,46 @@ describe('buildAttestation', () => {
       'attestation_hash',
     ])
     expect(Object.keys(buildAttestation(INPUT).environment)).toEqual(['os', 'arch', 'bun', 'ci'])
+  })
+
+  test('a FAIL names the step that failed', () => {
+    // EV-048 recorded a FAIL whose cause was six stopped containers, and EV-049
+    // recorded a PASS at the same revision once they were up. Both are true and
+    // both are kept; what the format could not do was say that one of them is
+    // about the machine and the other would have been about the code. ADR-0033.
+    const attestation = buildAttestation({ ...INPUT, exitCode: 1, failedStep: FAILED_STEP })
+
+    expect(attestation.result).toBe('FAIL')
+    expect(attestation.failed_step).toBe(FAILED_STEP)
+    expect(Object.keys(attestation)).toContain('failed_step')
+  })
+
+  test('a PASS carries no failed step, because nothing failed', () => {
+    // The recipe's variable holds the last step it started, which on a passing
+    // run is the last step. Recording it would read as the step that failed.
+    const attestation = buildAttestation(INPUT)
+
+    expect(attestation.failed_step).toBeUndefined()
+    expect(Object.keys(attestation)).not.toContain('failed_step')
+    expect(serialiseAttestation(attestation)).not.toContain('failed_step')
+  })
+
+  test('a FAIL with no step, and a PASS with one, are both refused', () => {
+    // Neither is a document this repository can produce, and a producer that
+    // accepts both records whichever mistake it was handed.
+    expect(() => buildAttestation({ ...INPUT, exitCode: 1 })).toThrow(/failed_step/)
+    expect(() => buildAttestation({ ...INPUT, failedStep: FAILED_STEP })).toThrow(/failed_step/)
+  })
+
+  test('a step that is not a step this recipe runs is refused', () => {
+    const refused = (step: string) =>
+      expect(() => buildAttestation({ ...INPUT, exitCode: 1, failedStep: step })).toThrow(
+        /failed_step/
+      )
+
+    refused('')
+    refused('bun run test; rm -rf /')
+    refused(`bun run ${'x'.repeat(200)}`)
   })
 
   test('a revision that is not a full commit SHA is refused', () => {
@@ -134,11 +187,26 @@ describe('parseAttestation', () => {
 
   test('a schema version it does not know is refused, not partially read', () => {
     const text = serialiseAttestation(buildAttestation(INPUT)).replace(
-      '"schema_version": 1',
-      '"schema_version": 2'
+      `"schema_version": ${ATTESTATION_SCHEMA_VERSION}`,
+      `"schema_version": ${ATTESTATION_SCHEMA_VERSION + 1}`
     )
 
     expect(() => parseAttestation(text)).toThrow(/schema_version/)
+  })
+
+  test('a FAIL round-trips with the step it named', () => {
+    const attestation = buildAttestation({ ...INPUT, exitCode: 1, failedStep: FAILED_STEP })
+
+    expect(parseAttestation(serialiseAttestation(attestation))).toEqual(attestation)
+  })
+
+  test('a FAIL document with no step is refused rather than read as unknown', () => {
+    const document = JSON.parse(
+      serialiseAttestation(buildAttestation({ ...INPUT, exitCode: 1, failedStep: FAILED_STEP }))
+    ) as Record<string, unknown>
+    delete document.failed_step
+
+    expect(() => parseAttestation(JSON.stringify(document))).toThrow(/failed_step/)
   })
 
   test('a missing required field is refused, naming the field', () => {

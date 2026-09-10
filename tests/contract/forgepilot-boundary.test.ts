@@ -21,6 +21,13 @@ const readRoot = (relative: string): Promise<string> => readFile(join(ROOT, rela
  * recorded as well as a passing one. That is the argued-for change the comment
  * above demands: the roster below is unchanged, every step is still blocking,
  * and what the recipe gained is the ability to say that it stopped.
+ *
+ * DBCLI-030 removed the grouping and gave each step a `step=` marker naming it.
+ * The grouping never made the chain stop — `&&` does, and `make` stops at a
+ * failing line, which is why the steps are one line — but it did discard the
+ * variable holding the running step's name, so every FAIL attestation said only
+ * that something failed. The roster below is again unchanged; what the recipe
+ * gained is the ability to say *which* step stopped it. ADR-0033.
  */
 const REQUIRED_STEPS = [
   'bun run services:check',
@@ -60,11 +67,11 @@ const REQUIRED_STEPS = [
  * `verify:` target further down that make would run instead. Each of them
  * changes one of these lines, so each of them now fails.
  */
-const PROLOGUE = ["@run=$$(bun run scripts/write-attestation.ts begin) || run='';", '('] as const
+const PROLOGUE = ["@run=$$(bun run scripts/write-attestation.ts begin) || run='';"] as const
 
 const EPILOGUE = [
-  '); status=$$?;',
-  'bun run scripts/write-attestation.ts finish $$status $$run || true;',
+  'status=$$?;',
+  'bun run scripts/write-attestation.ts finish $$status $$run "$$step" || true;',
   'exit $$status',
 ] as const
 
@@ -108,17 +115,37 @@ const parseVerifyRecipe = (makefile: string): Recipe => {
     if (text.length > 0 && !text.startsWith('#')) recipe.push(text)
   }
 
-  const opening = recipe.indexOf('(')
-  const closing = recipe.findIndex((line) => line.startsWith(');'))
+  const opening = recipe.findIndex((line) => line.startsWith('step='))
+  const closing = recipe.findIndex((line) => line.startsWith('status='))
   expect(opening).toBeGreaterThanOrEqual(0)
   expect(closing).toBeGreaterThan(opening)
 
-  const steps = recipe.slice(opening + 1, closing).map((line) => {
-    expect(line).not.toMatch(/\|\|\s*true|^-|;/)
-    return line.replace(/\s*&&$/, '')
+  // Each step line is `step='<name>' && <command>`, and the two halves are
+  // compared. A step whose marker names a different command would put the wrong
+  // step in a FAIL attestation, which is worse than the field not existing: it
+  // sends the reader to a step that ran fine.
+  //
+  // Every line but the last ends in `&&`, which is what keeps it blocking; the
+  // last ends the chain with `;` so that `status=$?` runs whatever happened.
+  // That one `;` is the only one allowed anywhere in the steps — chaining a
+  // second command onto a step with `;` would run it unconditionally and hide
+  // its status, which is the shape this roster exists to refuse.
+  const stepLines = recipe.slice(opening, closing)
+  const steps = stepLines.map((line, index) => {
+    const last = index === stepLines.length - 1
+    expect(line).not.toMatch(/\|\|\s*true|^-/)
+    expect(line.endsWith(last ? ';' : '&&')).toBe(true)
+
+    const body = line.replace(last ? /;$/ : /\s*&&$/, '').trim()
+    expect(body).not.toContain(';')
+
+    const marked = body.match(/^step='([^']*)' && (.+)$/)
+    expect(marked, `step line is not marked: ${JSON.stringify(line)}`).not.toBeNull()
+    expect(marked![1]).toBe(marked![2] as string)
+    return marked![2] as string
   })
 
-  return { prologue: recipe.slice(0, opening + 1), steps, epilogue: recipe.slice(closing) }
+  return { prologue: recipe.slice(0, opening), steps, epilogue: recipe.slice(closing) }
 }
 
 const verifyRecipe = async (): Promise<Recipe> => parseVerifyRecipe(await readRoot('Makefile'))

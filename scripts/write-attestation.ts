@@ -83,7 +83,8 @@ async function finish(
   exitCode: number,
   revision: string | undefined,
   worktree: string | undefined,
-  startedAt: string | undefined
+  startedAt: string | undefined,
+  step: string | undefined
 ): Promise<void> {
   if (revision === undefined || worktree === undefined || startedAt === undefined) {
     throw new Error(
@@ -103,6 +104,10 @@ async function finish(
     startedAt,
     finishedAt: instant(),
     environment: environment(),
+    // The recipe's variable holds the step it last *started*, so it names the
+    // failing step only when something failed. On a passing run it is the last
+    // step, and recording that would read as the step that stopped the run.
+    failedStep: exitCode === 0 ? undefined : step,
   })
 
   await mkdir(outputDirectory, { recursive: true })
@@ -124,21 +129,21 @@ try {
     // extra word was accepted in silence, and a word prepended — one line of
     // unexpected stdout, a future banner — shifted everything and produced an
     // error naming the wrong problem.
-    if (rest.length !== 4) {
+    if (rest.length !== 5) {
       throw new Error(
-        `finish takes <status> <revision> <clean|dirty> <started-at>, got ${rest.length} argument(s): ${JSON.stringify(rest)}`
+        `finish takes <status> <revision> <clean|dirty> <started-at> <step>, got ${rest.length} argument(s): ${JSON.stringify(rest)}`
       )
     }
 
-    const [status, revision, worktree, startedAt] = rest
+    const [status, revision, worktree, startedAt, step] = rest
     const exitCode = Number.parseInt(status ?? '', 10)
     if (!Number.isInteger(exitCode)) {
       throw new Error(`finish needs the run's exit status, got ${JSON.stringify(status)}`)
     }
-    await finish(exitCode, revision, worktree, startedAt)
+    await finish(exitCode, revision, worktree, startedAt, step)
   } else {
     throw new Error(
-      `unknown phase ${JSON.stringify(phase)}; expected 'begin' or 'finish <status> <revision> <clean|dirty> <started-at>'`
+      `unknown phase ${JSON.stringify(phase)}; expected 'begin' or 'finish <status> <revision> <clean|dirty> <started-at> <step>'`
     )
   }
 } catch (cause) {

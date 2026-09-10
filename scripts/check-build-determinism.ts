@@ -13,8 +13,17 @@
 //
 // Not part of `bun test` — it builds twice, which takes far too long for the
 // default suite. Run it in CI, or by hand before a release.
+//
+// Since DBCLI-032 this is also the `make verify` roster's only build. The
+// separate `bun run build` step before it produced artifacts that these two
+// builds overwrote before anything read them, and this check proves the two are
+// byte-identical to what it produced — so the roster was building three times to
+// learn what two builds say. What that step did provide was a readable failure,
+// because the builds here ran with their output discarded; that is why a failing
+// build now reports itself. The decisions live in `lib/build-determinism.ts`.
 
 import { $ } from 'bun'
+import { buildFailureMessage, driftedArtifacts } from './lib/build-determinism'
 
 const ARTIFACTS = [
   'dist/cli.mjs',
@@ -32,7 +41,21 @@ async function digest(path: string): Promise<string> {
 
 async function buildAndDigest(label: string): Promise<Map<string, string>> {
   console.log(`building (${label})...`)
-  await $`bun run build`.quiet()
+
+  // `.nothrow()` and an explicit report, rather than letting `$` throw: the
+  // throw carried the exit status and dropped the build's own diagnostics,
+  // which is the one thing a reader of a failed build needs.
+  const built = await $`bun run build`.nothrow().quiet()
+  if (built.exitCode !== 0) {
+    console.error(
+      buildFailureMessage(
+        label,
+        built.exitCode,
+        `${built.stdout.toString()}${built.stderr.toString()}`
+      )
+    )
+    process.exit(built.exitCode)
+  }
 
   const digests = new Map<string, string>()
   for (const artifact of ARTIFACTS) {
@@ -44,7 +67,7 @@ async function buildAndDigest(label: string): Promise<Map<string, string>> {
 const first = await buildAndDigest('first')
 const second = await buildAndDigest('second')
 
-const drifted = ARTIFACTS.filter((artifact) => first.get(artifact) !== second.get(artifact))
+const drifted = driftedArtifacts(ARTIFACTS, first, second)
 
 for (const artifact of ARTIFACTS) {
   const stable = !drifted.includes(artifact)

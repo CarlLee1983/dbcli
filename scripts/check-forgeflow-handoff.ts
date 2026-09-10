@@ -24,6 +24,7 @@ import {
   formatFailures,
   formatViolations,
   lifecycleBlock,
+  narrativeViolations,
   readLifecycle,
   reconcile,
   shallowCloneRefusal,
@@ -98,14 +99,18 @@ if (refusal !== null) {
   process.exit(1)
 }
 
-const body = lifecycleBlock(await Bun.file(handoffPath).text())
+const handoff = await Bun.file(handoffPath).text()
+const body = lifecycleBlock(handoff)
 
 // The contract first, the claims second. A block making a statement it is not
 // allowed to make is not a block whose delivery list is worth reconciling, and
 // reporting both at once would bury the one the reader has to fix first.
+// The block's own statements, then the prose around it. Both are things the
+// handoff is not allowed to say, and a reader fixing one may as well see both.
 const { lifecycle, violations } = readLifecycle(body)
-if (violations.length > 0) {
-  console.error(formatViolations(violations))
+const refused = [...violations, ...narrativeViolations(handoff, lifecycle)]
+if (refused.length > 0) {
+  console.error(formatViolations(refused))
   process.exit(1)
 }
 

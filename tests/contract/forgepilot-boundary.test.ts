@@ -67,11 +67,18 @@ const REQUIRED_STEPS = [
  * `verify:` target further down that make would run instead. Each of them
  * changes one of these lines, so each of them now fails.
  */
-const PROLOGUE = ["@run=$$(bun run scripts/write-attestation.ts begin) || run='';"] as const
+const PROLOGUE = [
+  "@started=$$(bun run scripts/write-attestation.ts begin) || started='';",
+  'run() { count=$$((count+1)); at=$$(date +%s);',
+  'printf \'==> [%s] %s\\n\' "$$count" "$$step";',
+  'eval "$$step"; code=$$?;',
+  'printf \'<== [%s] %s %ss exit %s\\n\' "$$count" "$$step" "$$(($$(date +%s)-at))" "$$code";',
+  'return $$code; };',
+] as const
 
 const EPILOGUE = [
   'status=$$?;',
-  'bun run scripts/write-attestation.ts finish $$status $$run "$$step" || true;',
+  'bun run scripts/write-attestation.ts finish $$status $$started "$$step" || true;',
   'exit $$status',
 ] as const
 
@@ -120,10 +127,10 @@ const parseVerifyRecipe = (makefile: string): Recipe => {
   expect(opening).toBeGreaterThanOrEqual(0)
   expect(closing).toBeGreaterThan(opening)
 
-  // Each step line is `step='<name>' && <command>`, and the two halves are
-  // compared. A step whose marker names a different command would put the wrong
-  // step in a FAIL attestation, which is worse than the field not existing: it
-  // sends the reader to a step that ran fine.
+  // Each step line is `step='<command>' && run`. There is nothing to compare:
+  // DBCLI-031 made the label and the command one string, because two copies can
+  // disagree and a log or an attestation that names the wrong step sends its
+  // reader to a step that ran fine.
   //
   // Every line but the last ends in `&&`, which is what keeps it blocking; the
   // last ends the chain with `;` so that `status=$?` runs whatever happened.
@@ -139,10 +146,9 @@ const parseVerifyRecipe = (makefile: string): Recipe => {
     const body = line.replace(last ? /;$/ : /\s*&&$/, '').trim()
     expect(body).not.toContain(';')
 
-    const marked = body.match(/^step='([^']*)' && (.+)$/)
-    expect(marked, `step line is not marked: ${JSON.stringify(line)}`).not.toBeNull()
-    expect(marked![1]).toBe(marked![2] as string)
-    return marked![2] as string
+    const marked = body.match(/^step='([^']*)' && run$/)
+    expect(marked, `step line does not announce itself: ${JSON.stringify(line)}`).not.toBeNull()
+    return marked![1] as string
   })
 
   return { prologue: recipe.slice(0, opening), steps, epilogue: recipe.slice(closing) }

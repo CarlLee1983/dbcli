@@ -23,6 +23,9 @@
       and every capability outside this Story's set as `unsupported`.
 * [ ] AC-008: A SQLite identifier is quoted with double quotes, and an embedded
       double quote is doubled.
+* [ ] AC-017: A parsed SQLite connection carries the path in `file` and an empty
+      string in `database`, `host`, `user` and `password`; the path appears in no
+      field but `file`.
 
 ## Failure Cases
 
@@ -46,6 +49,9 @@
       `docs/user/zh-TW/index.md` and `docs/user/zh-TW/index.html` all describe
       SQLite support, and `bun run docs:check` passes.
 * [ ] AC-016: The complete repository verification gate passes.
+* [ ] AC-018: The three regenerated capability-catalog hashes are the only
+      change to `tests/fixtures/plat004/legacy-surface-baseline.json`, and
+      `baselineCommit` is untouched.
 
 ## Acceptance Evidence
 
@@ -67,6 +73,8 @@
 | `AC-014` | command | `grep -rn ":memory:" tests/` | `repository checkout` | `no matches` |
 | `AC-015` | command | `bun run docs:check` | `repository checkout` | `exit 0` |
 | `AC-016` | command | `make verify` | `repository checkout` | `exit 0` |
+| `AC-018` | command | `git diff --stat tests/fixtures/plat004/legacy-surface-baseline.json` | `this branch` | `3 insertions, 3 deletions` |
+| `AC-017` | test | `tests/unit/utils/validation-sqlite.test.ts` | `a parsed sqlite connection` | `file holds the path, database is empty` |
 
 ## Security Fixture Matrix
 

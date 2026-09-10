@@ -2,12 +2,17 @@
  * DDL Generator factory and public exports
  */
 
+import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { DDLGenerator } from './types'
 import { PostgreSQLDDLGenerator } from './postgresql-ddl'
 import { MySQLDDLGenerator } from './mysql-ddl'
 
 export class DDLGeneratorFactory {
-  static create(system: 'postgresql' | 'mysql' | 'mariadb'): DDLGenerator {
+  // SQLite has no generator: its ALTER TABLE supports a small subset of
+  // operations and a column change is a table rebuild, so `migrate` is
+  // `unsupported` for it in ENGINE_CAPABILITIES rather than half-implemented.
+  // The refusal is here so a caller that reaches this anyway is told why.
+  static create(system: SqlDatabaseSystem): DDLGenerator {
     switch (system) {
       case 'postgresql':
         return new PostgreSQLDDLGenerator()

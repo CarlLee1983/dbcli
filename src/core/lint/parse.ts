@@ -17,6 +17,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
   postgresql: 'Postgresql',
+  sqlite: 'Sqlite',
 }
 
 export function parseSingleStatement(sql: string, system: SqlDatabaseSystem): AstNode {

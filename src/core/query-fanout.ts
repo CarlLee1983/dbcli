@@ -4,6 +4,7 @@ import {
   classifyStatement,
   enforcePermission,
   SQL_WRITE_OR_DDL_KEYWORDS,
+  type SqlDialect,
 } from '@/core/permission-guard'
 import { stripCommentsAndStrings } from '@/core/permission/sql-analysis'
 
@@ -45,10 +46,7 @@ export function aggregateFanOutExitCode(outcomes: readonly ConnectionQueryOutcom
  * Fail closed around SQL shapes whose leading keyword looks read-only but can
  * execute writes, notably data-modifying CTEs and EXPLAIN ANALYZE writes.
  */
-export function assertFanOutReadOnlySql(
-  sql: string,
-  dialect: 'postgresql' | 'mysql' | 'mariadb'
-): void {
+export function assertFanOutReadOnlySql(sql: string, dialect: SqlDialect): void {
   // The dialect is known here, so the statement count is checked first and
   // reports the fan-out contract rather than the generic stacking message.
   const executableSql = stripCommentsAndStrings(sql, { dialect })

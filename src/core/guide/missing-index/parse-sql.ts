@@ -20,6 +20,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
   postgresql: 'Postgresql',
+  sqlite: 'Sqlite',
 }
 
 export function parseSelect(sql: string, system: SqlDatabaseSystem): unknown {

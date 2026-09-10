@@ -60,7 +60,7 @@ here rather than tiered.
 ## Classification
 
 * Security sensitive: yes
-* Baseline conformance: no
+* Baseline conformance: yes
 * Task mode: mixed
 
 ## Authority
@@ -106,8 +106,11 @@ dbcli runs on.
   (`src/adapters/types.ts`), and to `SqlDatabaseSystem`.
 * `SqliteConnectionConfigSchema` in `src/utils/validation.ts`: `system` and a
   required `file` (`StringOrEnvRef`), `timeout` and `statementTimeout`
-  optional, everything else absent. Added to `ConnectionConfigSchema` and to
-  the v2 named-connection union.
+  optional. `host`, `port`, `user`, `password` and `database` are present and
+  defaulted empty, exactly as `MongoDBConnectionConfigSchema` and
+  `ElasticsearchConnectionConfigSchema` already do — `file` is the only field
+  with meaning. Added to `ConnectionConfigSchema` and to the v2
+  named-connection union.
 * `file?: string` added to `ConnectionOptions` (`src/adapters/types.ts`),
   optional there and required in the SQLite schema branch.
 * Rejection of `:memory:`, `file::memory:` and `mode=memory` at parse time —
@@ -123,6 +126,9 @@ dbcli runs on.
 * Refusal of `ATTACH` and `DETACH` at every permission level, with an error
   naming the connection boundary rather than a missing permission.
 * Error mapping for a read-only open against a database with an unreplayed WAL.
+* Regenerating the three capability-catalog hashes in
+  `tests/fixtures/plat004/legacy-surface-baseline.json` — see Superseded
+  Behavior.
 * `ENGINE_CAPABILITIES` rows for `sqlite`, this Story's set only: `list`,
   `schema`, `schemaSingle`, `query`, `q`, `queryOutput`, `queryLimitGuard`,
   `blacklist`, `status`. Everything else `unsupported`, and `proxy`
@@ -181,6 +187,13 @@ dbcli runs on.
   directions.
 * R8: Integration tests use a temporary file in a test-owned directory,
   removed afterwards. No test uses `:memory:`.
+* R10: The regenerated baseline hashes differ from their predecessors only
+  because the catalog gained a seventh engine. `baselineCommit` is unchanged:
+  it names the capture this fixture descends from, not a claim that today's
+  binary reproduces that commit.
+* R9: A parsed SQLite connection's `database` is the empty string and its
+  `file` carries the path. The path never appears in `database`, `host` or any
+  other field, so nothing downstream can mistake it for a database name.
 
 ## Expected Errors
 
@@ -200,6 +213,19 @@ dbcli runs on.
 * No new runtime dependency. `bun:sqlite` is built in.
 * `src/core/` gains no engine-specific branch that the adapter could hold.
 * Documentation parity is this Story's, not a later one's.
+
+## Superseded Behavior
+
+* `tests/integration/lazy-entry-path.test.ts` — the `capability catalog JSON`,
+  `capability catalog text` and `capability catalog Markdown` cases pin a
+  sha256 of the rendered capability catalog. ADR-0022 derives that catalog from
+  `ENGINE_CAPABILITIES`, so a seventh engine necessarily changes all three
+  renderings: 26 of the 53 capabilities now name `sqlite` in their engine list.
+  The three `stdoutSha256` values in
+  `tests/fixtures/plat004/legacy-surface-baseline.json` are regenerated, and
+  nothing else in that fixture changes. `b80a236a` set the precedent when
+  bounded evidence receipts last moved the same surface: the hashes moved and
+  `baselineCommit` did not.
 
 ## Trust Boundary Fields
 

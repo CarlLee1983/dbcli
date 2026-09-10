@@ -76,6 +76,34 @@ export interface PermissionCheckResult {
    * re-derived by whoever throws.
    */
   requiredPermission?: Permission
+
+  /**
+   * The refusal is a connection-boundary one, so no permission level lifts it.
+   * `enforcePermission` turns this into a `ConnectionBoundaryError`.
+   */
+  boundary?: true
+}
+
+/**
+ * A statement refused because it reaches outside the configured connection,
+ * not because the permission level is too low.
+ *
+ * SQLite's `ATTACH`/`DETACH` are the only members today. They are not a tier
+ * question: raising the permission does not make reaching a second database
+ * file acceptable, because the connection identity is what the blacklist, the
+ * audit log and the schema cache are all scoped to. Refusing them with a
+ * `PermissionError` would print `required: admin` and invite exactly the
+ * escalation that would not help.
+ */
+export class ConnectionBoundaryError extends Error {
+  constructor(
+    message: string,
+    public classification: StatementClassification
+  ) {
+    super(message)
+    this.name = 'ConnectionBoundaryError'
+    Object.setPrototypeOf(this, ConnectionBoundaryError.prototype)
+  }
 }
 
 /**
@@ -142,7 +170,7 @@ export function classifyStatement(sql: string): StatementClassification {
  * CTEs, `SELECT … INTO`, and `EXPLAIN ANALYZE` of a write.
  */
 /** SQL dialects whose quoting rules differ in ways that affect statement splitting. */
-export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
+export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb', 'sqlite'] as const
 export type SqlDialect = (typeof SQL_DIALECTS)[number]
 
 /** The SQL dialect of a connection system, or undefined for a non-SQL engine. */
@@ -257,11 +285,42 @@ function escalateHiddenWrite(
 /**
  * Check if statement is allowed under given permission level
  */
+/** `ATTACH`/`DETACH` at the head of any statement in the string. */
+const SQLITE_CROSS_DATABASE = /^\s*(ATTACH|DETACH)\b/i
+
+/**
+ * True when any statement in the string attaches or detaches a database file.
+ *
+ * Every statement is examined, not just the first: `admin` is allowed to stack
+ * statements, so a trailing `ATTACH` would otherwise be judged by a leading
+ * `SELECT`.
+ */
+function reachesAnotherDatabase(sql: string, dialect: SqlDialect | undefined): boolean {
+  if (dialect !== 'sqlite') return false
+  return stripCommentsAndStrings(sql, { dialect })
+    .split(';')
+    .some((statement) => SQLITE_CROSS_DATABASE.test(statement))
+}
+
 export function checkPermission(
   sql: string,
   permission: Permission,
   dialect?: SqlDialect
 ): PermissionCheckResult {
+  // Checked before anything else, including the admin shortcut: this is not a
+  // tier question, so there is no level at which it stops applying.
+  if (reachesAnotherDatabase(sql, dialect)) {
+    return {
+      allowed: false,
+      reason:
+        'ATTACH and DETACH are refused on a SQLite connection: they reach a database file ' +
+        'outside the one this connection names, which the blacklist, audit log and schema ' +
+        'cache are all scoped to. Configure a second connection instead.',
+      classification: classifyStatement(sql),
+      boundary: true,
+    }
+  }
+
   // A read-looking leading keyword does not make a statement a read: a CTE can
   // carry DELETE/UPDATE/INSERT … RETURNING, `SELECT … INTO` creates a table, and
   // `EXPLAIN ANALYZE <write>` executes the write it explains. Judging the
@@ -461,6 +520,10 @@ export function enforcePermission(
   dialect?: SqlDialect
 ): StatementClassification {
   const result = checkPermission(sql, permission, dialect)
+
+  if (result.boundary) {
+    throw new ConnectionBoundaryError(result.reason, result.classification)
+  }
 
   if (!result.allowed) {
     throw new PermissionError(

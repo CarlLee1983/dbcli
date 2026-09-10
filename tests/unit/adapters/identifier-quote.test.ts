@@ -111,3 +111,29 @@ describe('encodeEsIndexExpression', () => {
     expect(() => encodeEsIndexExpression('')).toThrow()
   })
 })
+
+describe('SQLite 識別字（DBCLI-034 / AC-008）', () => {
+  test('用雙引號，與 PostgreSQL 同規則', () => {
+    expect(quoteIdentifier('users', 'sqlite')).toBe('"users"')
+  })
+
+  test('內嵌的雙引號被加倍', () => {
+    expect(quoteIdentifier('we"ird', 'sqlite')).toBe('"we""ird"')
+  })
+
+  test('不用反引號——那是相容語法，不是產生 SQL 該用的形式', () => {
+    expect(quoteIdentifier('users', 'sqlite')).not.toContain('`')
+  })
+
+  test('點號被當成名稱的一部分而非分隔符', () => {
+    expect(quoteIdentifier('a.b', 'sqlite')).toBe('"a.b"')
+  })
+
+  test('限定名稱逐段加引號', () => {
+    expect(quoteQualifiedIdentifier('main.users', 'sqlite')).toBe('"main"."users"')
+  })
+
+  test('含 NUL 的名稱被拒絕', () => {
+    expect(() => quoteIdentifier('a\u0000b', 'sqlite')).toThrow()
+  })
+})

@@ -8,6 +8,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
   mysql: 'MySQL',
   mariadb: 'MariaDB',
+  sqlite: 'Sqlite',
 }
 
 const HASH = /^[a-f0-9]{64}$/

@@ -23,6 +23,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
   postgresql: 'Postgresql',
+  sqlite: 'Sqlite',
 }
 
 type Ast = Record<string, unknown>

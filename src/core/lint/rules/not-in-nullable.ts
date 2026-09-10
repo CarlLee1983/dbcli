@@ -107,11 +107,15 @@ const NULL_ON_EMPTY_FUNCTION_AGGREGATES: Record<SqlDatabaseSystem, ReadonlySet<s
     'VAR_POP',
     'VAR_SAMP',
   ]),
+  // SQLite: SUM() is NULL on empty while TOTAL() is 0.0, which is the whole
+  // reason both exist. GROUP_CONCAT and its 3.44+ STRING_AGG alias are NULL too.
+  sqlite: new Set([...COMMON_NULL_ON_EMPTY_AGGREGATES, 'GROUP_CONCAT', 'STRING_AGG']),
 }
 const NON_NULL_AGGREGATES: Record<SqlDatabaseSystem, ReadonlySet<string>> = {
   postgresql: new Set(['COUNT', 'REGR_COUNT']),
   mysql: new Set(['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR']),
   mariadb: new Set(['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR']),
+  sqlite: new Set(['COUNT', 'TOTAL']),
 }
 
 interface RelationBinding {

@@ -1,7 +1,7 @@
 # dbcli 完整說明文件
 
 <!-- doc-key: overview -->
-`dbcli` 是一款安全優先的資料庫 CLI，供人類開發者與 AI 代理（AI Agents）使用。它把 SQL（PostgreSQL、MySQL）、NoSQL（MongoDB）、Key-Value（Redis）與 Search（Elasticsearch）收攏到同一套操作介面，內建權限存取控制、敏感資料黑名單與自動化診斷工作流。
+`dbcli` 是一款安全優先的資料庫 CLI，供人類開發者與 AI 代理（AI Agents）使用。它把 SQL（PostgreSQL、MySQL、SQLite）、NoSQL（MongoDB）、Key-Value（Redis）與 Search（Elasticsearch）收攏到同一套操作介面，內建權限存取控制、敏感資料黑名單與自動化診斷工作流。
 
 ---
 
@@ -1197,17 +1197,43 @@ Applied Limit 一定與上方的截斷警示一致；兩者矛盾的 dashboard �
 <!-- doc-key: engine-support -->
 ## 資料庫引擎支援矩陣
 
-| 功能 | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
-| :--- | :---: | :---: | :---: | :---: |
-| 基礎查詢 | ✅ | ✅ | ✅ | ✅ |
-| Schema 快取 | ✅ | ✅ | ❌ | ✅ |
-| 儲存 Snippets | ✅ | ✅ | ✅ | ✅ |
-| 寫入操作 (DML) | ✅ | ✅ | ✅ (透過 query) | ❌ |
-| 結構變更 (DDL) | ✅ | ❌ | ❌ | ❌ |
-| 互動式 UI | ✅ | ✅ | ✅ | ✅ |
-| 查詢大小防護 | ✅ | ✅ | ⚠️（改寫 + 截斷） | ✅ |
-| 黑名單強制 | ✅ | ✅ | ⚠️（key glob） | ⚠️ |
-| 互動式 Shell（`shell`) | ✅ | ✅ | ✅（單行） | ⚠️（Kibana 風格） |
+| 功能 | PostgreSQL/MySQL | SQLite | MongoDB | Redis | Elasticsearch |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| 基礎查詢 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Schema 快取 | ✅ | ❌ | ✅ | ❌ | ✅ |
+| 儲存 Snippets | ✅ | ⚠️（執行 `q @name`可用；`queries` 管理指令尚未支援） | ✅ | ✅ | ✅ |
+| 寫入操作 (DML) | ✅ | ❌ | ✅ | ✅ (透過 query) | ❌ |
+| 結構變更 (DDL) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 互動式 UI | ✅ | ❌ | ✅ | ✅ | ✅ |
+| 查詢大小防護 | ✅ | ⚠️ | ✅ | ⚠️（改寫 + 截斷） | ✅ |
+| 黑名單強制 | ✅ | ✅ | ✅ | ⚠️（key glob） | ⚠️ |
+| 互動式 Shell（`shell`) | ✅ | ❌ | ✅ | ✅（單行） | ⚠️（Kibana 風格） |
+
+### SQLite 連線設定
+
+SQLite 連線指名的是一個資料庫**檔案**，不是主機。唯一有意義的欄位是 `file`；沒有 host、port、user 或 password，因為存取控制來自作業系統本身的檔案權限，而不是網路認證這一層。最小可用的設定如下：
+
+```json
+{
+  "version": 2,
+  "default": "local",
+  "connections": {
+    "local": { "system": "sqlite", "file": "./data/app.sqlite", "permission": "query-only" }
+  }
+}
+```
+
+`file` 和其他引擎的連線欄位一樣，可以寫成 `{"$env": "APP_DB_PATH"}` 參照；`timeout` / `statementTimeout` 這兩個選用欄位也同樣適用於 SQLite。
+
+**記憶體內的資料庫會被拒絕。** `:memory:`、`file::memory:`，以及任何路徑帶有 `mode=memory` 的寫法，都會在設定檔解析階段就失敗，而不是等到連線時才發現。原因是：黑名單、稽核紀錄與 schema 快取，全部都以「連線」為範圍在追蹤狀態，而記憶體內資料庫每次啟動都是一份全新、不同的資料庫——參見 `docs/adr/ADR-0038-an-in-memory-database-is-not-a-connection.md`。
+
+**dbcli 不會建立資料庫檔案。** `file` 指到不存在的路徑會在連線時失敗；路徑存在但不是 SQLite 資料庫也一樣會失敗，並且會明講失敗原因，而不是回傳看起來像損毀資料的結果。
+
+**`query-only` 是由資料庫引擎本身強制的，不是靠 dbcli。** PostgreSQL 與 MySQL 是把語句包進唯讀 transaction 執行；SQLite 沒有這種 transaction 機制，所以 dbcli 改成直接以唯讀模式開啟資料庫檔案（`SQLITE_OPEN_READONLY`）——這個 handle 完全沒有寫入通道。這樣做有一個代價要講清楚：一個留有尚未回放的 write-ahead log 的資料庫，是沒辦法以唯讀模式開啟的，因為回放 log 本身就是一種寫入。dbcli 會直接點名是 WAL 造成的，而不是丟出一個看不懂的 `SQLITE_CANTOPEN`。參見 `docs/adr/ADR-0037-query-only-on-sqlite-closes-the-door.md`。
+
+**`ATTACH` 與 `DETACH` 在所有權限層級都會被拒絕，包含 `admin`**，因為它們會碰到連線所指名之外的另一個資料庫檔案，這是連線邊界的問題，不是權限層級的問題。需要的話請改設定第二條連線。
+
+目前可用的指令是 `list`、`schema`、`query`、`q` 與 `status`。`init` 還沒有 SQLite 的精靈流程，請直接編輯 `config.json` 來設定連線。`insert`、`update`、`delete`、`export`、`migrate`、`diff`、`shell`、`doctor` 與 `report` 目前都還不支援 SQLite。
 
 ### MongoDB 連線設定
 

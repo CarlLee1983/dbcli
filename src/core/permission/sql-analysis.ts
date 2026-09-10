@@ -29,7 +29,7 @@ export function normalizeSQL(sql: string): string {
  */
 export function stripCommentsAndStrings(
   sql: string,
-  options: { dialect?: 'postgresql' | 'mysql' | 'mariadb' } = {}
+  options: { dialect?: 'postgresql' | 'mysql' | 'mariadb' | 'sqlite' } = {}
 ): string {
   let result = ''
   let i = 0
@@ -132,9 +132,20 @@ export function stripCommentsAndStrings(
       }
     }
 
-    // MySQL/MariaDB backtick-quoted identifier. Doubled backticks escape a
-    // literal backtick; SQL-looking text inside remains non-executable.
-    if (mysqlDialect && char === '`') {
+    // SQLite bracket-quoted identifier, accepted for compatibility. There is no
+    // escape inside: the identifier ends at the first `]`.
+    if (options.dialect === 'sqlite' && char === '[') {
+      i++
+      while (i < sql.length && sql[i] !== ']') i++
+      if (i < sql.length) i++
+      result += ' '
+      continue
+    }
+
+    // MySQL/MariaDB backtick-quoted identifier — SQLite accepts the same form
+    // for compatibility. Doubled backticks escape a literal backtick;
+    // SQL-looking text inside remains non-executable.
+    if ((mysqlDialect || options.dialect === 'sqlite') && char === '`') {
       i++
       while (i < sql.length) {
         if (sql[i] === '`') {

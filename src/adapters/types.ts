@@ -7,6 +7,7 @@ export type DatabaseSystem =
   | 'postgresql'
   | 'mysql'
   | 'mariadb'
+  | 'sqlite'
   | 'mongodb'
   | 'redis'
   | 'elasticsearch'
@@ -25,6 +26,7 @@ export const DATABASE_SYSTEMS = Object.freeze([
   'postgresql',
   'mysql',
   'mariadb',
+  'sqlite',
   'mongodb',
   'redis',
   'elasticsearch',
@@ -43,7 +45,10 @@ export type DatabaseSystemRosterIsExhaustive = AssertNever<
   Exclude<DatabaseSystem, (typeof DATABASE_SYSTEMS)[number]>
 >
 
-export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
+export type SqlDatabaseSystem = Extract<
+  DatabaseSystem,
+  'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
+>
 
 export type SqlExecutionMode = 'normal' | 'native-read-only'
 
@@ -65,6 +70,8 @@ export interface ConnectionOptions {
   password: string
   /** Database name */
   database: string
+  /** SQLite database file path (required for SQLite connections, absent otherwise) */
+  file?: string
   /** MongoDB connection URI (optional, for MongoDB connections) */
   uri?: string
   /** MongoDB auth database — used when building URI from host/port/user/password (default: 'admin') */

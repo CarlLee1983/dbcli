@@ -1,7 +1,7 @@
 # dbcli Comprehensive Documentation
 
 <!-- doc-key: overview -->
-`dbcli` is a security-first database CLI for both human developers and AI agents. It puts SQL (PostgreSQL, MySQL), NoSQL (MongoDB), Key-Value (Redis), and Search (Elasticsearch) databases behind one interface, with permission-based access control, sensitive-data blacklisting, and automated diagnostic workflows.
+`dbcli` is a security-first database CLI for both human developers and AI agents. It puts SQL (PostgreSQL, MySQL, SQLite), NoSQL (MongoDB), Key-Value (Redis), and Search (Elasticsearch) databases behind one interface, with permission-based access control, sensitive-data blacklisting, and automated diagnostic workflows.
 
 ---
 
@@ -1331,17 +1331,43 @@ Direct-query dashboards (`dbcli query --ui`, `dbcli export --format html`) are u
 <!-- doc-key: engine-support -->
 ## Database Engine Support Matrix
 
-| Feature | PostgreSQL/MySQL | MongoDB | Redis | Elasticsearch |
-| :--- | :---: | :---: | :---: | :---: |
-| Basic Querying | ✅ | ✅ | ✅ | ✅ |
-| Schema Caching | ✅ | ✅ | ❌ | ✅ |
-| Saved Snippets | ✅ | ✅ | ✅ | ✅ |
-| DML (Insert/Update) | ✅ | ✅ | ✅ (via query) | ❌ |
-| DDL (Migrate) | ✅ | ❌ | ❌ | ❌ |
-| Interactive UI | ✅ | ✅ | ✅ | ✅ |
-| Query Size Guard | ✅ | ✅ | ⚠️ (rewrite + truncate) | ✅ |
-| Blacklist Enforcement | ✅ | ✅ | ⚠️ (key globs) | ⚠️ |
-| Interactive Shell (`shell`) | ✅ | ✅ | ✅ (single-line) | ⚠️ (Kibana-style) |
+| Feature | PostgreSQL/MySQL | SQLite | MongoDB | Redis | Elasticsearch |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| Basic Querying | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Schema Caching | ✅ | ❌ | ✅ | ❌ | ✅ |
+| Saved Snippets | ✅ | ⚠️ (`q @name` works; `queries` management does not yet) | ✅ | ✅ | ✅ |
+| DML (Insert/Update) | ✅ | ❌ | ✅ | ✅ (via query) | ❌ |
+| DDL (Migrate) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Interactive UI | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Query Size Guard | ✅ | ⚠️ | ✅ | ⚠️ (rewrite + truncate) | ✅ |
+| Blacklist Enforcement | ✅ | ✅ | ✅ | ⚠️ (key globs) | ⚠️ |
+| Interactive Shell (`shell`) | ✅ | ❌ | ✅ | ✅ (single-line) | ⚠️ (Kibana-style) |
+
+### SQLite connection configuration
+
+A SQLite connection names a database file, not a host. The only field that matters is `file`; there is no `host`, `port`, `user`, or `password`, because access control comes from the operating system's file permissions rather than a network authentication step. A minimal config looks like this:
+
+```json
+{
+  "version": 2,
+  "default": "local",
+  "connections": {
+    "local": { "system": "sqlite", "file": "./data/app.sqlite", "permission": "query-only" }
+  }
+}
+```
+
+`file` accepts an `{"$env": "APP_DB_PATH"}` reference like every other connection field, and the same `timeout` / `statementTimeout` fields available to the other engines apply here too.
+
+In-memory databases are refused. `:memory:`, `file::memory:`, and any path carrying `mode=memory` fail when the configuration is parsed, rather than at connect time. The reason is that a connection is the identity the blacklist, the audit log, and the schema cache are all scoped to, and an in-memory database is a different database on every invocation — see `docs/adr/ADR-0038-an-in-memory-database-is-not-a-connection.md`.
+
+dbcli never creates a database file. A `file` path that does not exist fails at connect, and a path that exists but is not a SQLite database fails too, naming that as the reason rather than returning corrupt-looking data.
+
+`query-only` is enforced by the engine, not by dbcli. Where PostgreSQL and MySQL run the statement inside a read-only transaction, SQLite has no such transaction, so dbcli instead opens the database file itself read-only (`SQLITE_OPEN_READONLY`) — a handle with no write channel at all. This has one cost worth stating plainly: a database left with an unreplayed write-ahead log cannot be opened read-only, because replaying the log is itself a write. dbcli reports that case by naming the WAL rather than surfacing a bare `SQLITE_CANTOPEN`. See `docs/adr/ADR-0037-query-only-on-sqlite-closes-the-door.md`.
+
+`ATTACH` and `DETACH` are refused at every permission level, `admin` included, because they reach a database file outside the one the connection names — a connection-boundary question rather than a permission tier. Configure a second connection instead.
+
+Today, `list`, `schema`, `query`, `q`, and `status` work against a SQLite connection. `init` has no SQLite flow yet, so configure the connection by editing `config.json` directly. `insert`, `update`, `delete`, `export`, `migrate`, `diff`, `shell`, `doctor`, and `report` are not supported for SQLite yet.
 
 ### MongoDB connection configuration
 

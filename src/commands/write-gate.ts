@@ -77,6 +77,7 @@ const PARSER_DIALECTS: Record<SqlDialect, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
   postgresql: 'Postgresql',
+  sqlite: 'Sqlite',
 }
 
 const WRITE_TYPES = new Set<StatementType>([

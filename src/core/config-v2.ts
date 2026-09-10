@@ -6,6 +6,7 @@
  */
 
 import { type DbcliConfigV2, DbcliConfigV2Schema } from '@/utils/validation'
+import type { DatabaseSystem } from '@/adapters/types'
 import { ConfigError } from '@/utils/errors'
 import { assertConfigMutationApproved } from '@/core/config-mutation-guard'
 import {
@@ -41,7 +42,8 @@ export function detectConfigVersion(raw: unknown): 1 | 2 {
 export interface ResolvedConnection {
   name: string
   connection: {
-    system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+    system: DatabaseSystem
+    file?: string | { $env: string }
     host: string | { $env: string }
     port: number | { $env: string }
     user: string | { $env: string }

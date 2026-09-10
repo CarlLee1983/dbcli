@@ -59,6 +59,17 @@
 // one, a reader browsing `specs/stories/` finds the other, and neither is
 // wrong enough to notice.
 
+/**
+ * Headings in the prose around the lifecycle block.
+ *
+ * Upstream is explicit that the prose is the writer's business and that its own
+ * checker ignores it. That is exactly why it grew unnoticed: 870 of this file's
+ * 1,132 lines were one delivery-narrative section per delivered Story, written
+ * at delivery and never removed, because nothing had ever asked for a line to be
+ * removed — the delivery list's own failure shape, one document up. ADR-0036.
+ */
+const HEADING = /^#{2,3}\s+(.*)$/gm
+
 /** The `workflow:` block's delivery claims. */
 export interface Lifecycle {
   readonly completedStories: readonly string[]
@@ -242,6 +253,8 @@ export function readLifecycle(body: string): Reading {
   const values = new Map<string, string>()
   const completedStories: string[] = []
   const sections = new Set<string>()
+  /** Keys that carried at least one `- item`, for the rules below. */
+  const listed = new Set<string>()
 
   let section: string | null = null
   let known = false
@@ -332,6 +345,7 @@ export function readLifecycle(body: string): Reading {
         continue
       }
 
+      listed.add(location)
       if (location === COMPLETED) completedStories.push(listLine[1] as string)
       continue
     }
@@ -366,6 +380,24 @@ export function readLifecycle(body: string): Reading {
     }
   }
 
+  // A clean worktree owns no paths. Upstream defines both lists as the
+  // working-tree paths the Story owns and does not require them when nothing is
+  // uncommitted; ninety had accumulated here across a dozen delivered Stories
+  // under `dirty_worktree: false`, describing a working tree that had not
+  // existed for weeks.
+  if (bareValue(values.get('baseline.dirty_worktree') ?? '') === 'false') {
+    for (const field of ['story_owned_paths', 'known_unrelated_paths'] as const) {
+      const location = `baseline.${field}`
+      if (!listed.has(location)) continue
+      violations.push({
+        location,
+        reason:
+          'attributes paths while `baseline.dirty_worktree` is `false` — a clean worktree has no ' +
+          'uncommitted paths to attribute, so state `[]`',
+      })
+    }
+  }
+
   // The delivery list is what this gate reconciles; an empty one would
   // reconcile nothing and pass.
   if (completedStories.length === 0 && !violations.some((v) => v.location === COMPLETED)) {
@@ -375,6 +407,39 @@ export function readLifecycle(body: string): Reading {
   // Found order first, then the pinned fields in contract order, then the
   // delivery list: two runs over one handoff read the same way.
   return { lifecycle: { completedStories }, violations }
+}
+
+/**
+ * Refuse a section narrating a Story the lifecycle block already records.
+ *
+ * A delivered Story's reasoning lives in the commit that delivered it — fuller
+ * than any summary here, and travelling with the change — and its decisions live
+ * in `docs/adr/`. What the handoff is for is what has no other home: work in
+ * flight, and deliveries accepted against an issue rather than a Story.
+ *
+ * No attempt is made to tell narration from a passing reference. A rule that
+ * tried would be arguing about prose, and the answer to a heading that names a
+ * delivered Story is the same either way: say it in that Story's commit. The
+ * lifecycle block is excluded because it lists every completed Story by design.
+ */
+export function narrativeViolations(handoff: string, lifecycle: Lifecycle): Violation[] {
+  const recorded = new Set(lifecycle.completedStories)
+  const prose = handoff.replace(LIFECYCLE_FENCE, '')
+  const violations: Violation[] = []
+
+  for (const [, heading] of prose.matchAll(HEADING)) {
+    for (const story of recorded) {
+      if (!(heading as string).includes(story)) continue
+      violations.push({
+        location: story,
+        reason:
+          'is recorded as completed and still has a section in specs/handoff.md — its reasoning ' +
+          'belongs in the commit that delivered it and its decisions in docs/adr/, so delete the section',
+      })
+    }
+  }
+
+  return violations
 }
 
 /**

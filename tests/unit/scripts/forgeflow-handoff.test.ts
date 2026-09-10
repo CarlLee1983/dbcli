@@ -25,6 +25,7 @@
 import { describe, test, expect } from 'bun:test'
 import {
   collectStoryIds,
+  narrativeViolations,
   formatFailures,
   formatViolations,
   lifecycleBlock,
@@ -266,6 +267,83 @@ describe('readLifecycle', () => {
   test('a block recording no completed Story is refused, not reconciled as empty', () => {
     const empty = 'workflow:\n  current_story: none\n  next_story: pending\n  status: done\n'
     expect(locations(empty)).toEqual(['workflow.completed_stories'])
+  })
+})
+
+describe('the handoff carries what has no other home', () => {
+  // 870 of this file's 1,132 lines were delivery narrative for Stories the
+  // lifecycle block already recorded, written at delivery and never removed,
+  // because nothing had ever asked for a line to be removed. The same shape as
+  // the delivery list before DBCLI-029, one document up. ADR-0036.
+  const recorded = { completedStories: ['DBCLI-001', 'DBCLI-PLAT-001'] }
+
+  test('a section narrating a recorded Story is refused, naming it', () => {
+    const violations = narrativeViolations(
+      '# Handoff\n\n## DBCLI-001：那個決定為什麼是那樣\n\nprose\n',
+      recorded
+    )
+
+    expect(violations).toHaveLength(1)
+    expect(violations[0]!.location).toBe('DBCLI-001')
+    expect(violations[0]!.reason).toMatch(/commit/)
+  })
+
+  test('a subsection counts too, because that is where the prose actually grew', () => {
+    expect(narrativeViolations('# Handoff\n\n### DBCLI-PLAT-001 收尾\n', recorded)).toHaveLength(1)
+  })
+
+  test('a Story that is not recorded may be narrated', () => {
+    // In-flight work, and deliveries accepted against an issue rather than a
+    // Story, have no other home. DBCLI-PLAT-008 is the second kind: no Story
+    // directory, no entry in the list, and these notes are all there is.
+    expect(narrativeViolations('# Handoff\n\n## DBCLI-PLAT-008 — issue 驗收\n', recorded)).toEqual(
+      []
+    )
+  })
+
+  test('a heading that merely mentions a Story in passing is still a section about it', () => {
+    // No attempt to tell narration from reference. A rule that tried would be
+    // arguing about prose, and the fix for a heading that names a delivered
+    // Story is the same either way: say it in that Story's commit.
+    expect(narrativeViolations('# Handoff\n\n## 收尾與 DBCLI-001\n', recorded)).toHaveLength(1)
+  })
+
+  test('the lifecycle block itself is not prose', () => {
+    // The block lists every completed Story by design; reading it as narrative
+    // would refuse every handoff there has ever been.
+    const handoff = handoffFile(BODY)
+
+    expect(narrativeViolations(handoff, readLifecycle(BODY).lifecycle)).toEqual([])
+  })
+})
+
+describe('a clean worktree owns no paths', () => {
+  const clean = (paths: string) =>
+    BODY.replace('  story_owned_paths: []', `  story_owned_paths:\n${paths}`)
+
+  test('a path attributed while nothing is uncommitted is refused', () => {
+    // Upstream defines these as the working-tree paths the Story owns. Ninety of
+    // them had accumulated across a dozen delivered Stories, under
+    // `dirty_worktree: false` and `current_story: none` — a list that grew for
+    // the same reason the prose did.
+    const { violations } = readLifecycle(clean('    - src/guard.ts'))
+
+    expect(violations).toHaveLength(1)
+    expect(violations[0]!.location).toBe('baseline.story_owned_paths')
+    expect(violations[0]!.reason).toMatch(/dirty_worktree/)
+  })
+
+  test('a dirty worktree may attribute paths', () => {
+    const dirty = clean('    - src/guard.ts').replace(
+      '  dirty_worktree: false',
+      '  dirty_worktree: true'
+    )
+
+    expect(readLifecycle(dirty).violations).toEqual([])
+  })
+
+  test('the empty lists a clean worktree states are accepted', () => {
+    expect(readLifecycle(BODY).violations).toEqual([])
   })
 })
 

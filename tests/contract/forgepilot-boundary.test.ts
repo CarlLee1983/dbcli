@@ -39,7 +39,6 @@ const REQUIRED_STEPS = [
   'bun run typecheck:tests',
   'bun run lint',
   'SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test',
-  'bun run build',
   'bun run build:determinism',
   'bun run dev -- --help',
   'bun run dev -- --version',
@@ -202,6 +201,21 @@ describe('make verify runs from a clean checkout', () => {
     const recipeText = makefile.slice(makefile.indexOf('verify:'))
 
     expect(recipeText).not.toContain('pipefail')
+  })
+
+  test('builds the artifacts before any step executes them', async () => {
+    // DBCLI-032 removed the roster's separate `bun run build`: `build:determinism`
+    // rebuilds the same artifacts twice and overwrote it before anything read
+    // it, and the check itself proves the two are byte-identical. What has to
+    // hold after that removal is the ordering, not the step — the roster is a
+    // literal list, and a literal list is exactly the thing that can be
+    // rearranged without anyone noticing.
+    const { steps } = await verifyRecipe()
+    const builds = steps.findIndex((step) => step.includes('build'))
+    const executes = steps.findIndex((step) => step.startsWith('./dist/'))
+
+    expect(builds).toBeGreaterThanOrEqual(0)
+    expect(executes).toBeGreaterThan(builds)
   })
 
   test('keeps every step it had before, in the same order', async () => {

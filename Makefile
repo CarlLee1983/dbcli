@@ -64,7 +64,6 @@ verify:
 	step='bun run typecheck:tests' && run && \
 	step='bun run lint' && run && \
 	step='SKIP_INTEGRATION_TESTS=false REQUIRE_INTEGRATION_SERVICES=true bun run test' && run && \
-	step='bun run build' && run && \
 	step='bun run build:determinism' && run && \
 	step='bun run dev -- --help' && run && \
 	step='bun run dev -- --version' && run && \

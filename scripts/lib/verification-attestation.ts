@@ -46,9 +46,9 @@ import { createHash } from 'node:crypto'
  * The artifact format version, which is not the package version.
  *
  * It moves when a field, its requiredness, or the meaning of a value changes.
- * DBCLI-019's per-step detail is the next thing expected to move it.
+ * Version 2 added `failed_step`, present exactly on the FAIL path.
  */
-export const ATTESTATION_SCHEMA_VERSION = 1
+export const ATTESTATION_SCHEMA_VERSION = 2
 
 export type AttestationResult = 'PASS' | 'FAIL'
 
@@ -79,6 +79,22 @@ export interface Attestation {
   readonly finished_at: string
   readonly duration_ms: number
   readonly environment: AttestationEnvironment
+  /**
+   * The step the run stopped at, on the FAIL path and only there.
+   *
+   * A FAIL used to be one word for two different facts. `EV-048 FAIL` was six
+   * stopped containers refused by `services:check`, the third of twenty-three
+   * steps; `EV-049 PASS` at the same revision was the same code once they were
+   * up. Both records are true and the evidence store keeps both, and nothing in
+   * either said that one was about the machine. A record that compresses "this
+   * commit is broken" and "this machine was not ready" into one word trains its
+   * readers to skip it.
+   *
+   * Absent on PASS. The recipe's variable holds the last step it *started*,
+   * which on a passing run is the last step, and recording that would read as
+   * the step that failed.
+   */
+  readonly failed_step?: string
   readonly attestation_hash: string
 }
 
@@ -90,6 +106,8 @@ export interface AttestationInput {
   readonly startedAt: string
   readonly finishedAt: string
   readonly environment: AttestationEnvironment
+  /** Required when `exitCode` is non-zero, refused when it is zero. */
+  readonly failedStep?: string
 }
 
 /** Key order is part of the format: two serialisations of one run must match. */
@@ -104,6 +122,7 @@ const FIELDS = [
   'finished_at',
   'duration_ms',
   'environment',
+  'failed_step',
   'attestation_hash',
 ] as const
 
@@ -113,6 +132,18 @@ const REVISION = /^[0-9a-f]{40}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 const SAFE_TEXT = /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,63}$/
 const COMMAND = /^[a-z][a-z0-9 :-]{0,63}$/
+
+/**
+ * A step as the recipe spells it: `bun run docs:check`, `./dist/cli.mjs --help`,
+ * an inline `NAME=value` prefix.
+ *
+ * Bounded like every other text field here, and for the same reason: the value
+ * is produced by this repository's own Makefile, so the pattern is not defence
+ * against an attacker but against a shell variable that held something other
+ * than a step name. A `;` cannot appear, which is what a smuggled second
+ * command would need.
+ */
+const STEP = /^[A-Za-z0-9./][A-Za-z0-9 _./:=-]{0,127}$/
 
 /** One day. Long enough for any real gate, short enough to catch a bad clock. */
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000
@@ -215,6 +246,15 @@ export function buildAttestation(input: AttestationInput): Attestation {
     refuse('exit_code', `must be an integer in 0..255, got ${JSON.stringify(input.exitCode)}`)
   }
 
+  // The pairing is the point of the field. A FAIL with no step is the record
+  // this Story exists to stop producing, and a PASS with one names a step that
+  // did not fail.
+  const failed =
+    input.exitCode === 0 ? undefined : requireMatch(input.failedStep, STEP, 'failed_step')
+  if (input.exitCode === 0 && input.failedStep !== undefined) {
+    refuse('failed_step', 'is stated on a passing run, where no step failed')
+  }
+
   const duration = Date.parse(finishedAt) - Date.parse(startedAt)
   if (duration < 0) refuse('finished_at', `is before started_at, so the run has no duration`)
 
@@ -238,6 +278,7 @@ export function buildAttestation(input: AttestationInput): Attestation {
     finished_at: finishedAt,
     duration_ms: duration,
     environment: checkEnvironment(input.environment),
+    ...(failed === undefined ? {} : { failed_step: failed }),
   }
 
   const digest = createHash('sha256').update(hashableBytes(body), 'utf8').digest('hex')
@@ -275,6 +316,10 @@ export function parseAttestation(text: string): Attestation {
   }
 
   for (const field of FIELDS) {
+    // `failed_step` is required exactly where it is meaningful. Requiring it
+    // everywhere would refuse every passing attestation; requiring it nowhere
+    // would read a FAIL that has lost its step as a FAIL that never had one.
+    if (field === 'failed_step' && record.exit_code === 0) continue
     if (!(field in record)) refuse(field, 'is missing')
   }
   for (const field of Object.keys(record)) {
@@ -308,6 +353,7 @@ export function parseAttestation(text: string): Attestation {
     startedAt: record.started_at as string,
     finishedAt: record.finished_at as string,
     environment: environment as AttestationEnvironment,
+    failedStep: record.failed_step as string | undefined,
   })
 
   // Rebuilding and comparing is the whole check: every derived field — the

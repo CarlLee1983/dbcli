@@ -165,9 +165,6 @@ wrong is the sentence, not the behaviour.
 * R7: `dbcli doctor` reports a missing or unreadable file as a failure, and an
   unwritable file as a failure only when the permission implies writing.
 * R8: No command accepts a SQLite path outside the configuration.
-* R9: A command marked `supported` for SQLite in `ENGINE_CAPABILITIES` runs
-  against a SQLite connection when spawned as a CLI process, not only when its
-  exported function is called.
 
 ## Expected Errors
 

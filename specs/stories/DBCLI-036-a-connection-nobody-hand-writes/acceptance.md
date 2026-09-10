@@ -33,9 +33,6 @@
       predates the engine, without claiming SQLite is not a SQL connection.
 * [ ] AC-011: `dbcli doctor` reports a missing file and an unreadable file as
       distinct failures.
-* [ ] AC-017: Every command the matrix marks `supported` for SQLite runs
-      against a SQLite connection as a spawned CLI process, not merely as an
-      exported function.
 
 ## Regression Requirements
 
@@ -58,7 +55,7 @@
 | `AC-004` | test | `tests/unit/commands/init-engine-roster.test.ts` | `init.ts's list and DATABASE_SYSTEMS` | `exact equality` |
 | `AC-005` | test | `tests/unit/core/config-v2.test.ts` | `a SQLite connection in a v2 config` | `file present in the listing` |
 | `AC-006` | test | `tests/integration/sqlite-doctor.test.ts` | `a read-only file under data-admin` | `failure naming writability` |
-| `AC-007` | test | `tests/unit/adapters/capabilities.test.ts` | `the sqlite matrix rows` | `the six added, the five still unsupported` |
+| `AC-007` | test | `tests/unit/adapters/capabilities.test.ts` | `the sqlite matrix rows` | `the six supported, the five still unsupported` |
 | `AC-008` | test | `tests/integration/sqlite-init.test.ts` | `a path under a temporary directory that does not exist` | `refusal, no config written, no file created` |
 | `AC-009` | test | `tests/integration/sqlite-init.test.ts` | `:memory: typed at the prompt` | `refusal naming the same reason as the schema` |
 | `AC-010` | test | `tests/unit/core/migrate-v1-to-v2.test.ts` | `a v1 config with system sqlite` | `refusal whose text names v1, not the SQL category` |
@@ -68,7 +65,6 @@
 | `AC-014` | command | `bun run src/cli.ts query --help` | `repository checkout` | `no file or db path option` |
 | `AC-015` | command | `bun run docs:check` | `repository checkout` | `exit 0` |
 | `AC-016` | command | `make verify` | `repository checkout` | `exit 0` |
-| `AC-017` | test | `tests/integration/sqlite-init.test.ts` | `a configured SQLite connection driven through spawned CLI runs` | `list, query, export and q all exit 0` |
 
 ## Security Fixture Matrix
 

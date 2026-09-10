@@ -205,13 +205,15 @@ describe('AC-014: 沒有任何命令從旗標或引數收 SQLite 路徑', () => 
 })
 
 /**
- * AC-017：能力矩陣說支援的命令，要用「真的被 spawn 出來的 CLI」證明。
+ * 回歸防線：能力矩陣說支援的命令，要用「真的被 spawn 出來的 CLI」證明。
  *
- * DBCLI-034 與 DBCLI-035 的測試都停在 adapter 與 executor 這一層，所以七個命令
- * 各自在入口處把 SQLite 擋掉這件事，兩張 Story 都看不到。這個 describe 的存在
- * 是為了讓那個盲點不會再開一次：矩陣認領一格，這裡就要有一條 spawn。
+ * 這一組不對應任何驗收條件，它對應的是一個實際發生過的缺陷。DBCLI-034 與
+ * DBCLI-035 的測試都停在 adapter 與 executor 這一層，所以七個命令各自在入口處
+ * 用一份寫死的引擎字面量把 SQLite 擋掉這件事，兩張 Story 都看不到——矩陣說支
+ * 援，命令說不支援，而沒有人問得到那個問題。矩陣認領一格，這裡就要有一條
+ * spawn，那個盲點才不會再開一次。
  */
-describe('AC-017: 矩陣認領的命令都跑得起來', () => {
+describe('矩陣認領的命令都跑得起來（回歸）', () => {
   test('schema 讀得到欄位', async () => {
     await initSqlite(dbPath)
     const schema = await run(['schema', 'users', '--format', 'json'])

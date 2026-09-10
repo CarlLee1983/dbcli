@@ -38,6 +38,10 @@
 * [ ] AC-012: Documentation parity across both languages and both formats, and
       `bun run docs:check` passes.
 * [ ] AC-013: The complete repository verification gate passes.
+* [ ] AC-014: The three regenerated capability-catalog hashes are the only
+      change to `tests/fixtures/plat004/legacy-surface-baseline.json`.
+* [ ] AC-015: Generated write SQL for SQLite uses double-quoted identifiers and
+      `?` placeholders; PostgreSQL keeps `$n` and MySQL keeps backticks.
 
 ## Acceptance Evidence
 
@@ -56,6 +60,8 @@
 | `AC-011` | test | `tests/contract/capability-catalog.test.ts` | `the live Commander tree` | `both directions pass` |
 | `AC-012` | command | `bun run docs:check` | `repository checkout` | `exit 0` |
 | `AC-013` | command | `make verify` | `repository checkout` | `exit 0` |
+| `AC-014` | command | `git diff --stat tests/fixtures/plat004/legacy-surface-baseline.json` | `this branch` | `3 insertions, 3 deletions` |
+| `AC-015` | test | `tests/integration/sqlite-write.test.ts` | `a dry-run insert` | `double quotes and ? placeholders` |
 
 ## Security Fixture Matrix
 

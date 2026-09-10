@@ -5,21 +5,21 @@
       "name": "capability catalog JSON",
       "args": ["capabilities", "--format", "json"],
       "exitCode": 0,
-      "stdoutSha256": "3471c8faa142b562937fd43464895d531dc959232693ffb76a77c26a2247ecf6",
+      "stdoutSha256": "e9f51c67f37516c580a7dd88695426bcb9b616fb05c51d1568584698459d1782",
       "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "name": "capability catalog text",
       "args": ["capabilities"],
       "exitCode": 0,
-      "stdoutSha256": "47b8b76742996f78b3abd44eed9ed989f65612a1f9399a3f9ef832d86a550cd7",
+      "stdoutSha256": "b2d939b6b5c040a650b452d6100197c9d59d0b5761503d59fcf50913f57cf851",
       "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "name": "capability catalog Markdown",
       "args": ["capabilities", "--format", "markdown"],
       "exitCode": 0,
-      "stdoutSha256": "59e0e237632b13793f0e1fe17870734890a414ecedcc9f3039de2a333f6ddfed",
+      "stdoutSha256": "29b6d5aa340cd1c08e946f174a74d9f7d97164d3a09419bc992457c6f20b7fa1",
       "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {

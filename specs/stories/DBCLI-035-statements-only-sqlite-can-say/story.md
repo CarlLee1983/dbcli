@@ -27,13 +27,17 @@ they classify `UNKNOWN` and are refused for everything below `admin` by
 `TIER_GRANTS` (`:283-288`). That is the correct verdict reached by accident,
 and an accident is not a rule.
 
-`REPLACE INTO` and `INSERT OR REPLACE` are the dangerous ones.
-`SQL_WRITE_OR_DDL_KEYWORDS` (`:153-154`) is the regex `findWriteKeyword` scans
-with, and `REPLACE` is not in it. `INSERT OR REPLACE` survives on its `INSERT`
-prefix; a statement beginning `REPLACE INTO` does not, and a delete-then-insert
-would classify as `UNKNOWN` — refused below `admin`, but for the wrong reason,
-and mapped to no statement type at all where the audit log and the risk
-analyser read one.
+`REPLACE INTO` is the one whose current behaviour has to be stated carefully,
+because it is half right already. `SQL_WRITE_OR_DDL_KEYWORDS` (`:153-154`) does
+contain `REPLACE`, and its `(?!\s*\()` lookahead already excludes the string
+function, so `SELECT REPLACE(name, 'a', 'b') FROM t` classifies `SELECT` and is
+allowed under `query-only` — measured, not assumed. What the keyword scan knows,
+the *type mapper* does not: `mapKeywordToType` has no entry for `REPLACE`, so
+`REPLACE INTO users VALUES (1)` classifies `UNKNOWN` while `INSERT OR REPLACE`
+classifies `INSERT` on its leading keyword. The statement is refused below
+`admin` either way, but it is mapped to no statement type where the audit log
+and the risk analyser read one, and two spellings of one operation are recorded
+as two different things.
 
 The classifier is hand-written throughout — `stripCommentsAndStrings` in
 `src/core/permission/sql-analysis.ts` is a per-dialect state machine, and no
@@ -45,7 +49,7 @@ no backtick identifiers by default, though it accepts both for compatibility.
 ## Classification
 
 * Security sensitive: yes
-* Baseline conformance: no
+* Baseline conformance: yes
 * Task mode: execution
 
 ## Authority
@@ -68,10 +72,12 @@ no backtick identifiers by default, though it accepts both for compatibility.
 
 ## Risk
 
-* Level: high
-* Reason: `write-keyword-omission`
+* Level: medium
+* Reason: `type-mapper-omission`
 
-A write keyword the scanner does not know is a write dbcli believes is a read.
+The write-keyword scan already knows `REPLACE`; the type mapper does not. The
+risk is therefore misrecording rather than under-refusing, which is why this is
+`medium` rather than the `high` an unknown write keyword would deserve.
 
 ## Scope
 
@@ -88,8 +94,13 @@ A write keyword the scanner does not know is a write dbcli believes is a read.
   double-quoted identifiers, and the compatibility forms it accepts.
 * `insert`, `update` and `delete` against SQLite, through the existing
   `data-executor` path.
-* `ENGINE_CAPABILITIES` rows for `insert`, `update`, `delete` and `q` write
-  paths.
+* `ENGINE_CAPABILITIES` rows for `insert`, `update` and `delete`.
+* Regenerating the three capability-catalog hashes in
+  `tests/fixtures/plat004/legacy-surface-baseline.json`, for the second Story
+  running — see Superseded Behavior.
+* `data-executor` and the three write commands stop collapsing the engine to
+  `postgresql | mysql`: SQLite needs `?` placeholders like MySQL and double
+  quotes like PostgreSQL, which neither half of that pair expresses.
 * Documentation parity for what this Story delivers.
 
 ### Out of Scope
@@ -118,14 +129,16 @@ A write keyword the scanner does not know is a write dbcli believes is a read.
 
 ## Rules
 
-* R1: `REPLACE INTO` is classified as a write and refused for `query-only`,
-  with a statement type — not `UNKNOWN`.
+* R1: `REPLACE INTO` is classified as a write with a statement type — not
+  `UNKNOWN` — and `SELECT REPLACE(...)` keeps classifying `SELECT`.
 * R2: `INSERT OR REPLACE` keeps the verdict it has today.
 * R3: Every `PRAGMA`, with or without a value, is admin-only.
 * R4: `VACUUM` and `REINDEX` are admin-only by declaration, and a test asserts
   the reason is the declaration rather than the fallthrough.
-* R5: Adding `REPLACE` changes no existing verdict for PostgreSQL, MySQL or
-  MariaDB. Their fixtures are unchanged.
+* R5: Mapping `REPLACE` to a statement type changes no existing verdict for
+  PostgreSQL, MySQL or MariaDB — MySQL's `REPLACE INTO` moves from `UNKNOWN`
+  (admin-only) to a write type, which is a re-tier and must be decided, not
+  arrived at. Until it is, the mapping is applied for the SQLite dialect only.
 * R6: `insert` / `update` / `delete` against SQLite obey the same tiers as
   PostgreSQL, and `--dry-run` prints SQLite-quoted SQL without executing.
 * R7: A write attempted on a `query-only` connection still fails at the handle,
@@ -147,6 +160,20 @@ A write keyword the scanner does not know is a write dbcli believes is a read.
 
 * No AST parser on the permission path.
 * The classifier stays engine-parameterised, not engine-branched.
+
+## Superseded Behavior
+
+* `tests/integration/lazy-entry-path.test.ts` — the three capability-catalog
+  cases, for the same reason DBCLI-034 named them: the catalog is derived from
+  `ENGINE_CAPABILITIES` (ADR-0022), so claiming `insert`, `update` and `delete`
+  for SQLite necessarily changes all three renderings. Only the three
+  `stdoutSha256` values change; `baselineCommit` does not.
+
+  Two consecutive Stories have now moved this fixture for the same structural
+  reason, which is evidence that a frozen sha256 of a derived catalog cannot
+  survive ordinary engine work. Whether that guard should exist in this shape is
+  a design question with its own Story, not something to settle inside a Story
+  about SQLite statements.
 
 ## Trust Boundary Fields
 

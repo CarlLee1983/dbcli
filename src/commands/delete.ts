@@ -22,6 +22,7 @@ import {
   printMutationFailure,
   printMutationOutcome,
 } from '@/commands/mutation-outcome'
+import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
 import {
@@ -349,9 +350,7 @@ export async function deleteCommand(
       }
 
       // 8. Create DataExecutor and execute DELETE
-      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
-        | 'postgresql'
-        | 'mysql'
+      const dbSystem = config.connection.system as SqlDatabaseSystem | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)

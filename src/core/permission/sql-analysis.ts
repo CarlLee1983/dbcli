@@ -256,8 +256,34 @@ export function extractFirstKeyword(sql: string): string {
 /**
  * Map SQL keyword to statement type
  */
-export function mapKeywordToType(keyword: string): StatementType {
+/**
+ * Statements dbcli refuses below `admin` by declaration rather than by failing
+ * to recognise them.
+ *
+ * `VACUUM` and `REINDEX` already reached that verdict as unrecognised
+ * keywords, which is the right answer arrived at by accident: nothing said so,
+ * so nothing could keep saying so. `PRAGMA` is here whole, read forms
+ * included — telling `PRAGMA table_info(users)` from `PRAGMA journal_mode=WAL`
+ * means reading the argument, which is the analysis `escalateHiddenWrite`
+ * exists because dbcli does not trust. `dbcli schema` is the supported way to
+ * read table structure.
+ */
+const DECLARED_ADMIN_ONLY_KEYWORDS = new Set(['PRAGMA', 'VACUUM', 'REINDEX'])
+
+export function isDeclaredAdminOnly(keyword: string): boolean {
+  return DECLARED_ADMIN_ONLY_KEYWORDS.has(keyword.toUpperCase())
+}
+
+export function mapKeywordToType(
+  keyword: string,
+  dialect?: 'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
+): StatementType {
   const upper = keyword.toUpperCase()
+
+  // SQLite only. MySQL has `REPLACE INTO` too, where it classifies UNKNOWN and
+  // is therefore admin-only; mapping it here for every dialect would move it to
+  // `data-admin`, and a re-tier is a decision, not a side effect (DBCLI-035 R5).
+  if (upper === 'REPLACE' && dialect === 'sqlite') return 'REPLACE'
 
   // Read operations
   if (upper === 'SELECT') return 'SELECT'
@@ -287,7 +313,9 @@ export function mapKeywordToType(keyword: string): StatementType {
  * Determine if a statement type is destructive
  */
 export function isDestructiveOperation(type: StatementType): boolean {
-  return ['DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT'].includes(type)
+  // REPLACE is here because it deletes: a conflicting row is removed before the
+  // replacement is written, which is the whole difference from INSERT.
+  return ['DELETE', 'REPLACE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT'].includes(type)
 }
 
 /**

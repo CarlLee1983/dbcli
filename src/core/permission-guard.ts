@@ -17,6 +17,7 @@ import {
   extractFirstKeyword,
   mapKeywordToType,
   isDestructiveOperation,
+  isDeclaredAdminOnly,
   extractAllKeywords,
   determineConfidence,
 } from '@/core/permission/sql-analysis'
@@ -29,6 +30,7 @@ export type StatementType =
   | 'INSERT'
   | 'UPDATE'
   | 'DELETE'
+  | 'REPLACE'
   | 'ALTER'
   | 'DROP'
   | 'CREATE'
@@ -130,9 +132,9 @@ export class PermissionError extends Error {
  * Classify SQL statement into operation type
  * Uses whitelist approach: only return confident classifications
  */
-export function classifyStatement(sql: string): StatementClassification {
+export function classifyStatement(sql: string, dialect?: SqlDialect): StatementClassification {
   const normalized = normalizeSQL(sql)
-  const stripped = stripCommentsAndStrings(normalized)
+  const stripped = stripCommentsAndStrings(normalized, { dialect })
   const upper = stripped.toUpperCase()
 
   // MariaDB/MySQL: 'ANALYZE SELECT ...' is a read-only EXPLAIN variant.
@@ -152,8 +154,21 @@ export function classifyStatement(sql: string): StatementClassification {
   const composite = detectCompositePatterns(upper)
   const firstKeyword = extractFirstKeyword(stripped)
 
+  // Declared admin-only: the verdict is the same one an unrecognised keyword
+  // already produced, but now something says it, so `isDangerous` is true and a
+  // test can tell the declaration from the fallthrough.
+  if (isDeclaredAdminOnly(firstKeyword)) {
+    return {
+      type: 'UNKNOWN',
+      isDangerous: true,
+      keywords: extractAllKeywords(stripped),
+      isComposite: false,
+      confidence: 'HIGH',
+    }
+  }
+
   // Map keyword to statement type
-  const type = mapKeywordToType(firstKeyword)
+  const type = mapKeywordToType(firstKeyword, dialect)
 
   return {
     type,
@@ -326,7 +341,7 @@ export function checkPermission(
   // `EXPLAIN ANALYZE <write>` executes the write it explains. Judging the
   // statement by the write it performs lets the ordinary tiers decide, instead
   // of this proof living only on the multi-connection path as it used to.
-  const classification = escalateHiddenWrite(sql, classifyStatement(sql), dialect)
+  const classification = escalateHiddenWrite(sql, classifyStatement(sql, dialect), dialect)
 
   // Classification describes one statement, but drivers using the simple query
   // protocol (PostgreSQL) execute every semicolon-separated statement in the
@@ -349,7 +364,9 @@ export function checkPermission(
 const TIER_GRANTS: ReadonlyArray<{ permission: Permission; types: readonly StatementType[] }> = [
   { permission: 'query-only', types: ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN'] },
   { permission: 'read-write', types: ['INSERT', 'UPDATE'] },
-  { permission: 'data-admin', types: ['DELETE'] },
+  // REPLACE sits with DELETE rather than INSERT: it removes a conflicting row
+  // before writing the replacement, so it can destroy data INSERT cannot.
+  { permission: 'data-admin', types: ['DELETE', 'REPLACE'] },
 ]
 
 /**

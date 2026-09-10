@@ -5,6 +5,7 @@
  * validate data columns, handle parameterized queries to prevent SQL injection.
  */
 
+import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { DatabaseAdapter, TableSchema } from '@/adapters/types'
 import type { Permission } from '@/types'
 import type { DataExecutionResult, DataExecutionOptions } from '@/types/data'
@@ -26,7 +27,7 @@ export class DataExecutor {
   constructor(
     private adapter: DatabaseAdapter,
     private permission: Permission,
-    private dbSystem: 'postgresql' | 'mysql' = 'postgresql',
+    private dbSystem: SqlDatabaseSystem = 'postgresql',
     private blacklistValidator?: BlacklistValidator
   ) {}
 
@@ -189,7 +190,7 @@ export class DataExecutor {
   /**
    * Get database system type (used to determine parameter placeholder and identifier quoting)
    */
-  private getSystemType(): 'postgresql' | 'mysql' {
+  private getSystemType(): SqlDatabaseSystem {
     return this.dbSystem
   }
 
@@ -197,7 +198,10 @@ export class DataExecutor {
    * Get identifier quote character (for table names and column names)
    */
   private getQuoteChar(): string {
-    return this.dbSystem === 'mysql' ? '`' : '"'
+    // SQLite accepts backticks for compatibility, but the standard form is the
+    // double quote PostgreSQL uses, and generated SQL should use the standard
+    // one. See `src/adapters/identifier-quote.ts`.
+    return this.dbSystem === 'mysql' || this.dbSystem === 'mariadb' ? '`' : '"'
   }
 
   private checkBlacklist(operation: 'INSERT' | 'UPDATE' | 'DELETE', tableName: string): void {

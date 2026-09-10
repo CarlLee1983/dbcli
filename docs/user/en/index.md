@@ -1336,7 +1336,7 @@ Direct-query dashboards (`dbcli query --ui`, `dbcli export --format html`) are u
 | Basic Querying | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Schema Caching | ✅ | ❌ | ✅ | ❌ | ✅ |
 | Saved Snippets | ✅ | ⚠️ (`q @name` works; `queries` management does not yet) | ✅ | ✅ | ✅ |
-| DML (Insert/Update) | ✅ | ❌ | ✅ | ✅ (via query) | ❌ |
+| DML (Insert/Update) | ✅ | ✅ | ✅ | ✅ (via query) | ❌ |
 | DDL (Migrate) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Interactive UI | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Query Size Guard | ✅ | ⚠️ | ✅ | ⚠️ (rewrite + truncate) | ✅ |
@@ -1367,7 +1367,7 @@ dbcli never creates a database file. A `file` path that does not exist fails at 
 
 `ATTACH` and `DETACH` are refused at every permission level, `admin` included, because they reach a database file outside the one the connection names — a connection-boundary question rather than a permission tier. Configure a second connection instead.
 
-Today, `list`, `schema`, `query`, `q`, and `status` work against a SQLite connection. `init` has no SQLite flow yet, so configure the connection by editing `config.json` directly. `insert`, `update`, `delete`, `export`, `migrate`, `diff`, `shell`, `doctor`, and `report` are not supported for SQLite yet.
+Today, `list`, `schema`, `query`, `q`, `status`, `insert`, `update`, and `delete` work against a SQLite connection. Writes go through the same permission ladder and the same `--dry-run` as the other SQL engines, and the SQL they generate uses SQLite's standard double-quoted identifiers and `?` placeholders. `REPLACE INTO` requires `data-admin` rather than `read-write`, because it removes a conflicting row before writing the replacement; `PRAGMA`, `VACUUM` and `REINDEX` require `admin`. `init` has no SQLite flow yet, so configure the connection by editing `config.json` directly. `export`, `migrate`, `diff`, `shell`, `doctor`, and `report` are not supported for SQLite yet.
 
 ### MongoDB connection configuration
 

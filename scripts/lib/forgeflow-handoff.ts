@@ -483,12 +483,34 @@ export function shallowCloneRefusal(isShallowOutput: string): string | null {
  */
 
 /**
- * Compare every delivery claim against the repository.
+ * Compare every delivery claim against the repository, and back.
  *
  * `DELIVERED_BEFORE_TRAILERS` is a ratchet, not an amnesty: it may shrink and
  * never grow. A new Story must carry a trailer, an entry whose commit stopped
  * existing fails, and so does an entry for a Story that has since acquired a
  * trailer — a stale exemption is drift of exactly the kind this gate catches.
+ *
+ * ## Both directions, because one of them cannot catch an omission
+ *
+ * For ten revisions this asked only whether every recorded Story had evidence.
+ * A list checked in that direction alone can only rot toward being incomplete,
+ * and it did, twice: DBCLI-027 found DBCLI-022 to DBCLI-026 delivered, merged
+ * and approved with none of them recorded, and reconciling DBCLI-028's delivery
+ * then found DBCLI-027 had left itself out of the same list it had just
+ * repaired. Both were found by a human noticing. The entries were never false —
+ * nothing had asked for them. ADR-0032.
+ *
+ * `trailers` is one set for both directions: the Story IDs whose trailers are
+ * reachable from `HEAD`. It used to be read from `git log --all`, which the
+ * reverse rule cannot use — an unmerged branch would demand handoff entries for
+ * Stories this tree has not delivered — and two scopes for one comparison is
+ * the split verdict ADR-0031 removed, one level down. So both read the history
+ * of the checkout in hand, which is the same history locally and in CI.
+ *
+ * A trailer naming a Story with no `specs/stories` directory is not reported.
+ * `DBCLI-PLAT-008` and its neighbours were accepted against issues; demanding a
+ * handoff entry for a Story this repository does not contain would be inventing
+ * one rather than reconciling one.
  */
 export async function reconcile({
   lifecycle,
@@ -546,6 +568,18 @@ export async function reconcile({
         reason: 'has a DELIVERED_BEFORE_TRAILERS entry but is not recorded as completed',
       })
     }
+  }
+
+  const recorded = new Set(completedStories)
+
+  for (const story of trailers) {
+    if (recorded.has(story) || !directories.has(story)) continue
+    failures.push({
+      story,
+      reason:
+        'carries a `Story:` trailer in this history but is not recorded in completed_stories — ' +
+        'add it in the change that delivers it',
+    })
   }
 
   return failures

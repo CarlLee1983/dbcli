@@ -11,10 +11,17 @@ to be at — a marker naming an untagged revision makes "which release is this" 
 question with two answers.
 
 `make verify` runs `bun run forgeflow:check`, which reconciles the handoff's
-`completed_stories` against the repository. Upstream's `story-check` and
+`completed_stories` against the repository, in both directions: every recorded
+Story needs a `Story:` commit trailer, and every Story whose trailer this
+checkout's history carries needs an entry. Upstream's `story-check` and
 `handoff-check` are static structure checks that live in a ForgeFlow checkout
 and are documented as never deciding whether a declaration is truthful; this
 repository's check covers that separate layer and duplicates neither.
+
+**Add the `completed_stories` entry in the change that delivers the Story**, in
+the same commit as the trailer or the same pull request. Recording it after the
+merge is what left DBCLI-022 to DBCLI-027 unrecorded, and it turns `main` red in
+between. ADR-0032.
 
 Create a Story by copying the template:
 

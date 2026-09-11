@@ -53,14 +53,31 @@ export async function createWorkspace(prefix = 'dbcli-sqlite-cli-'): Promise<Wor
   const dbPath = join(workDir, 'app.sqlite')
   const seed = new Database(dbPath, { create: true })
   seed.run('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL, secret TEXT)')
-  const insert = seed.prepare('INSERT INTO users (id, email, secret) VALUES (?, ?, ?)')
-  for (const row of SEED_USERS) insert.run(row.id, row.email, row.secret)
-  seed.close()
+  for (const row of SEED_USERS) {
+    seed.run('INSERT INTO users (id, email, secret) VALUES (?, ?, ?)', [
+      row.id,
+      row.email,
+      row.secret,
+    ])
+  }
+  closeReleasingFile(seed)
   return { workDir, homeDir, dbPath }
 }
 
+/**
+ * `Database.close()` 是 `sqlite3_close_v2`：還有沒 finalize 的 statement 時，
+ * 連線會變成 zombie、檔案 handle 留著，Windows 上接下來的 `rm` 就是 EBUSY——
+ * 第一次 CI 就是這樣倒的。`close(true)` 改呼叫 `sqlite3_close`，有殘留就丟錯，
+ * 讓漏掉 finalize 的地方在所有平台上一樣大聲。
+ */
+function closeReleasingFile(db: Database): void {
+  db.close(true)
+}
+
 export async function destroyWorkspace(ws: Workspace): Promise<void> {
-  await rm(ws.workDir, { recursive: true, force: true })
+  // Windows 在子程序結束後釋放目錄 handle 有一小段延遲；重試是 node:fs 自己
+  // 為這種情況提供的選項，不是吞掉錯誤——用完重試次數仍然會丟。
+  await rm(ws.workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 }
 
 export function runCli(
@@ -145,22 +162,28 @@ export function createContext(ws: Workspace, runOptions: RunOptions = {}): Scena
 export function readRows<T = Record<string, unknown>>(dbPath: string, sql: string): T[] {
   const db = new Database(dbPath, { readonly: true })
   try {
-    return db.query(sql).all() as T[]
+    const statement = db.prepare(sql)
+    try {
+      return statement.all() as T[]
+    } finally {
+      statement.finalize()
+    }
   } finally {
-    db.close()
+    closeReleasingFile(db)
   }
 }
 
 /** 往種子資料庫追加大量列，給 LIMIT 守衛之類需要超過門檻的情境用。 */
 export function seedBulkRows(dbPath: string, count: number, startId = 1000): void {
   const db = new Database(dbPath)
+  const insert = db.prepare('INSERT INTO users (id, email, secret) VALUES (?, ?, ?)')
   try {
-    const insert = db.prepare('INSERT INTO users (id, email, secret) VALUES (?, ?, ?)')
     db.transaction(() => {
       for (let i = 0; i < count; i++) insert.run(startId + i, `bulk${i}@example.com`, null)
     })()
   } finally {
-    db.close()
+    insert.finalize()
+    closeReleasingFile(db)
   }
 }
 

@@ -411,7 +411,7 @@ export const SQLITE_CLI_SCENARIOS: readonly CliScenario[] = [
       const snapshot = jsonFromStdout<{ enabled: boolean; currentFile: string }>(health.stdout)
       expect(snapshot.enabled).toBe(true)
       expect(snapshot.currentFile.startsWith(storageRoot(ws))).toBe(true)
-      expect(snapshot.currentFile.endsWith('/audit/local.jsonl')).toBe(true)
+      expect(snapshot.currentFile.endsWith(join('audit', 'local.jsonl'))).toBe(true)
       const logged = (await Bun.file(snapshot.currentFile).text()).trim().split('\n')
       expect(logged.some((line) => line.includes(entry.id))).toBe(true)
 

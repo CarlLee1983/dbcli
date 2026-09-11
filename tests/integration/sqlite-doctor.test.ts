@@ -40,7 +40,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await chmod(dbPath, 0o644).catch(() => {})
-  await rm(workDir, { recursive: true, force: true })
+  await rm(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 describe('AC-006: 檔案存在且可讀時 doctor 通過', () => {

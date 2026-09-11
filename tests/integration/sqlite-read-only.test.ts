@@ -38,7 +38,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(workDir, { recursive: true, force: true })
+  await rm(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 describe('query-only 由引擎拒絕寫入', () => {

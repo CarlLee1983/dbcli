@@ -114,6 +114,19 @@ macos 0.07ms、windows 0.27ms，最慢的一台離 2ms 還有 7.4 倍；1000-tab
 在兩者中間，兩側都有餘裕。三個 OS 的絕對速度差了快四倍，比值卻幾乎不動——這就是
 當初選比值而不選毫秒數的理由，現在有量測撐著，不只是論證。
 
+## SQLite 宣告對帳之後留下的兩個量測
+
+DBCLI-040 之後，`tests/integration/sqlite-cli/` 是 SQLite 能力宣告的證據來源：矩陣裡
+`supported` / `limited` 的每一格都要有一條 spawn 真的 CLI 的情境，情境跑過且
+通過才算數。盤點時量到的兩件事留在這裡，都不在 DBCLI-040 的範圍內：
+
+- `schemaFullScan` 對 SQLite 標成 `unsupported`，但 `dbcli schema`（無引數）與
+  `schema --refresh` 在 SQLite 上實際跑得完並寫進快取。矩陣少認領了一格；
+  要不要認領是產品決定，認領時對帳會要求一條情境。
+- `auditHealth` 的計數器（`currentEntryCount`、`currentSizeBytes`）是該程序自己
+  的 writer 的，每次 spawn 都從 0 起算；跨程序能觀察的只有它指的檔案。情境
+  斷言的是檔案路徑與內容，不是計數器。
+
 ## Lifecycle
 
 `current_story` 與 `next_story` 永久是契約的 sentinel。要知道現在該做什麼，問
@@ -168,6 +181,7 @@ workflow:
     - DBCLI-034
     - DBCLI-035
     - DBCLI-036
+    - DBCLI-040
   status: done
 
 baseline:

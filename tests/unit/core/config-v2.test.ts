@@ -6,6 +6,7 @@ import {
   resolveConnection,
   patchConnectionSchema,
   findSimilarConnectionNames,
+  listConnections,
 } from '@/core/config-v2'
 import { DbcliConfigV2Schema } from '@/utils/validation'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -328,5 +329,73 @@ describe('config-v2', () => {
         })
       ).toThrow()
     })
+  })
+})
+
+/**
+ * AC-005：listConnections 為 SQLite 帶 `file`，就像它為 MongoDB 帶 `uri`。
+ *
+ * 這張清單存在的理由是回答「這個連線指向哪裡」。對 SQLite 而言，host、port 與
+ * database 都是空的，所以少了 `file` 這個問題就沒有答案——而預設值會讓它看起來
+ * 像是有答案：`localhost:27017/`。
+ */
+describe('listConnections 的連線目標', () => {
+  const config = {
+    version: 2,
+    default: 'local',
+    connections: {
+      local: {
+        system: 'sqlite',
+        file: '/srv/app.sqlite',
+        permission: 'query-only',
+      },
+      docs: {
+        system: 'mongodb',
+        uri: 'mongodb://localhost:27017/docs',
+        permission: 'query-only',
+      },
+      pg: {
+        system: 'postgresql',
+        host: 'db.example.com',
+        port: 5432,
+        user: 'app',
+        password: 'x',
+        database: 'app',
+        permission: 'query-only',
+      },
+    },
+  }
+
+  test('SQLite 連線帶 file', () => {
+    const local = listConnections(config as never).find((c) => c.name === 'local')
+    expect(local?.file).toBe('/srv/app.sqlite')
+  })
+
+  test('MongoDB 連線仍然帶 uri，SQLite 不帶', () => {
+    const rows = listConnections(config as never)
+    expect(rows.find((c) => c.name === 'docs')?.uri).toBe('mongodb://localhost:27017/docs')
+    expect(rows.find((c) => c.name === 'docs')?.file).toBeUndefined()
+    expect(rows.find((c) => c.name === 'local')?.uri).toBeUndefined()
+  })
+
+  test('沒有 file 的連線不會憑空長出這個欄位', () => {
+    const pg = listConnections(config as never).find((c) => c.name === 'pg')
+    expect(pg?.file).toBeUndefined()
+    expect(pg?.host).toBe('db.example.com')
+  })
+
+  test('$env 參照原樣帶過去，不在這裡解析', () => {
+    const withEnv = {
+      ...config,
+      connections: {
+        local: {
+          system: 'sqlite',
+          file: { $env: 'DBCLI_LOCAL_FILE' },
+          permission: 'query-only',
+        },
+      },
+    }
+    const local = listConnections(withEnv as never)[0]
+    expect(local?.file).toEqual({ $env: 'DBCLI_LOCAL_FILE' })
   })
 })

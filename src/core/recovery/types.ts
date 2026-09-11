@@ -1,5 +1,5 @@
 import type { GuideStep } from '@/core/guide/types'
-import type { ConnectionErrorCode } from '@/adapters/types'
+import type { ConnectionErrorCode, DatabaseSystem } from '@/adapters/types'
 
 /** Stable contract version for RecoveryEnvelope JSON. Bump on breaking shape change. */
 export const RECOVERY_SCHEMA_VERSION = 1 as const
@@ -110,7 +110,7 @@ export interface RecoveryContext {
   /** Operation that failed, e.g. "query" / "q" / "schema". Used in messages, not in the code. */
   operation: string
   /** Connected system if known, otherwise null. */
-  system?: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch' | null
+  system?: DatabaseSystem | null
   /** Active connection name when v2 multi-connection is in use; otherwise undefined. */
   connectionName?: string
   /** Optional snippet name the operation was attempting (for snippet errors). */

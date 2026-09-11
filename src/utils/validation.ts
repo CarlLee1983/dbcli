@@ -149,6 +149,62 @@ const SqlConnectionConfigSchema = z.object({
 })
 
 /**
+ * SQLite in-memory targets are refused at parse time — ADR-0038.
+ *
+ * A connection is the identity the blacklist, the audit log and the schema
+ * cache are scoped to. `:memory:` is created empty at open and destroyed at
+ * close, so one configured name would address a different database on every
+ * invocation. Refusing it here rather than in the adapter keeps an identity
+ * that cannot hold from ever being connected with.
+ */
+export const SQLITE_MEMORY_TARGET_MESSAGE =
+  'SQLite in-memory databases are refused: a memory target is a different database on every ' +
+  'connection, so it cannot be the connection identity the blacklist, audit log and schema ' +
+  'cache are scoped to. Point `file` at a database file on disk. See ADR-0038.'
+
+function isSqliteMemoryTarget(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.toLowerCase() === ':memory:') return true
+  if (!trimmed.toLowerCase().startsWith('file:')) return false
+
+  const withoutScheme = trimmed.slice('file:'.length)
+  const queryStart = withoutScheme.indexOf('?')
+  const path = queryStart === -1 ? withoutScheme : withoutScheme.slice(0, queryStart)
+  if (path.toLowerCase() === ':memory:') return true
+
+  const query = queryStart === -1 ? '' : withoutScheme.slice(queryStart + 1)
+  return new URLSearchParams(query).get('mode')?.toLowerCase() === 'memory'
+}
+
+/**
+ * SQLite connection schema — the target is a file path, and there is nothing
+ * else to configure. No host, no port, no credentials: the operating system's
+ * file permissions are the access control, which is why `file` is the only
+ * field with meaning.
+ *
+ * host/port/user/password/database are present and defaulted empty for the same
+ * reason MongoDB's and Elasticsearch's are: `ConnectionConfig` is a union whose
+ * consumers read those fields without narrowing, and a branch missing them
+ * makes every such reader a type error. `database` stays empty deliberately —
+ * the path lives in `file` and nowhere else, so nothing downstream can print a
+ * filesystem path where it means to print a database name.
+ */
+export const SqliteConnectionConfigSchema = z.object({
+  system: z.literal('sqlite'),
+  file: z.union([z.string().min(1), EnvRefSchema]).superRefine((value, ctx) => {
+    if (typeof value === 'string' && isSqliteMemoryTarget(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: SQLITE_MEMORY_TARGET_MESSAGE })
+    }
+  }),
+  host: OptStringOrEnvRef,
+  port: z.union([z.number().int(), EnvRefSchema]).optional().default(0),
+  user: OptStringOrEnvRef,
+  password: z.union([z.string(), EnvRefSchema]).optional().default(''),
+  database: OptStringOrEnvRef,
+  ...TimeoutField,
+})
+
+/**
  * Redis connection schema — host/port required, user/password optional,
  * database is the logical DB index (kept as string for env-binding parity).
  */
@@ -182,10 +238,11 @@ export const ElasticsearchConnectionConfigSchema = z.object({
 })
 
 /**
- * Connection configuration schema (union of SQL, MongoDB, Redis, Elasticsearch)
+ * Connection configuration schema (union of SQL, SQLite, MongoDB, Redis, Elasticsearch)
  */
 export const ConnectionConfigSchema = z.union([
   SqlConnectionConfigSchema,
+  SqliteConnectionConfigSchema,
   MongoDBConnectionConfigSchema,
   RedisConnectionConfigSchema,
   ElasticsearchConnectionConfigSchema,
@@ -380,6 +437,12 @@ const SqlNamedConnectionSchema = SqlConnectionConfigSchema.extend({
   environment: EnvironmentLabelSchema,
 })
 
+const SqliteNamedConnectionSchema = SqliteConnectionConfigSchema.extend({
+  permission: PermissionSchema,
+  envFile: z.string().optional(),
+  environment: EnvironmentLabelSchema,
+})
+
 const MongoDBNamedConnectionSchema = MongoDBConnectionConfigSchema.extend({
   permission: PermissionSchema,
   envFile: z.string().optional(),
@@ -400,6 +463,7 @@ const ElasticsearchNamedConnectionSchema = ElasticsearchConnectionConfigSchema.e
 
 const NamedConnectionUnion = z.union([
   SqlNamedConnectionSchema,
+  SqliteNamedConnectionSchema,
   MongoDBNamedConnectionSchema,
   RedisNamedConnectionSchema,
   ElasticsearchNamedConnectionSchema,

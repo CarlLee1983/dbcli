@@ -17,7 +17,7 @@
 
 import { dollarQuoteDelimiterAt } from './sql-lexical'
 
-export type SqlTablesDialect = 'postgresql' | 'mysql' | 'mariadb'
+export type SqlTablesDialect = 'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
 
 export interface ExtractTableReferencesOptions {
   dialect?: SqlTablesDialect
@@ -283,6 +283,22 @@ function tokenize(
         }
         i++
       }
+      continue
+    }
+
+    // SQLite bracket-quoted identifier, accepted for compatibility. There is no
+    // escape inside: the name ends at the first `]`. It yields the identifier
+    // rather than blank, because a table name the scan drops is a table the
+    // blacklist cannot block.
+    if (dialect === 'sqlite' && char === '[') {
+      i++
+      let value = ''
+      while (i < sql.length && sql[i] !== ']') {
+        value += sql[i]
+        i++
+      }
+      if (i < sql.length) i++
+      tokens.push({ kind: 'identifier', value, quoted: true })
       continue
     }
 

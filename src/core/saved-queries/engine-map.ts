@@ -8,6 +8,7 @@ import type { EngineTag } from './types'
 export function mapSystemToEngine(system: string): EngineTag {
   if (system === 'postgresql') return 'postgres'
   if (system === 'mysql' || system === 'mariadb') return 'mysql'
+  if (system === 'sqlite') return 'sqlite'
   if (system === 'mongodb') return 'mongodb'
   if (system === 'elasticsearch') return 'elasticsearch'
   if (system === 'redis') return 'redis'

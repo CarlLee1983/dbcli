@@ -923,6 +923,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                         <tr class="bg-background/50">
                             <th class="py-5">Feature</th>
                             <th class="text-center py-5">SQL</th>
+                            <th class="text-center py-5">SQLite</th>
                             <th class="text-center py-5">MongoDB</th>
                             <th class="text-center py-5">Redis</th>
                             <th class="text-center py-5">ES</th>
@@ -935,10 +936,12 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Schema Caching</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -949,9 +952,11 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Data Writes</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -963,10 +968,12 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Interactive UI</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -974,6 +981,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Query Size Guard</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -982,12 +990,14 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td class="text-left font-bold px-8">Blacklist Enforcement</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">Interactive Shell</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
@@ -995,6 +1005,29 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                     </tbody>
                 </table>
             </div>
+
+            <h3 class="mt-12">SQLite connection configuration</h3>
+            <p>A SQLite connection names a database file, not a host. The only field that matters is <code>file</code>; there is no <code>host</code>, <code>port</code>, <code>user</code>, or <code>password</code>, because access control comes from the operating system's file permissions rather than a network authentication step. A minimal config looks like this:</p>
+            <pre><code>{
+  "version": 2,
+  "default": "local",
+  "connections": {
+    "local": { "system": "sqlite", "file": "./data/app.sqlite", "permission": "query-only" }
+  }
+}</code></pre>
+            <p><code>file</code> accepts an <code>{"$env": "APP_DB_PATH"}</code> reference like every other connection field, and the same <code>timeout</code> / <code>statementTimeout</code> fields available to the other engines apply here too.</p>
+            <p>In-memory databases are refused. <code>:memory:</code>, <code>file::memory:</code>, and any path carrying <code>mode=memory</code> fail when the configuration is parsed, rather than at connect time. The reason is that a connection is the identity the blacklist, the audit log, and the schema cache are all scoped to, and an in-memory database is a different database on every invocation — see <code>docs/adr/ADR-0038-an-in-memory-database-is-not-a-connection.md</code>.</p>
+            <p>dbcli never creates a database file. A <code>file</code> path that does not exist fails at connect, and a path that exists but is not a SQLite database fails too, naming that as the reason rather than returning corrupt-looking data.</p>
+            <p><code>query-only</code> is enforced by the engine, not by dbcli. Where PostgreSQL and MySQL run the statement inside a read-only transaction, SQLite has no such transaction, so dbcli instead opens the database file itself read-only (<code>SQLITE_OPEN_READONLY</code>) — a handle with no write channel at all. This has one cost worth stating plainly: a database left with an unreplayed write-ahead log cannot be opened read-only, because replaying the log is itself a write. dbcli reports that case by naming the WAL rather than surfacing a bare <code>SQLITE_CANTOPEN</code>. See <code>docs/adr/ADR-0037-query-only-on-sqlite-closes-the-door.md</code>.</p>
+            <p><code>ATTACH</code> and <code>DETACH</code> are refused at every permission level, <code>admin</code> included, because they reach a database file outside the one the connection names — a connection-boundary question rather than a permission tier. Configure a second connection instead.</p>
+            <h3 class="mt-12">Creating a SQLite connection</h3>
+            <p><code>dbcli init --system sqlite</code> asks two questions — the database file path and the permission — and nothing about a host, port, user, password or database name, because a SQLite connection has none of them. Non-interactively, pass the path as <code>--file</code>:</p>
+            <pre><code>dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive</code></pre>
+            <p>The path is checked before anything is written. A path that does not exist, a path that is not a SQLite database, and any in-memory form are all refused with <code>config.json</code> left untouched — dbcli does not create the database for you.</p>
+            <p><code>dbcli use</code> and <code>dbcli status</code> display the file path where they display a host for the other engines, so a SQLite connection never renders as an empty <code>:0/</code> endpoint.</p>
+            <p><code>dbcli doctor</code> checks the file rather than a network endpoint: that it exists, that it is readable, and — only where the permission allows writes — that it is writable. A read-only file under a <code>query-only</code> connection is correctly configured and is reported as such, not as a failure.</p>
+            <p>Existing v1 configurations cannot be upgraded to name SQLite. The v1 format predates the engine, so <code>dbcli</code> refuses the migration and points at <code>dbcli init --system sqlite</code> instead.</p>
+            <p>Today, <code>init</code>, <code>use</code>, <code>status</code>, <code>list</code>, <code>schema</code>, <code>query</code>, <code>q</code>, <code>queries</code>, <code>export</code>, <code>doctor</code>, <code>insert</code>, <code>update</code>, and <code>delete</code> work against a SQLite connection. Writes go through the same permission ladder and the same <code>--dry-run</code> as the other SQL engines, and the SQL they generate uses SQLite's standard double-quoted identifiers and <code>?</code> placeholders. <code>REPLACE INTO</code> requires <code>data-admin</code> rather than <code>read-write</code>, because it removes a conflicting row before writing the replacement; <code>PRAGMA</code>, <code>VACUUM</code> and <code>REINDEX</code> require <code>admin</code>. <code>migrate</code>, <code>diff</code>, <code>shell</code>, <code>inspect</code>, and <code>report</code> are not supported for SQLite yet.</p>
 
             <h3 class="mt-12">MongoDB connection configuration</h3>
             <p><code>dbcli init --system mongodb</code> defaults to a field-by-field wizard, matching the SQL engines: Host, whether it is an SRV domain, Port (skipped for SRV), User, and — only when a User is set — Password plus <code>authSource</code>, followed by an optional advanced step for <code>replicaSet</code> / <code>tls</code>. Pasting a full connection string is now the explicit second choice ("Paste a full connection string (advanced)"). Non-interactive usage is unchanged: passing <code>--uri</code> skips the mode prompt entirely and behaves exactly as before.</p>

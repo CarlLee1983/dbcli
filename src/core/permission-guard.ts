@@ -17,6 +17,7 @@ import {
   extractFirstKeyword,
   mapKeywordToType,
   isDestructiveOperation,
+  isDeclaredAdminOnly,
   extractAllKeywords,
   determineConfidence,
 } from '@/core/permission/sql-analysis'
@@ -29,6 +30,7 @@ export type StatementType =
   | 'INSERT'
   | 'UPDATE'
   | 'DELETE'
+  | 'REPLACE'
   | 'ALTER'
   | 'DROP'
   | 'CREATE'
@@ -76,6 +78,34 @@ export interface PermissionCheckResult {
    * re-derived by whoever throws.
    */
   requiredPermission?: Permission
+
+  /**
+   * The refusal is a connection-boundary one, so no permission level lifts it.
+   * `enforcePermission` turns this into a `ConnectionBoundaryError`.
+   */
+  boundary?: true
+}
+
+/**
+ * A statement refused because it reaches outside the configured connection,
+ * not because the permission level is too low.
+ *
+ * SQLite's `ATTACH`/`DETACH` are the only members today. They are not a tier
+ * question: raising the permission does not make reaching a second database
+ * file acceptable, because the connection identity is what the blacklist, the
+ * audit log and the schema cache are all scoped to. Refusing them with a
+ * `PermissionError` would print `required: admin` and invite exactly the
+ * escalation that would not help.
+ */
+export class ConnectionBoundaryError extends Error {
+  constructor(
+    message: string,
+    public classification: StatementClassification
+  ) {
+    super(message)
+    this.name = 'ConnectionBoundaryError'
+    Object.setPrototypeOf(this, ConnectionBoundaryError.prototype)
+  }
 }
 
 /**
@@ -102,9 +132,9 @@ export class PermissionError extends Error {
  * Classify SQL statement into operation type
  * Uses whitelist approach: only return confident classifications
  */
-export function classifyStatement(sql: string): StatementClassification {
+export function classifyStatement(sql: string, dialect?: SqlDialect): StatementClassification {
   const normalized = normalizeSQL(sql)
-  const stripped = stripCommentsAndStrings(normalized)
+  const stripped = stripCommentsAndStrings(normalized, { dialect })
   const upper = stripped.toUpperCase()
 
   // MariaDB/MySQL: 'ANALYZE SELECT ...' is a read-only EXPLAIN variant.
@@ -124,8 +154,21 @@ export function classifyStatement(sql: string): StatementClassification {
   const composite = detectCompositePatterns(upper)
   const firstKeyword = extractFirstKeyword(stripped)
 
+  // Declared admin-only: the verdict is the same one an unrecognised keyword
+  // already produced, but now something says it, so `isDangerous` is true and a
+  // test can tell the declaration from the fallthrough.
+  if (isDeclaredAdminOnly(firstKeyword)) {
+    return {
+      type: 'UNKNOWN',
+      isDangerous: true,
+      keywords: extractAllKeywords(stripped),
+      isComposite: false,
+      confidence: 'HIGH',
+    }
+  }
+
   // Map keyword to statement type
-  const type = mapKeywordToType(firstKeyword)
+  const type = mapKeywordToType(firstKeyword, dialect)
 
   return {
     type,
@@ -142,7 +185,7 @@ export function classifyStatement(sql: string): StatementClassification {
  * CTEs, `SELECT … INTO`, and `EXPLAIN ANALYZE` of a write.
  */
 /** SQL dialects whose quoting rules differ in ways that affect statement splitting. */
-export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb'] as const
+export const SQL_DIALECTS = ['postgresql', 'mysql', 'mariadb', 'sqlite'] as const
 export type SqlDialect = (typeof SQL_DIALECTS)[number]
 
 /** The SQL dialect of a connection system, or undefined for a non-SQL engine. */
@@ -257,17 +300,48 @@ function escalateHiddenWrite(
 /**
  * Check if statement is allowed under given permission level
  */
+/** `ATTACH`/`DETACH` at the head of any statement in the string. */
+const SQLITE_CROSS_DATABASE = /^\s*(ATTACH|DETACH)\b/i
+
+/**
+ * True when any statement in the string attaches or detaches a database file.
+ *
+ * Every statement is examined, not just the first: `admin` is allowed to stack
+ * statements, so a trailing `ATTACH` would otherwise be judged by a leading
+ * `SELECT`.
+ */
+function reachesAnotherDatabase(sql: string, dialect: SqlDialect | undefined): boolean {
+  if (dialect !== 'sqlite') return false
+  return stripCommentsAndStrings(sql, { dialect })
+    .split(';')
+    .some((statement) => SQLITE_CROSS_DATABASE.test(statement))
+}
+
 export function checkPermission(
   sql: string,
   permission: Permission,
   dialect?: SqlDialect
 ): PermissionCheckResult {
+  // Checked before anything else, including the admin shortcut: this is not a
+  // tier question, so there is no level at which it stops applying.
+  if (reachesAnotherDatabase(sql, dialect)) {
+    return {
+      allowed: false,
+      reason:
+        'ATTACH and DETACH are refused on a SQLite connection: they reach a database file ' +
+        'outside the one this connection names, which the blacklist, audit log and schema ' +
+        'cache are all scoped to. Configure a second connection instead.',
+      classification: classifyStatement(sql),
+      boundary: true,
+    }
+  }
+
   // A read-looking leading keyword does not make a statement a read: a CTE can
   // carry DELETE/UPDATE/INSERT … RETURNING, `SELECT … INTO` creates a table, and
   // `EXPLAIN ANALYZE <write>` executes the write it explains. Judging the
   // statement by the write it performs lets the ordinary tiers decide, instead
   // of this proof living only on the multi-connection path as it used to.
-  const classification = escalateHiddenWrite(sql, classifyStatement(sql), dialect)
+  const classification = escalateHiddenWrite(sql, classifyStatement(sql, dialect), dialect)
 
   // Classification describes one statement, but drivers using the simple query
   // protocol (PostgreSQL) execute every semicolon-separated statement in the
@@ -290,7 +364,9 @@ export function checkPermission(
 const TIER_GRANTS: ReadonlyArray<{ permission: Permission; types: readonly StatementType[] }> = [
   { permission: 'query-only', types: ['SELECT', 'SHOW', 'DESCRIBE', 'EXPLAIN'] },
   { permission: 'read-write', types: ['INSERT', 'UPDATE'] },
-  { permission: 'data-admin', types: ['DELETE'] },
+  // REPLACE sits with DELETE rather than INSERT: it removes a conflicting row
+  // before writing the replacement, so it can destroy data INSERT cannot.
+  { permission: 'data-admin', types: ['DELETE', 'REPLACE'] },
 ]
 
 /**
@@ -461,6 +537,10 @@ export function enforcePermission(
   dialect?: SqlDialect
 ): StatementClassification {
   const result = checkPermission(sql, permission, dialect)
+
+  if (result.boundary) {
+    throw new ConnectionBoundaryError(result.reason, result.classification)
+  }
 
   if (!result.allowed) {
     throw new PermissionError(

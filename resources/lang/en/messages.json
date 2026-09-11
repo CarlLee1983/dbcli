@@ -39,7 +39,8 @@
     "connection_not_found": "Connection '{name}' does not exist",
     "cannot_remove_last": "Cannot remove the last connection",
     "connection_already_exists": "Connection '{name}' already exists",
-    "rename_invalid_format": "Usage: --rename <old-name>:<new-name>"
+    "rename_invalid_format": "Usage: --rename <old-name>:<new-name>",
+    "prompt_sqlite_file": "SQLite database file path: "
   },
   "inspect": {
     "description": "Read-only snapshot of connection, permission, blacklist, objects, snippets, and suggested next commands.",
@@ -204,7 +205,8 @@
     "require_name": "Non-interactive mode requires --name option",
     "env_refs_missing_options": "When using --use-env-refs, environment variable names must be specified.\nProvide options: --env-host, --env-port, --env-user, --env-password, --env-database\nOr use interactive mode: run \"dbcli init --use-env-refs\" without --no-interactive",
     "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry",
-    "invalid_output_format": "--format {format} is not supported here — use text or json"
+    "invalid_output_format": "--format {format} is not supported here — use text or json",
+    "sqlite_file_required": "A SQLite connection needs a file path. Pass --file <path> or run init interactively."
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",

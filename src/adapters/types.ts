@@ -7,6 +7,7 @@ export type DatabaseSystem =
   | 'postgresql'
   | 'mysql'
   | 'mariadb'
+  | 'sqlite'
   | 'mongodb'
   | 'redis'
   | 'elasticsearch'
@@ -25,6 +26,7 @@ export const DATABASE_SYSTEMS = Object.freeze([
   'postgresql',
   'mysql',
   'mariadb',
+  'sqlite',
   'mongodb',
   'redis',
   'elasticsearch',
@@ -43,7 +45,30 @@ export type DatabaseSystemRosterIsExhaustive = AssertNever<
   Exclude<DatabaseSystem, (typeof DATABASE_SYSTEMS)[number]>
 >
 
-export type SqlDatabaseSystem = Extract<DatabaseSystem, 'postgresql' | 'mysql' | 'mariadb'>
+export type SqlDatabaseSystem = Extract<
+  DatabaseSystem,
+  'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
+>
+
+/**
+ * The runtime half of `SqlDatabaseSystem`.
+ *
+ * Seven commands each carried their own `['postgresql', 'mysql', 'mariadb']`
+ * literal to decide whether a connection was SQL enough to run on. Adding
+ * SQLite to the union left all seven refusing it, and nothing failed to
+ * compile: a literal array is not the union. This is the one roster they now
+ * read, guarded the same way `DATABASE_SYSTEMS` is.
+ */
+export const SQL_DATABASE_SYSTEMS = Object.freeze([
+  'postgresql',
+  'mysql',
+  'mariadb',
+  'sqlite',
+] as const) satisfies readonly SqlDatabaseSystem[]
+
+export type SqlDatabaseSystemRosterIsExhaustive = AssertNever<
+  Exclude<SqlDatabaseSystem, (typeof SQL_DATABASE_SYSTEMS)[number]>
+>
 
 export type SqlExecutionMode = 'normal' | 'native-read-only'
 
@@ -65,6 +90,8 @@ export interface ConnectionOptions {
   password: string
   /** Database name */
   database: string
+  /** SQLite database file path (required for SQLite connections, absent otherwise) */
+  file?: string
   /** MongoDB connection URI (optional, for MongoDB connections) */
   uri?: string
   /** MongoDB auth database — used when building URI from host/port/user/password (default: 'admin') */

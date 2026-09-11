@@ -11,11 +11,16 @@
  * 而 API 路徑是結構，兩者必須靠 percent-encoding 分開。
  */
 
-export type SqlIdentifierDialect = 'postgresql' | 'mysql' | 'mariadb'
+export type SqlIdentifierDialect = 'postgresql' | 'mysql' | 'mariadb' | 'sqlite'
 
-/** 各方言的識別字引號字元 */
+/**
+ * 各方言的識別字引號字元。
+ *
+ * SQLite 與 PostgreSQL 同樣用雙引號——它也接受反引號與方括號，但那是相容性
+ * 語法，產生 SQL 時該用標準的那一種。
+ */
 function quoteCharFor(dialect: SqlIdentifierDialect): string {
-  return dialect === 'postgresql' ? '"' : '`'
+  return dialect === 'postgresql' || dialect === 'sqlite' ? '"' : '`'
 }
 
 function assertQuotable(name: string, what: string): void {

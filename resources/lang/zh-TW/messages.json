@@ -39,7 +39,8 @@
     "connection_not_found": "連線 '{name}' 不存在",
     "cannot_remove_last": "無法移除最後一個連線",
     "connection_already_exists": "連線 '{name}' 已存在",
-    "rename_invalid_format": "用法：--rename <舊名稱>:<新名稱>"
+    "rename_invalid_format": "用法：--rename <舊名稱>:<新名稱>",
+    "prompt_sqlite_file": "SQLite 資料庫檔案路徑："
   },
   "inspect": {
     "description": "唯讀檢視：連線、權限、黑名單、物件、片段與建議下一步指令。",
@@ -204,7 +205,8 @@
     "require_name": "非互動模式需要 --name 選項",
     "env_refs_missing_options": "使用 --use-env-refs 時，必須指定環境變數名稱。\n請提供選項：--env-host、--env-port、--env-user、--env-password、--env-database\n或使用互動模式：執行 \"dbcli init --use-env-refs\"（不加 --no-interactive）",
     "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試",
-    "invalid_output_format": "無法使用 --format {format}，請使用 text 或 json"
+    "invalid_output_format": "無法使用 --format {format}，請使用 text 或 json",
+    "sqlite_file_required": "SQLite 連線需要一個檔案路徑。請用 --file <path>，或以互動模式執行 init。"
   },
   "success": {
     "inserted": "成功插入 {count} 列",

@@ -7,12 +7,7 @@ import crypto from 'node:crypto'
 import { t, t_vars } from '@/i18n/message-loader'
 import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
 import { presentConnectionError } from '@/utils/connection-error-message'
-import {
-  AdapterFactory,
-  ConnectionError,
-  type ConnectionOptions,
-  type SqlConnectionOptions,
-} from '@/adapters'
+import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DataExecutor } from '@/core/data-executor'
 import { confirmDirectMutation, confirmMutationInteractively } from '@/commands/mutation-confirm'
 import { auditOutcomeForMutation } from '@/commands/mutation-audit'
@@ -22,6 +17,7 @@ import {
   printMutationFailure,
   printMutationOutcome,
 } from '@/commands/mutation-outcome'
+import type { SqlDatabaseSystem } from '@/adapters/types'
 import type { DataExecutionResult } from '@/types/data'
 import { configModule } from '@/core/config'
 import { enforcePermissionForType, PermissionError } from '@/core/permission-guard'
@@ -34,13 +30,7 @@ import { previewUpdate } from '@/core/mongo/dry-run-formatter'
 import { runDmlPlanAnalysis } from '@/commands/dml-plan'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import type { DbcliConfig } from '@/utils/validation'
-
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 /**
  * Update command action handler
@@ -380,9 +370,7 @@ export async function updateCommand(
       }
 
       // 9. Create DataExecutor and execute UPDATE
-      const dbSystem = (config.connection.system === 'postgresql' ? 'postgresql' : 'mysql') as
-        | 'postgresql'
-        | 'mysql'
+      const dbSystem = config.connection.system as SqlDatabaseSystem | 'mysql'
       // Construct blacklist validator from config
       const blacklistManager = new BlacklistManager(config)
       const blacklistValidator = new BlacklistValidator(blacklistManager)

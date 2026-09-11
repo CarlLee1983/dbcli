@@ -5,7 +5,25 @@
 
 export type ParamType = 'int' | 'string' | 'float' | 'bool' | 'date' | 'datetime'
 
-export type EngineTag = 'postgres' | 'mysql' | 'elasticsearch' | 'redis' | 'mongodb'
+/**
+ * The engine tags a snippet may declare.
+ *
+ * Four places listed these independently — the type, the parser's validator,
+ * and `queries search` / `queries suggest`'s `--engine` filters — so adding
+ * SQLite meant a snippet the parser accepted that the filter then rejected as
+ * unknown. `EngineTag` is derived from this array so the type cannot drift
+ * from the runtime roster, and the two callers read it directly.
+ */
+export const ENGINE_TAGS = Object.freeze([
+  'postgres',
+  'mysql',
+  'sqlite',
+  'elasticsearch',
+  'redis',
+  'mongodb',
+] as const)
+
+export type EngineTag = (typeof ENGINE_TAGS)[number]
 
 export interface ParamSpec {
   name: string

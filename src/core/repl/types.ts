@@ -1,3 +1,4 @@
+import type { DatabaseSystem } from '@/adapters/types'
 // src/core/repl/types.ts
 
 export type InputType = 'sql' | 'command' | 'meta' | 'empty'
@@ -21,7 +22,7 @@ export interface ReplState {
 export interface ReplContext {
   readonly configPath: string
   readonly permission: import('../../types').Permission
-  readonly system: 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'elasticsearch'
+  readonly system: DatabaseSystem
   readonly tableNames: readonly string[]
   readonly columnsByTable: Readonly<Record<string, readonly string[]>>
   /**

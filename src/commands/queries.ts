@@ -16,6 +16,7 @@ import {
   type EngineTag,
   type ResolvedSnippet,
   type SnippetSource,
+  ENGINE_TAGS,
 } from '@/core/saved-queries'
 import { foldVariants, type FoldedRow } from '@/core/saved-queries/fold'
 import { searchSnippets, type SearchInput, type SearchHit } from '@/core/saved-queries/search'
@@ -271,7 +272,7 @@ export async function queriesSearch(
     process.exit(2)
     return
   }
-  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'mongodb', 'all'] as const
+  const allowed = [...ENGINE_TAGS, 'all'] as const
   if (options.engine && !allowed.includes(options.engine as (typeof allowed)[number])) {
     console.error(`Unknown engine '${options.engine}'. Allowed: ${allowed.join(', ')}.`)
     process.exit(2)
@@ -386,7 +387,7 @@ export async function queriesSuggest(
     process.exit(2)
     return
   }
-  const allowed = ['postgres', 'mysql', 'redis', 'elasticsearch', 'mongodb', 'all'] as const
+  const allowed = [...ENGINE_TAGS, 'all'] as const
   if (options.engine && !allowed.includes(options.engine as (typeof allowed)[number])) {
     console.error(`Unknown engine '${options.engine}'. Allowed: ${allowed.join(', ')}.`)
     process.exit(2)

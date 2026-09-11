@@ -33,6 +33,24 @@ export interface SqlConnectionConfig {
 }
 
 /**
+ * SQLite Connection configuration (stored in .dbcli file)
+ *
+ * `file` is the only field with meaning. host/port/user/password/database are
+ * present and empty for the same reason MongoDB's are when a `uri` is given:
+ * `ConnectionConfig` is a union whose readers reach for those fields without
+ * narrowing. The database path is never one of them — see ADR-0038.
+ */
+export interface SqliteConnectionConfig {
+  system: 'sqlite'
+  file: string | { $env: string }
+  host: string | { $env: string }
+  port: number | { $env: string }
+  user: string | { $env: string }
+  password: string | { $env: string }
+  database: string | { $env: string }
+}
+
+/**
  * MongoDB Connection configuration (stored in .dbcli file)
  */
 export interface MongoDBConnectionConfig {
@@ -87,10 +105,11 @@ export interface ElasticsearchConnectionConfig {
 }
 
 /**
- * Connection configuration (stored in .dbcli file) — union of SQL, MongoDB, Redis, Elasticsearch
+ * Connection configuration (stored in .dbcli file) — union of SQL, SQLite, MongoDB, Redis, Elasticsearch
  */
 export type ConnectionConfig =
   | SqlConnectionConfig
+  | SqliteConnectionConfig
   | MongoDBConnectionConfig
   | RedisConnectionConfig
   | ElasticsearchConnectionConfig

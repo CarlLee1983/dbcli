@@ -12,6 +12,7 @@ import type {
 } from './types'
 import { PostgreSQLAdapter } from './postgresql-adapter'
 import { MySQLAdapter } from './mysql-adapter'
+import { SQLiteAdapter } from './sqlite-adapter'
 import { MongoDBAdapter } from './mongodb-adapter'
 import { RedisAdapter } from './redis-adapter'
 import { ElasticsearchAdapter } from './elasticsearch-adapter'
@@ -61,6 +62,8 @@ export class AdapterFactory {
       case 'mysql':
       case 'mariadb':
         return new MySQLAdapter(options)
+      case 'sqlite':
+        return new SQLiteAdapter(options)
       default:
         throw new Error(
           `createSqlAdapter requires a SQL system, got: ${(options as { system?: string }).system}`
@@ -92,6 +95,7 @@ export class AdapterFactory {
       case 'postgresql':
       case 'mysql':
       case 'mariadb':
+      case 'sqlite':
         return AdapterFactory.createSqlAdapter(options as SqlConnectionOptions)
       case 'redis':
         return AdapterFactory.createRedisAdapter(config)
@@ -112,6 +116,7 @@ export class AdapterFactory {
       case 'postgresql':
       case 'mysql':
       case 'mariadb':
+      case 'sqlite':
         return AdapterFactory.createSqlAdapter(options as SqlConnectionOptions)
       case 'mongodb':
       case 'redis':

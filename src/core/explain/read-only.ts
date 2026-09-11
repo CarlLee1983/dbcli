@@ -5,6 +5,7 @@ const DIALECT: Record<SqlDatabaseSystem, string> = {
   postgresql: 'Postgresql',
   mysql: 'MySQL',
   mariadb: 'MariaDB',
+  sqlite: 'Sqlite',
 }
 
 const WRITE_STATEMENT_TYPES = new Set([

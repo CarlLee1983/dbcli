@@ -51,8 +51,18 @@ export function setDefaultConnection(config: DbcliConfigV2, name: string): Dbcli
 export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
   const system = (v1.connection as { system?: string }).system
   if (!SQL_SYSTEMS.includes(system as SqlSystem)) {
+    // SQLite is refused here like every other non-listed engine, but not for
+    // the reason the old wording gave: it *is* a SQL connection in dbcli's
+    // vocabulary. It is refused because v1 predates the engine, so no v1
+    // configuration can honestly name it.
+    if (system === 'sqlite') {
+      throw new Error(
+        `v1→v2 自動升級不接受 'sqlite'：v1 設定格式早於 SQLite 支援，不可能是由 dbcli 寫出來的。` +
+          `請用 'dbcli init --system sqlite' 直接建立 v2 連線。`
+      )
+    }
     throw new Error(
-      `v1→v2 自動升級目前僅支援 SQL 連線(mysql/postgresql/mariadb),不支援 '${system}'`
+      `v1→v2 自動升級目前僅支援 mysql/postgresql/mariadb 的逐欄連線設定,不支援 '${system}'`
     )
   }
   const c = v1.connection as {

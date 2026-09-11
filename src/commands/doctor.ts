@@ -5,12 +5,6 @@ import { configModule } from '@/core/config'
 import { AdapterFactory, type ConnectionOptions, type SqlConnectionOptions } from '@/adapters'
 import type { ConnectionConfig } from '@/types'
 
-function requireSqlConnection(connection: ConnectionOptions): SqlConnectionOptions {
-  if (!['postgresql', 'mysql', 'mariadb'].includes(connection.system)) {
-    throw new Error(`This command requires a SQL connection, got: ${connection.system}`)
-  }
-  return connection as SqlConnectionOptions
-}
 import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
@@ -24,8 +18,10 @@ import { resolveSchemaPath } from '@/utils/schema-path'
 import { collectRuntimeInfo, type RuntimeInfo } from '@/utils/runtime-info'
 import { getSchemaIsolationConnectionName } from '@/core/config'
 import { resolveSrv } from 'node:dns/promises'
+import { access, constants } from 'node:fs/promises'
 import { writeAuditEntry } from '@/core/audit/integration-helper'
 import { shellQuote } from '@/core/recovery/shell-quote'
+import { requireSqlConnection } from '@/commands/require-sql-connection'
 
 const ALLOWED_FORMATS = ['text', 'json'] as const
 
@@ -73,7 +69,7 @@ export interface DoctorRemediationStep {
   requiresHumanConfirmation: true
 }
 
-type LargeTableTarget = 'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'elasticsearch'
+type LargeTableTarget = 'postgresql' | 'mysql' | 'mariadb' | 'sqlite' | 'mongodb' | 'elasticsearch'
 
 function safeSqlIdentifier(value: string): string | null {
   return /^[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(value) ? value : null
@@ -518,6 +514,95 @@ export const runDoctorChecks = {
     }
   },
 
+  /**
+   * Absent, unreadable, and unwritable-when-writing are three findings, not
+   * one. They are emitted as separate results so `--remediation` and a reader
+   * scanning the report both see which repair applies.
+   */
+  async checkSQLiteFile(file: string, permission: string): Promise<DoctorResult[]> {
+    const group = 'Connection & Data'
+    if (!file) {
+      return [
+        {
+          group,
+          label: 'Database file',
+          status: 'error',
+          message: 'Connection has no file path — run "dbcli init --system sqlite"',
+        },
+      ]
+    }
+
+    try {
+      await access(file, constants.F_OK)
+    } catch {
+      return [
+        {
+          group,
+          label: 'Database file',
+          status: 'error',
+          message: `Database file not found: ${file}`,
+          details: { file },
+        },
+      ]
+    }
+
+    try {
+      await access(file, constants.R_OK)
+    } catch {
+      return [
+        {
+          group,
+          label: 'Database file',
+          status: 'error',
+          message: `Database file is not readable: ${file}`,
+          details: { file },
+        },
+      ]
+    }
+
+    const results: DoctorResult[] = [
+      {
+        group,
+        label: 'Database file',
+        status: 'pass',
+        message: `Readable: ${file}`,
+        details: { file },
+      },
+    ]
+
+    if (permission === 'query-only') {
+      results.push({
+        group,
+        label: 'Database file writable',
+        status: 'pass',
+        message: 'Not required — the connection is query-only',
+        details: { file, permission },
+      })
+      return results
+    }
+
+    try {
+      await access(file, constants.W_OK)
+      results.push({
+        group,
+        label: 'Database file writable',
+        status: 'pass',
+        message: `Writable: ${file}`,
+        details: { file, permission },
+      })
+    } catch {
+      results.push({
+        group,
+        label: 'Database file writable',
+        status: 'error',
+        message: `Database file is not writable, but permission '${permission}' allows writes: ${file}`,
+        details: { file, permission },
+      })
+    }
+
+    return results
+  },
+
   checkLargeTables(
     tables: Array<{ name: string; estimatedRowCount?: number }>,
     system: LargeTableTarget = 'postgresql'
@@ -852,6 +937,84 @@ export async function collectElasticsearchDoctorResults(
   return results
 }
 
+/**
+ * The three questions a SQLite connection can fail that a networked one cannot.
+ *
+ * A host and port either resolve or they do not, and the driver says which. A
+ * file has three separate ways of being wrong — absent, unreadable, or
+ * read-only under a permission that intends to write — and an `open()` failure
+ * collapses all three into one message. They are separated here because the
+ * repair differs: create or re-point the path, fix the mode, or lower the
+ * permission.
+ *
+ * Writability is only a failure where the permission implies writing. A
+ * `query-only` connection to a file on read-only media is correctly
+ * configured, and reporting it as broken would train the reader to ignore the
+ * check.
+ */
+export async function collectSQLiteDoctorResults(
+  config: {
+    connection: ConnectionConfig
+    permission?: string
+    metadata?: { schemaLastUpdated?: string }
+    blacklistedColumns?: Map<string, Set<string>>
+  },
+  runtimeOverrides: Partial<DoctorCollectorRuntime> = {}
+): Promise<DoctorResult[]> {
+  void runtimeOverrides
+  const results: DoctorResult[] = []
+  const file = (config.connection as { file?: string }).file ?? ''
+
+  const fileResults = await runDoctorChecks.checkSQLiteFile(file, config.permission ?? 'query-only')
+  results.push(...fileResults)
+  if (fileResults.some((r) => r.status === 'error')) return results
+
+  const adapter = AdapterFactory.createSqlAdapter(config.connection as SqlConnectionOptions)
+  try {
+    await adapter.connect()
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'pass',
+      message: `Connected to sqlite ${file}`,
+    })
+
+    try {
+      const tables = await adapter.listTables()
+      const tableColumns = new Map<string, string[]>()
+      for (const t of tables) {
+        tableColumns.set(
+          t.name,
+          t.columns.map((c) => c.name)
+        )
+      }
+      if (config.blacklistedColumns) {
+        results.push(
+          runDoctorChecks.checkBlacklistCompleteness(tableColumns, config.blacklistedColumns)
+        )
+      }
+      results.push(runDoctorChecks.checkLargeTables(tables, 'sqlite'))
+    } catch {
+      // A readable file that is not a SQLite database fails at connect, above.
+    }
+
+    results.push(
+      runDoctorChecks.checkSchemaCacheFreshness(config.metadata?.schemaLastUpdated ?? null)
+    )
+  } catch (error) {
+    results.push({
+      group: 'Connection & Data',
+      label: 'Connection',
+      status: 'error',
+      message: `Connection failed: ${(error as Error).message}`,
+    })
+  } finally {
+    await adapter.disconnect()
+  }
+
+  return results
+}
+
 export const doctorCommand = new Command('doctor')
   .description('Run diagnostic checks on dbcli configuration, environment, and connection')
   .option('--format <type>', 'Output format: text, json', 'text')
@@ -907,6 +1070,13 @@ export const doctorCommand = new Command('doctor')
           if (config.connection.system === 'mongodb') {
             results.push(
               ...(await collectMongoDoctorResults({
+                ...config,
+                blacklistedColumns,
+              }))
+            )
+          } else if (config.connection.system === 'sqlite') {
+            results.push(
+              ...(await collectSQLiteDoctorResults({
                 ...config,
                 blacklistedColumns,
               }))

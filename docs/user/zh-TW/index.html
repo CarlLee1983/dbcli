@@ -923,6 +923,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                         <tr class="bg-background/50">
                             <th class="py-5">功能</th>
                             <th class="text-center py-5">SQL</th>
+                            <th class="text-center py-5">SQLite</th>
                             <th class="text-center py-5">MongoDB</th>
                             <th class="text-center py-5">Redis</th>
                             <th class="text-center py-5">ES</th>
@@ -935,10 +936,12 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">結構快取</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -949,9 +952,11 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">資料寫入</td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -963,10 +968,12 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">互動式 UI</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -974,6 +981,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">查詢大小防護</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
@@ -982,12 +990,14 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                             <td class="text-left font-bold px-8">黑名單強制</td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                         </tr>
                         <tr class="hover:bg-primary/5 transition-colors">
                             <td class="text-left font-bold px-8">互動式 Shell</td>
                             <td><span class="text-primary font-bold">✅</span></td>
+                            <td><span class="text-secondary opacity-30 font-bold">❌</span></td>
                             <td><span class="text-primary font-bold">✅</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
                             <td><span class="text-secondary font-bold">⚠️</span></td>
@@ -995,6 +1005,29 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                     </tbody>
                 </table>
             </div>
+
+            <h3 class="mt-12">SQLite 連線設定</h3>
+            <p>SQLite 連線指名的是一個資料庫檔案，不是主機。唯一有意義的欄位是 <code>file</code>；沒有 <code>host</code>、<code>port</code>、<code>user</code> 或 <code>password</code>，因為存取控制來自作業系統本身的檔案權限，而不是網路認證這一層。最小可用的設定如下：</p>
+            <pre><code>{
+  "version": 2,
+  "default": "local",
+  "connections": {
+    "local": { "system": "sqlite", "file": "./data/app.sqlite", "permission": "query-only" }
+  }
+}</code></pre>
+            <p><code>file</code> 和其他引擎的連線欄位一樣，可以寫成 <code>{"$env": "APP_DB_PATH"}</code> 參照；<code>timeout</code> / <code>statementTimeout</code> 這兩個選用欄位也同樣適用於 SQLite。</p>
+            <p>記憶體內的資料庫會被拒絕。<code>:memory:</code>、<code>file::memory:</code>，以及任何路徑帶有 <code>mode=memory</code> 的寫法，都會在設定檔解析階段就失敗，而不是等到連線時才發現。原因是：黑名單、稽核紀錄與 schema 快取，全部都以「連線」為範圍在追蹤狀態，而記憶體內資料庫每次啟動都是一份全新、不同的資料庫——參見 <code>docs/adr/ADR-0038-an-in-memory-database-is-not-a-connection.md</code>。</p>
+            <p>dbcli 不會建立資料庫檔案。<code>file</code> 指到不存在的路徑會在連線時失敗；路徑存在但不是 SQLite 資料庫也一樣會失敗，並且會明講失敗原因，而不是回傳看起來像損毀資料的結果。</p>
+            <p><code>query-only</code> 是由資料庫引擎本身強制的，不是靠 dbcli。PostgreSQL 與 MySQL 是把語句包進唯讀 transaction 執行；SQLite 沒有這種 transaction 機制，所以 dbcli 改成直接以唯讀模式開啟資料庫檔案（<code>SQLITE_OPEN_READONLY</code>）——這個 handle 完全沒有寫入通道。這樣做有一個代價要講清楚：一個留有尚未回放的 write-ahead log 的資料庫，是沒辦法以唯讀模式開啟的，因為回放 log 本身就是一種寫入。dbcli 會直接點名是 WAL 造成的，而不是丟出一個看不懂的 <code>SQLITE_CANTOPEN</code>。參見 <code>docs/adr/ADR-0037-query-only-on-sqlite-closes-the-door.md</code>。</p>
+            <p><code>ATTACH</code> 與 <code>DETACH</code> 在所有權限層級都會被拒絕，包含 <code>admin</code>，因為它們會碰到連線所指名之外的另一個資料庫檔案，這是連線邊界的問題，不是權限層級的問題。需要的話請改設定第二條連線。</p>
+            <h3 class="mt-12">建立 SQLite 連線</h3>
+            <p><code>dbcli init --system sqlite</code> 只問兩件事——資料庫檔案路徑與權限——不會問 host、port、user、password 或資料庫名稱，因為 SQLite 連線根本沒有這些東西。非互動模式下把路徑寫在 <code>--file</code>：</p>
+            <pre><code>dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive</code></pre>
+            <p><strong>路徑會在任何東西被寫出去之前先檢查。</strong> 不存在的路徑、不是 SQLite 資料庫的檔案、以及任何形式的 in-memory 目標都會被拒絕，而 <code>config.json</code> 原封不動——dbcli 不會替你把資料庫建出來。</p>
+            <p><code>dbcli use</code> 與 <code>dbcli status</code> 會在其他引擎顯示 host 的位置顯示檔案路徑，所以 SQLite 連線不會被印成一個空的 <code>:0/</code> 端點。</p>
+            <p><code>dbcli doctor</code> 檢查的是檔案而不是網路端點：檔案存不存在、讀不讀得到，以及——只有在權限允許寫入時——寫不寫得進去。<code>query-only</code> 連線指向一個唯讀檔案是正確的設定，doctor 會照實這樣報告，而不是報成失敗。</p>
+            <p><strong>既有的 v1 設定無法升級成 SQLite 連線。</strong> v1 這個格式早於這個引擎，所以 dbcli 會拒絕這個遷移，並指向 <code>dbcli init --system sqlite</code>。</p>
+            <p>目前可用的指令是 <code>init</code>、<code>use</code>、<code>status</code>、<code>list</code>、<code>schema</code>、<code>query</code>、<code>q</code>、<code>queries</code>、<code>export</code>、<code>doctor</code>、<code>insert</code>、<code>update</code> 與 <code>delete</code>。寫入走的是與其他 SQL 引擎相同的權限階梯與 <code>--dry-run</code>，生成的 SQL 使用 SQLite 標準的雙引號識別字與 <code>?</code> 佔位符。<code>REPLACE INTO</code> 需要 <code>data-admin</code> 而非 <code>read-write</code>——它會先移除衝突的列再寫入替代值；<code>PRAGMA</code>、<code>VACUUM</code> 與 <code>REINDEX</code> 需要 <code>admin</code>。<code>migrate</code>、<code>diff</code>、<code>shell</code>、<code>inspect</code> 與 <code>report</code> 目前都還不支援 SQLite。</p>
 
             <h3 class="mt-12">MongoDB 連線設定</h3>
             <p><code>dbcli init --system mongodb</code> 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 <code>authSource</code>，最後是可選的進階步驟（<code>replicaSet</code> / <code>tls</code>）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。非互動用法不受影響：傳入 <code>--uri</code> 會直接跳過連線方式提問，行為與過去完全相同。</p>

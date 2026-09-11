@@ -368,6 +368,83 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
       ...SQL_BASE,
       check: cap('limited', 'readonly', 'SQL-only and strongest on MySQL/MariaDB.'),
     }),
+    // SQLite is deliberately narrow in its first Story (DBCLI-034): a row is
+    // `supported` only where an acceptance criterion observes it. The
+    // engine-independent keys keep the status every other engine gives them —
+    // marking them `unsupported` here would make them stop deriving as
+    // engine-independent in the capability catalog (ADR-0022).
+    sqlite: Object.freeze({
+      ...SQL_BASE,
+      init: cap(
+        'supported',
+        'local-write',
+        'Asks for a file path and a permission; the file must already exist.'
+      ),
+      use: cap('supported', 'local-write', 'Switches connections and displays the file path.'),
+      schemaFullScan: cap(
+        'unsupported',
+        'none',
+        'Full schema cache scan is not implemented for SQLite.'
+      ),
+      lint: cap('unsupported', 'none', 'Static lint is not enabled for the SQLite dialect yet.'),
+      queries: cap(
+        'supported',
+        'local-write',
+        'Snippets may declare `engine: sqlite` and bind with `?` placeholders.'
+      ),
+      insert: cap('supported', 'db-write', 'Row insert through the shared data-executor path.'),
+      update: cap('supported', 'db-write', 'Row update with a mandatory --where clause.'),
+      delete: cap('supported', 'db-write', 'Row delete with a mandatory --where clause.'),
+      export: cap(
+        'supported',
+        'local-write',
+        'Exports SELECT results to json, csv or html through the shared query path.'
+      ),
+      check: cap('unsupported', 'none', 'Data health check is not enabled for SQLite.'),
+      diff: cap('unsupported', 'none', 'Schema snapshots are not enabled for SQLite.'),
+      migrate: cap(
+        'unsupported',
+        'none',
+        'SQLite ALTER TABLE covers few operations and a column change is a table rebuild; no DDL generator exists.'
+      ),
+      shell: cap('unsupported', 'none', 'The REPL is not enabled for SQLite.'),
+      doctor: cap(
+        'supported',
+        'readonly',
+        'Checks the file exists, is readable, and is writable when the permission allows writes.'
+      ),
+      inspect: cap('unsupported', 'none', 'Inspection collectors are not enabled for SQLite.'),
+      report: cap(
+        'unsupported',
+        'none',
+        'Report diagnostics query engine-specific statistics views.'
+      ),
+      guide: cap('unsupported', 'none', 'Guides depend on engine-specific EXPLAIN output.'),
+      explain: cap('unsupported', 'none', 'EXPLAIN handling is not enabled for SQLite.'),
+      plan: cap('unsupported', 'none', 'Plan capture is not enabled for SQLite.'),
+      impactAssess: cap('unsupported', 'none', 'Impact assessment is not enabled for SQLite.'),
+      assert: cap('unsupported', 'none', 'Assertions are not enabled for SQLite.'),
+      snapshot: cap('unsupported', 'none', 'Result snapshots are not enabled for SQLite.'),
+      verify: cap('unsupported', 'none', 'Write verification is not enabled for SQLite.'),
+      semantic: cap('unsupported', 'none', 'Semantic context work is not enabled for SQLite.'),
+      design: cap('unsupported', 'none', 'Schema design work is not enabled for SQLite.'),
+      proxy: cap('not-applicable', 'none', 'SQLite has no network protocol to proxy.'),
+      proxyAnalyze: cap('not-applicable', 'none', 'There are no SQLite proxy events to analyse.'),
+      password: cap(
+        'not-applicable',
+        'none',
+        'A SQLite connection has no credential to store or rotate.'
+      ),
+      // verification / verificationPrune / evidence / contract / recovery /
+      // backfillArtifact are deliberately absent: every engine marks them
+      // `not-applicable`, which is what makes them derive as engine-independent
+      // (ADR-0022). Overriding them here would make that derivation false.
+      queryLimitGuard: cap(
+        'limited',
+        'readonly',
+        'Applies the same LIMIT rewrite as the other SQL engines; under query-only the handle is opened read-only, which a database with an unreplayed WAL cannot satisfy.'
+      ),
+    }),
     mysql: Object.freeze(SQL_BASE),
     mariadb: Object.freeze(SQL_BASE),
     mongodb: Object.freeze({

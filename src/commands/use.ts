@@ -30,6 +30,8 @@ type ConnectionIdentity = {
     port: number | null
   }
   database: string | null
+  /** Present only for engines whose target is a path rather than an endpoint. */
+  file?: string
   isDefault: boolean
 }
 
@@ -63,13 +65,22 @@ export async function switchDefault(
 export function listConnectionsForDisplay(config: DbcliConfigV2): string[] {
   return Object.entries(config.connections).map(([name, conn]) => {
     const marker = name === config.default ? '*' : ' '
+    const environmentLabel = conn.environment ? ` [${conn.environment}]` : ''
+
+    // A SQLite connection has no endpoint to render. Printing `:0/` for one
+    // would be worse than saying nothing: it looks like a host that failed to
+    // resolve rather than a connection that never had one.
+    const file = (conn as { file?: string | { $env: string } }).file
+    if (file !== undefined) {
+      const rendered = typeof file === 'object' ? `\${${file.$env}}` : file
+      return `${marker} ${name.padEnd(12)}${environmentLabel} ${conn.system.padEnd(12)} ${rendered}`
+    }
+
     const host = typeof conn.host === 'object' ? `\${${conn.host.$env}}` : conn.host
     const port = typeof conn.port === 'object' ? `\${${conn.port.$env}}` : conn.port
     const db = typeof conn.database === 'object' ? `\${${conn.database.$env}}` : conn.database
 
-    const environment = conn.environment ? ` [${conn.environment}]` : ''
-
-    return `${marker} ${name.padEnd(12)}${environment} ${conn.system.padEnd(12)} ${host}:${port}/${db}`
+    return `${marker} ${name.padEnd(12)}${environmentLabel} ${conn.system.padEnd(12)} ${host}:${port}/${db}`
   })
 }
 
@@ -86,6 +97,11 @@ export function listConnectionIdentities(config: DbcliConfigV2): ConnectionIdent
     const database =
       typeof conn.database === 'string' && conn.database.length > 0 ? conn.database : null
 
+    // A path is not a credential, and without it two SQLite connections are
+    // indistinguishable in machine output — which is the same failure the
+    // nulled host/port above exist to avoid, one engine further on.
+    const file = (conn as { file?: string | { $env: string } }).file
+
     return {
       name,
       environment: conn.environment ?? null,
@@ -96,6 +112,7 @@ export function listConnectionIdentities(config: DbcliConfigV2): ConnectionIdent
         port: host !== null && typeof conn.port === 'number' ? conn.port : null,
       },
       database,
+      ...(typeof file === 'string' && { file }),
       isDefault: name === config.default,
     }
   })

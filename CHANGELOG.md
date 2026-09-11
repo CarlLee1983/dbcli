@@ -5,6 +5,95 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.1.0] - 2026-09-11
+
+ForgeFlow Story DBCLI-014 到 DBCLI-036 在 `v9.0.0` 之後交付。其中只有最後三張
+（DBCLI-034、035、036）改動使用者看得到的行為——SQLite 成為第六種 engine；其餘
+二十張全部落在 ForgeFlow／ForgePilot 的工作控制面、`make verify` 的證據與效能門檻上，
+照 8.0.0 處理 DBCLI-013 的方式，收在 Changed 底下。
+
+版本為 **9.1.0**。新增一種 engine 是 MINOR；本區間沒有任何一處拒絕先前被接受的輸入、
+改變既有 JSON 欄位的意義，或移除旗標與指令。三張 SQLite Story 各自帶一條回歸驗收
+（DBCLI-034 AC-012、DBCLI-035 AC-010、DBCLI-036 AC-012／013），要求既有 fixture 的判決
+一字不變，而不是「大致相容」。
+
+### Added
+
+- **SQLite 成為第六種 engine：一個檔案就是一條連線。** `list`、`schema`、`query`、`q`、
+  `export`、`queries` 走的是其他 SQL engine 同一條權限階梯、同一份 blacklist 與同一套
+  audit 規則，`--use a,b` 扇出同樣可用。連線設定只有 `file` 一個欄位有意義——沒有 host、
+  port、user、password，因為存取控制來自作業系統的檔案權限，而不是網路上的一次認證。
+
+  `query-only` 由 engine 執行，不是由 dbcli 代為保證。PostgreSQL 與 MySQL 把語句放進
+  read-only transaction，SQLite 沒有這種 transaction，所以 dbcli 直接以
+  `SQLITE_OPEN_READONLY` 開檔——一個根本沒有寫入通道的 handle。代價講明：帶著未重放
+  write-ahead log 的資料庫開不成唯讀，因為重放本身就是寫入；dbcli 會指名 WAL，而不是把
+  `SQLITE_CANTOPEN` 原樣丟出來。（DBCLI-034、ADR-0037）
+
+  dbcli 不會替你建立資料庫檔。路徑不存在、路徑存在但不是 SQLite 資料庫，都在連線時
+  失敗並指名原因；`:memory:`、`file::memory:` 與任何帶 `mode=memory` 的路徑則更早，
+  在設定解析時就被拒絕——連線是 blacklist、audit log 與 schema cache 共同綁定的身分，
+  而一個記憶體資料庫每次呼叫都是不同的資料庫，這種身分撐不住。（ADR-0038）
+
+- **SQLite 專屬語句有了判決，寫入路徑打通。** `insert`、`update`、`delete` 在與其他 SQL
+  engine 相同的階梯與 `--dry-run` 下對 SQLite 檔案運作，產生的 SQL 使用 SQLite 標準的
+  雙引號識別字與 `?` 佔位符。`REPLACE INTO` 要求 `data-admin` 而不是 `read-write`——它
+  會先移除衝突的那一列再寫入替代值，那正是它與 INSERT 的差別；`PRAGMA`、`VACUUM`、
+  `REINDEX` 要求 `admin`。MySQL 的 `REPLACE INTO` 仍維持先前的分類，這條映射只在 SQLite
+  方言上生效。
+
+  `ATTACH` 與 `DETACH` 在任何權限層級都被拒絕，`admin` 也不例外。它們不是階梯問題：
+  提高權限不會讓「碰到連線沒有指名的第二個資料庫檔」變得可以接受。拒絕走的是新的
+  `ConnectionBoundaryError` 而不是 `PermissionError`，因為後者會印出 `required: admin`，
+  等於邀請一次幫不上忙的提權。（DBCLI-035、ADR-0037）
+
+- **SQLite 連線不必手寫。** `dbcli init --system sqlite` 只問兩件事——檔案路徑與權限——
+  不問 host、port、user、password 或資料庫名稱；非互動時用 `--file <path>`。路徑在任何
+  東西被寫進 `config.json` 之前就檢查，不存在、不是 SQLite 資料庫、或任何記憶體形式
+  一律拒絕並保持設定檔原封不動。
+
+  `use` 與 `status` 在其他 engine 顯示 host 的位置顯示檔案路徑，所以 SQLite 連線不會
+  render 成看起來像解析失敗的 `:0/`；`status --format json` 與 `use` 的機器輸出各多一個
+  只在 SQLite 連線上出現的 `file` 欄位。`doctor` 檢查的是檔案而非網路端點：存在、可讀，
+  以及只在權限允許寫入時才檢查可寫——`query-only` 下的唯讀檔案是設定正確，會被如此
+  回報而不是判為失敗。v1 設定無法升級成 SQLite（v1 格式早於這個 engine），訊息改為
+  指向 `dbcli init --system sqlite`。（DBCLI-036）
+
+- **`docs/feature-matrix.md` 多了 SQLite 一欄與限制摘要。** 表格與
+  `src/adapters/capabilities.ts` 的 `sqlite` 登錄同步。
+
+### Changed
+
+- **ForgePilot 成為生命週期的唯一權威，`specs/handoff.md` 只留下沒有別的家的東西。**
+  handoff 從工作佇列變成交付紀錄，並由 gate 比對倉庫自己的歷史雙向檢查：宣告了交付卻
+  沒有東西背書會紅，歷史已經宣稱交付卻沒登進清單也會紅；「誰被允許 commit 或 push」
+  是交付回答不了的另一個問題，gate 停止回答它。ForgeFlow 升級到 0.6.0，Story 的
+  `## Authority`、風險宣告與逐條驗收證據改由上游 checker 執行而非在本倉庫重寫，Story
+  對 ADR 的依賴從散文連結變成解析得開的一行。（DBCLI-014、016、018、021、027、028、
+  029、033；ADR-0025、0027、0029、0030、0031、0032、0036）
+
+- **`make verify` 自帶依賴安裝，寫出綁定 revision 的 Verification Attestation，並少
+  build 一次。** FAIL 會指名它停在哪一步，log 邊跑邊說自己在第幾步、每步花了多久；
+  attestation 不是 evidence receipt，兩個階段都不准決定 verdict。`test:perf` 的判決不再
+  取決於機器忙不忙：十九條讀時鐘的門換成計算實際做了多少工作，blacklist 遮蔽成本改由
+  確定性計數表達。（DBCLI-015、017、019、020、030、031、032；ADR-0026、0028、0033、
+  0034、0035）
+
+- **五條被承認的 contract 豁免全部歸零。** DBCLI-PLAT-004 到 007、012 的信任邊界與
+  fixture 矩陣改成指名真正的欄位與真的存在的測試；先前沒有任何斷言的三列
+  correlation-id fixture 補上測試。純規格與測試修正，程式行為未變。
+  （DBCLI-022、023、024、025、026）
+
+- **ADR 檔名統一為 `ADR-00NN-*.md`。** `docs/adr/0001-*.md` 這類舊檔名全部改名，讓
+  Story 的決策記錄連結可以被 checker 解析；指向舊路徑的外部書籤需要調整。
+  （DBCLI-021、ADR-0029）
+
+### Fixed
+
+- **Windows 上三個 SQLite 測試依賴 POSIX 權限語意而假紅。** `chmod` 在 Windows 拿不掉
+  讀取權限、也擋不住目錄內建檔，這兩個情境改為 `skipIf(win32)`；「可讀但不是資料庫」
+  的 fixture 改用臨時目錄內寫出的文字檔，不再依賴 `/etc/passwd`。
+
 ## [9.0.0] - 2026-09-06
 
 ### Changed

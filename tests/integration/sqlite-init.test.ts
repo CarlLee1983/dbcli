@@ -183,7 +183,9 @@ describe('security fixture matrix — 每一列都要在寫入之前被拒', () 
   })
 
   test('可讀但不是資料庫的檔案被拒，訊息說出哪裡不對', async () => {
-    const init = await initSqlite('/etc/passwd')
+    const notADatabase = join(workDir, 'notes.txt')
+    await Bun.write(notADatabase, 'this is a text file, not a SQLite database\n')
+    const init = await initSqlite(notADatabase)
     expect(init.code).not.toBe(0)
     expect(`${init.stdout}${init.stderr}`).toMatch(/Not a SQLite database|header/i)
     expect(await configWritten()).toBe(false)

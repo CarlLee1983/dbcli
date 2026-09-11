@@ -120,17 +120,21 @@ describe('AC-011: 檔案不存在與檔案讀不到是兩種不同的失敗', ()
     expect(find(results, 'Connection')).toBeUndefined()
   })
 
-  test('讀不到 → "not readable"，訊息與 "not found" 不同', async () => {
-    await chmod(dbPath, 0o000)
-    const results = await collectSQLiteDoctorResults({
-      connection: connection(dbPath),
-      permission: 'query-only',
-    })
-    const file = find(results, 'Database file')
-    expect(file?.status).toBe('error')
-    expect(file?.message).toMatch(/not readable/i)
-    expect(file?.message).not.toMatch(/not found/i)
-  })
+  // Windows 的 chmod 只能設 read-only 屬性，拿不掉讀取權限，這個情境無法表達。
+  test.skipIf(process.platform === 'win32')(
+    '讀不到 → "not readable"，訊息與 "not found" 不同',
+    async () => {
+      await chmod(dbPath, 0o000)
+      const results = await collectSQLiteDoctorResults({
+        connection: connection(dbPath),
+        permission: 'query-only',
+      })
+      const file = find(results, 'Database file')
+      expect(file?.status).toBe('error')
+      expect(file?.message).toMatch(/not readable/i)
+      expect(file?.message).not.toMatch(/not found/i)
+    }
+  )
 
   test('連 file 都沒有的設定，說的是設定壞了而不是檔案壞了', async () => {
     const results = await collectSQLiteDoctorResults({

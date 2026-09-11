@@ -143,30 +143,34 @@ describe('未重放的 WAL', () => {
     await rm(`${file}-shm`, { force: true })
   }
 
-  test('唯讀開檔失敗時說出 write-ahead log，而不是裸的 SQLITE_CANTOPEN', async () => {
-    // chmod 對 root 沒有意義，而唯讀目錄正是這個情境的前提。
-    if (process.getuid?.() === 0) {
-      console.log('⏭ running as root — a read-only directory cannot be expressed; skipping')
-      return
+  // Windows 沒有唯讀目錄的 POSIX 語意（chmod 500 擋不住建檔），也沒有 SIGKILL。
+  test.skipIf(process.platform === 'win32')(
+    '唯讀開檔失敗時說出 write-ahead log，而不是裸的 SQLITE_CANTOPEN',
+    async () => {
+      // chmod 對 root 沒有意義，而唯讀目錄正是這個情境的前提。
+      if (process.getuid?.() === 0) {
+        console.log('⏭ running as root — a read-only directory cannot be expressed; skipping')
+        return
+      }
+
+      await leaveUnreplayedWal(dbPath)
+      expect(await Bun.file(`${dbPath}-wal`).exists()).toBe(true)
+      await Bun.$`chmod 500 ${workDir}`.quiet()
+
+      const adapter = new SQLiteAdapter(options(dbPath))
+      let thrown: unknown
+      try {
+        await adapter.connect()
+        await adapter.execute('SELECT 1', [], { sqlMode: 'native-read-only' })
+      } catch (error) {
+        thrown = error
+      } finally {
+        await adapter.disconnect()
+        await Bun.$`chmod 700 ${workDir}`.quiet()
+      }
+
+      expect(thrown).toBeInstanceOf(ConnectionError)
+      expect((thrown as ConnectionError).message).toMatch(/write-ahead log/i)
     }
-
-    await leaveUnreplayedWal(dbPath)
-    expect(await Bun.file(`${dbPath}-wal`).exists()).toBe(true)
-    await Bun.$`chmod 500 ${workDir}`.quiet()
-
-    const adapter = new SQLiteAdapter(options(dbPath))
-    let thrown: unknown
-    try {
-      await adapter.connect()
-      await adapter.execute('SELECT 1', [], { sqlMode: 'native-read-only' })
-    } catch (error) {
-      thrown = error
-    } finally {
-      await adapter.disconnect()
-      await Bun.$`chmod 700 ${workDir}`.quiet()
-    }
-
-    expect(thrown).toBeInstanceOf(ConnectionError)
-    expect((thrown as ConnectionError).message).toMatch(/write-ahead log/i)
-  })
+  )
 })

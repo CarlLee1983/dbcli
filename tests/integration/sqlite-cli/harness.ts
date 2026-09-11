@@ -175,12 +175,15 @@ export function readRows<T = Record<string, unknown>>(dbPath: string, sql: strin
 
 /** 往種子資料庫追加大量列，給 LIMIT 守衛之類需要超過門檻的情境用。 */
 export function seedBulkRows(dbPath: string, count: number, startId = 1000): void {
+  // 不用 `db.transaction()`：Bun 1.3.3 的包裝會留下一份它自己的 statement，
+  // `close(true)` 因此回報 database is locked。BEGIN / COMMIT 走 `run()`，用完
+  // 即 finalize。
   const db = new Database(dbPath)
   const insert = db.prepare('INSERT INTO users (id, email, secret) VALUES (?, ?, ?)')
   try {
-    db.transaction(() => {
-      for (let i = 0; i < count; i++) insert.run(startId + i, `bulk${i}@example.com`, null)
-    })()
+    db.run('BEGIN')
+    for (let i = 0; i < count; i++) insert.run(startId + i, `bulk${i}@example.com`, null)
+    db.run('COMMIT')
   } finally {
     insert.finalize()
     closeReleasingFile(db)

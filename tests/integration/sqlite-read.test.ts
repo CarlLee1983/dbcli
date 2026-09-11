@@ -54,11 +54,14 @@ beforeAll(async () => {
   seed.run(`CREATE VIEW active_users AS SELECT id, email FROM users`)
   const insert = seed.prepare('INSERT INTO users (email, nickname) VALUES (?, ?)')
   for (let i = 0; i < 1500; i++) insert.run(`user${i}@example.com`, i % 2 === 0 ? `n${i}` : null)
-  seed.close()
+  // `close()` 是 sqlite3_close_v2：statement 沒 finalize 就會留成 zombie 連線，
+  // Windows 上 afterAll 的 rm 因此間歇 EBUSY（main 68ab037b、PR #196 都倒過）。
+  insert.finalize()
+  seed.close(true)
 })
 
 afterAll(async () => {
-  await rm(workDir, { recursive: true, force: true })
+  await rm(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 describe('SQLiteAdapter 讀取', () => {

@@ -65,7 +65,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(workDir, { recursive: true, force: true })
+  await rm(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 describe('data-admin 的寫入', () => {

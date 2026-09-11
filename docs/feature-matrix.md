@@ -11,39 +11,39 @@ Legend:
 
 Maintenance note: command support statuses in this table are mirrored by `src/adapters/capabilities.ts` and guarded by `tests/unit/adapters/capabilities.test.ts`. Update both together when support changes.
 
-| Command / area | PostgreSQL | MySQL | MariaDB | MongoDB | Redis | Elasticsearch | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB defaults to a field-by-field wizard (host/port/user/password/`authSource`/`replicaSet`/`tls`/`srv`); a full `uri` remains an advanced fallback (`--uri` for non-interactive use). Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
-| Multi-connection `use` / `--use` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | v2 config isolates connections and schema caches. |
-| `password` rotation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Changes one connection's password only. Writes to the env var the config references (a literal password is converted to `{ "$env": ... }` once); verifies by connecting before saving unless `--skip-test`. Blocked in agent mode. |
-| Read-only query fan-out (`--use a,b`) | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL read-only statements, Mongo filters/read-only pipelines, and ES search only. Rejects writes, recovery, UI, CSV, and HTML; mixed outcomes exit 2. |
-| `list` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | SQL: tables; Mongo: collections; Redis: keys (SCAN); ES: indices. |
-| `schema [table]` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Mongo: sampled; Redis: per-key only (type/TTL/size); ES: flattened mapping. |
-| `schema` full scan / `--refresh` / `--reset` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | Redis has no full scan/cache. ES iterates non-system indices. |
-| `query` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SQL; Mongo: JSON; Redis: commands; ES: DSL/Lucene. |
-| Query output `table` / `json` / `csv` / `html` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter; HTML and `--ui` show truncation/security warnings before KPIs, charts, and raw rows. |
-| Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL/Mongo/ES apply limits. Redis: SCAN/LRANGE/ZRANGE rewrite + HGETALL/SMEMBERS/KEYS truncate at 1000; `--no-limit` bypasses. |
-| `q` saved query execution | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Mongo: JSON `find` / `aggregate` body, requires `collection` frontmatter (CLI `--collection` overrides), parameter substitutions are JSON-encoded. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
-| `queries` snippet management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Management works regardless of active connection. |
-| `insert` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
-| `update` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
-| `delete` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
-| `export` | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo plus ES. An auto-limit hit fails closed without writing a partial file; use `--no-limit` for all rows or `--limit N` to accept a bound. ES full-index export scrolls in batches. Redis not supported. |
-| `blacklist` config management | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob rejection (Redis-native pattern) plus value/hash-field masking (`[REDACTED]`) via the `redis.mask` config block. |
-| `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
-| `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
-| `migrate` DDL | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | SQL-only (Postgres/MySQL/MariaDB). |
-| `shell` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL + MongoDB + Redis + ES. ES: Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank-line submit), read-focused, `_search` auto-capped at 1000. Redis: single-line; SCAN/LRANGE auto-capped at 1000; `.no-limit` to bypass. |
-| `status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Safe non-credential config summary. |
-| `doctor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Engine-specific diagnostics. |
-| `completion` | N/A | N/A | N/A | N/A | N/A | N/A | Shell completion is engine-independent. |
-| `upgrade` | N/A | N/A | N/A | N/A | N/A | N/A | Update checks are engine-independent. |
-| `recover` | N/A | N/A | N/A | N/A | N/A | N/A | Automated remediation and multi-turn protocol; engine-independent logic operating on saved envelopes. |
-| `skill` | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. New: `skill tasks list/show/plan` exposes plan-only Agent Task Packs (built-in + `.dbcli-shared/tasks/` + `.dbcli/tasks/`); plans never execute commands. |
-| `verify` | N/A | N/A | N/A | N/A | N/A | N/A | Runs non-executing verification scenarios: `safe-backfill` (analyzes UPDATE, never writes), `migration` (analyzes ALTER TABLE DDL, never executes DDL), `rollback` (analyzes a restore statement via `--kind ddl\|dml`, never executes it), and `constraint` (generates a read-only `COUNT(*)` violation query via `--check fk\|not-null\|unique\|custom`, never writes). All scenarios produce local `.dbcli/verification/` artifacts in `--after-write` mode. SQL engines only. |
-| `verification` | N/A | N/A | N/A | N/A | N/A | N/A | Inspects and manages local VerificationArtifact files. Subcommands: `list` / `show` / `summary` / `prune` (all `local-write` or `readonly`). `summary --latest-only` narrows to the latest matching artifact plus status counts. Never connects to a database. |
-| `audit` | N/A | N/A | N/A | N/A | N/A | N/A | Cross-engine local capability writing `.dbcli/audit/<conn>.jsonl`. Subcommands: `tail` / `show` / `health` (`readonly`), `clear` (`local-write`). See `assets/reference.md` §audit. |
-| Package `./agent-core` export | N/A | N/A | N/A | N/A | N/A | N/A | Semver-stable, database-independent agent CLI helpers: env loading/references, connection selection/name parsing, and applied-limit trimming plus public types. Purity is release-gated. |
+| Command / area | PostgreSQL | MySQL | MariaDB | SQLite | MongoDB | Redis | Elasticsearch | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | MongoDB defaults to a field-by-field wizard (host/port/user/password/`authSource`/`replicaSet`/`tls`/`srv`); a full `uri` remains an advanced fallback (`--uri` for non-interactive use). Redis uses database index (0-15). ES supports Cloud ID/ApiKey. |
+| Multi-connection `use` / `--use` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | v2 config isolates connections and schema caches. |
+| `password` rotation | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | Changes one connection's password only. Writes to the env var the config references (a literal password is converted to `{ "$env": ... }` once); verifies by connecting before saving unless `--skip-test`. Blocked in agent mode. SQLite: a file connection has no credential to rotate. |
+| Read-only query fan-out (`--use a,b`) | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL read-only statements, Mongo filters/read-only pipelines, and ES search only. Rejects writes, recovery, UI, CSV, and HTML; mixed outcomes exit 2. |
+| `list` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | SQL: tables; Mongo: collections; Redis: keys (SCAN); ES: indices. |
+| `schema [table]` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Mongo: sampled; Redis: per-key only (type/TTL/size); ES: flattened mapping. |
+| `schema` full scan / `--refresh` / `--reset` | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❌ | ✅ | Redis has no full scan/cache. ES iterates non-system indices. SQLite: full scan is not implemented; single-table `schema` works. |
+| `query` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SQL; Mongo: JSON; Redis: commands; ES: DSL/Lucene. |
+| Query output `table` / `json` / `csv` / `html` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All engines flow through shared result formatter; HTML and `--ui` show truncation/security warnings before KPIs, charts, and raw rows. |
+| Query auto-limit / size guard | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | SQL/Mongo/ES apply limits. Redis: SCAN/LRANGE/ZRANGE rewrite + HGETALL/SMEMBERS/KEYS truncate at 1000; `--no-limit` bypasses. SQLite: same LIMIT rewrite; under `query-only` the file is opened read-only, which a database with an unreplayed WAL cannot satisfy. |
+| `q` saved query execution | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | SQL: SELECT/WITH only. Mongo: JSON `find` / `aggregate` body, requires `collection` frontmatter (CLI `--collection` overrides), parameter substitutions are JSON-encoded. Redis: read-only allowlist + range/SCAN size guard. ES: JSON DSL with size guard, scripts rejected, requires `index` frontmatter. |
+| `queries` snippet management | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Management works regardless of active connection. |
+| `insert` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand (use `query`). |
+| `update` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES writes not exposed via dedicated subcommand. |
+| `delete` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | Redis/ES deletes not exposed via dedicated subcommand. |
+| `export` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | ⚠️ | SQL/Mongo plus ES. An auto-limit hit fails closed without writing a partial file; use `--no-limit` for all rows or `--limit N` to accept a bound. ES full-index export scrolls in batches. Redis not supported. |
+| `blacklist` config management | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | Rule CRUD engine-independent. Enforcement varies by engine. Redis: key-glob rejection (Redis-native pattern) plus value/hash-field masking (`[REDACTED]`) via the `redis.mask` config block. |
+| `check` data health | ⚠️ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | SQL-only; best on MySQL/MariaDB. |
+| `diff` snapshots | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | Relational schema snapshots only. |
+| `migrate` DDL | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | SQL-only (Postgres/MySQL/MariaDB). SQLite: `ALTER TABLE` covers few operations and a column change is a table rebuild; no DDL generator. |
+| `shell` | ✅ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ⚠️ | SQL + MongoDB + Redis + ES. ES: Kibana Dev Tools-style REPL (`<METHOD> /<path>` + optional JSON body, blank-line submit), read-focused, `_search` auto-capped at 1000. Redis: single-line; SCAN/LRANGE auto-capped at 1000; `.no-limit` to bypass. SQLite: the REPL is not enabled yet. |
+| `status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Safe non-credential config summary. |
+| `doctor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Engine-specific diagnostics. |
+| `completion` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Shell completion is engine-independent. |
+| `upgrade` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Update checks are engine-independent. |
+| `recover` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Automated remediation and multi-turn protocol; engine-independent logic operating on saved envelopes. |
+| `skill` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Skill generation is engine-independent. New: `skill tasks list/show/plan` exposes plan-only Agent Task Packs (built-in + `.dbcli-shared/tasks/` + `.dbcli/tasks/`); plans never execute commands. |
+| `verify` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Runs non-executing verification scenarios: `safe-backfill` (analyzes UPDATE, never writes), `migration` (analyzes ALTER TABLE DDL, never executes DDL), `rollback` (analyzes a restore statement via `--kind ddl\|dml`, never executes it), and `constraint` (generates a read-only `COUNT(*)` violation query via `--check fk\|not-null\|unique\|custom`, never writes). All scenarios produce local `.dbcli/verification/` artifacts in `--after-write` mode. SQL engines only. |
+| `verification` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Inspects and manages local VerificationArtifact files. Subcommands: `list` / `show` / `summary` / `prune` (all `local-write` or `readonly`). `summary --latest-only` narrows to the latest matching artifact plus status counts. Never connects to a database. |
+| `audit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Cross-engine local capability writing `.dbcli/audit/<conn>.jsonl`. Subcommands: `tail` / `show` / `health` (`readonly`), `clear` (`local-write`). See `assets/reference.md` §audit. |
+| Package `./agent-core` export | N/A | N/A | N/A | N/A | N/A | N/A | N/A | Semver-stable, database-independent agent CLI helpers: env loading/references, connection selection/name parsing, and applied-limit trimming plus public types. Purity is release-gated. |
 
 ## Side-effect tiers
 
@@ -74,6 +74,31 @@ bun run release:check
 - The CI test matrix runs with `SKIP_INTEGRATION_TESTS=true`, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.
 
 See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
+
+## SQLite limitations summary
+
+SQLite support (DBCLI-034 to DBCLI-036) is deliberately narrow: a row is supported only where an acceptance criterion observes it.
+
+### Connection and configuration
+
+- A connection names a database `file`; there is no `host`, `port`, `user`, `password`, or `database`.
+- dbcli never creates the file. A missing path, a readable file that is not a SQLite database, and every in-memory form (`:memory:`, `file::memory:`) are refused before anything is written.
+- `dbcli init --system sqlite` asks only for the file path and the permission; `use` and `status` display the path where other engines display a host.
+- v1 configurations cannot be migrated to SQLite; run `dbcli init --system sqlite` instead.
+
+### Read path
+
+- `query-only` is enforced by opening the file read-only (`SQLITE_OPEN_READONLY`) rather than by a read-only transaction. A database left with an unreplayed write-ahead log cannot be opened this way; the error names the WAL instead of a bare `SQLITE_CANTOPEN`. See `docs/adr/ADR-0037-query-only-on-sqlite-closes-the-door.md`.
+- Auto-limit, blacklist masking, snippets (`engine: sqlite`, `?` placeholders), and `--use a,b` fan-out behave as on the other SQL engines.
+
+### Write path
+
+- `insert` / `update` / `delete` share the SQL data-executor path with double-quoted identifiers and `?` placeholders; `--dry-run` prints the statement without touching the file.
+- `REPLACE INTO` requires `data-admin`; `PRAGMA`, `VACUUM`, and `REINDEX` require `admin`; `ATTACH` / `DETACH` are refused at every level.
+
+### Not supported
+
+- `schema` full scan, `check`, `diff`, `migrate`, `shell`, `inspect`, `report`, `explain`, `plan`, `verify`, `semantic`, and `design` are unsupported and exit with an engine error.
 
 ## MongoDB limitations summary
 

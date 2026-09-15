@@ -184,6 +184,7 @@ workflow:
     - DBCLI-040
     - DBCLI-037
     - DBCLI-038
+    - DBCLI-039
   status: done
 
 baseline:

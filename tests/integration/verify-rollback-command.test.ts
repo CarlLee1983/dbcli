@@ -16,6 +16,48 @@ const CONN = {
   database: PG_DATABASE,
 }
 
+/**
+ * Where a port number reaches an artifact, named by field.
+ *
+ * This replaced `expect(raw).not.toContain(String(CONN.port))`. That searched
+ * the whole document for four digits, and the document carries a generated id
+ * whose random suffix produces those digits by chance — `ver_mtvlt4v8_73543356`
+ * failed the assertion on 2026-09-10 with nothing leaked, and the same commit
+ * passed on the next run. GATE-002 and GATE-003 both resolved this class the
+ * same way: an assertion that gives two answers for one commit is replaced by a
+ * deterministic measurement, not retried.
+ *
+ * The walk is over every field, and containment — not equality — is what counts
+ * as a leak, so a port embedded in a connection string is still caught. The one
+ * exemption is the top-level `id`, which is generated here rather than derived
+ * from any connection input; the caller pins its shape so the exemption cannot
+ * hide a field that merely calls itself an id.
+ */
+function portLeaks(document: unknown, port: number): string[] {
+  const needle = String(port)
+  const found: string[] = []
+  const walk = (value: unknown, path: string): void => {
+    if (value === null || value === undefined) return
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => walk(item, `${path}[${index}]`))
+      return
+    }
+    if (typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        if (path === '' && key === 'id') continue
+        walk(child, path === '' ? key : `${path}.${key}`)
+      }
+      return
+    }
+    if (String(value).includes(needle)) found.push(`${path}: ${String(value)}`)
+  }
+  walk(document, '')
+  return found
+}
+
+/** `ver_<base36 ms>_<8 hex>` — the only shape the id exemption above covers. */
+const ARTIFACT_ID = /^ver_[0-9a-z]+_[0-9a-f]{8}$/
+
 const TABLE = 'dbcli_verify_rollback_it'
 // A reverting ALTER TABLE that is analyzed but never executed.
 const DDL = `ALTER TABLE ${TABLE} DROP COLUMN never_dropped`
@@ -366,7 +408,42 @@ describe('dbcli verify rollback (integration)', () => {
     expect(raw).not.toContain('12345')
     expect(raw).not.toContain('67890')
     expect(raw).not.toContain('sensitive-literal')
-    expect(raw).not.toContain(String(CONN.port))
     expect(raw).not.toContain(CONN.password)
+
+    // The port is asked for by field rather than searched for as a substring:
+    // the document's generated id contains four random hex digits that can be
+    // the port by chance. The id's shape is pinned because the walk skips it.
+    const document = JSON.parse(raw)
+    expect(document.id).toMatch(ARTIFACT_ID)
+    expect(portLeaks(document, CONN.port)).toEqual([])
+  })
+
+  test('the port check catches a leak in any field, and names it', () => {
+    const leaked = {
+      schemaVersion: 1,
+      id: 'ver_mtvlt4v8_73543356',
+      connection: { port: PG_PORT },
+      evidence: [{ command: `psql -h localhost -p ${PG_PORT}` }],
+      summary: 'nothing to see here',
+    }
+
+    expect(portLeaks(leaked, PG_PORT)).toEqual([
+      `connection.port: ${PG_PORT}`,
+      `evidence[0].command: psql -h localhost -p ${PG_PORT}`,
+    ])
+  })
+
+  test('an id whose random suffix contains the port is not a leak', () => {
+    // The observed value. Its suffix carries 5433 at offset four, which is what
+    // made the old whole-document search fail with nothing leaked.
+    const clean = {
+      schemaVersion: 1,
+      id: 'ver_mtvlt4v8_73543356',
+      summary: 'redacted',
+      evidence: [{ command: 'dbcli verify rollback' }],
+    }
+
+    expect(clean.id).toMatch(ARTIFACT_ID)
+    expect(portLeaks(clean, 5433)).toEqual([])
   })
 })

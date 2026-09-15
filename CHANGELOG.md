@@ -5,6 +5,50 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.1.1] - 2026-09-15
+
+一個使用者回報的查詢缺陷（#197），一條會把人導向無效權限階的拒絕訊息，以及兩個
+會對同一個 commit 給出兩種答案、或只會叫「東西變了」的測試門檻。
+
+版本為 **9.1.1**。沒有新增指令、旗標或 engine；沒有任何一處拒絕先前被接受的輸入。
+唯一改變輸出的是拒絕訊息裡的 `required:` 欄位與它的句子——那個值先前是錯的，照它
+去要權限會被再拒一次，所以修正它不是相容性變更，是讓它開始為真。
+
+### Fixed
+
+- **snippet 裡重複使用同一個具名參數，在 MySQL / MariaDB / SQLite 上不再炸。**
+  `rewriteToBind()` 對每一次 `:name` 出現輸出一個 placeholder，但 bind values 是由
+  去重後的名稱清單映射出來的。PostgreSQL 重用 `$1`，一個值對一個索引本來就對；`?`
+  沒有索引可以重用，所以 placeholder 數量跟著出現次數走、values 數量跟著相異名稱數
+  走，兩者在有重複參數時必然對不上，MariaDB 以 `ER_WRONG_ARGUMENTS` 拒絕整條
+  statement。
+
+  實務影響是「參數為 0 就查全部、否則查單一」這類條件在 snippet 裡寫不出來，只能
+  繞道 CTE 讓參數只出現一次。`--dry-run` 看得到 SQL 與 bind values 不匹配，但不會
+  報錯，所以問題要到真的執行才炸。非 PostgreSQL 引擎現在每一次出現送一個值，
+  PostgreSQL 的去重行為不變。（#197）
+
+- **拒絕訊息指向的權限階，現在是真的會通過的那一階。** 無法分類的語句（`REPLACE
+  INTO`、`PRAGMA`、`VACUUM`、`REINDEX` 等）在 `query-only` 下被拒時宣稱需要
+  `read-write`，但沒有任何一階授予未知語句，取得 read-write 之後會再被拒一次。訊息
+  與 `required:` 欄位現在都說 `admin`，en 與 zh-TW 同步。判決完全沒變：本來拒絕的仍
+  然拒絕，本來允許的仍然允許。（DBCLI-037）
+
+### Changed
+
+- **capability catalog 的輸出改由契約守住，不再由 sha256 守住。** 三份渲染
+  （JSON／text／Markdown）的凍結雜湊換成結構性斷言：文件在釘住的 schema 版本下
+  parse 得過、三份渲染列出同一組 capability、每個 capability 指的 command 是 CLI 真的
+  帶得動的。catalog 是從 engine 矩陣推導出來的（ADR-0022），所以每次矩陣變動都會
+  移動那三個雜湊，而修法永遠是把現在的值抄回去——連續三次之後，它報告的是 diff
+  本來就說了的事。決定與被否決的選項記在 ADR-0039。使用者可見的輸出沒有變。
+  （DBCLI-038）
+
+- **驗證 artifact 的秘密洩漏檢查改成逐欄檢查。** 原本在整份文件裡搜尋連線 port 的
+  四位數字，而 artifact 帶一個隨機後綴的 id，後綴湊出那四位數字時測試會紅——什麼都
+  沒洩漏，重跑就過。改為解析後逐欄走訪並指名帶著 port 的欄位；判準仍是包含而非
+  相等，藏在連線字串裡的 port 照樣抓得到。（DBCLI-039）
+
 ## [9.1.0] - 2026-09-11
 
 ForgeFlow Story DBCLI-014 到 DBCLI-036 在 `v9.0.0` 之後交付。其中只有最後三張

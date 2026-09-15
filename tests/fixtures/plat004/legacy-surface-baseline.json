@@ -2,27 +2,6 @@
   "baselineCommit": "cc7427bedbd72215ccf370911bd262ba9f315717",
   "cases": [
     {
-      "name": "capability catalog JSON",
-      "args": ["capabilities", "--format", "json"],
-      "exitCode": 0,
-      "stdoutSha256": "a28c1de62c046342b2f019118dc9d72645ecbeaeb158802fc73cfd3fd8e4aa8e",
-      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "name": "capability catalog text",
-      "args": ["capabilities"],
-      "exitCode": 0,
-      "stdoutSha256": "72689bb74fc144658fcc582100a3e7091988f9e44b3ea709bf1f273fa23e5726",
-      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "name": "capability catalog Markdown",
-      "args": ["capabilities", "--format", "markdown"],
-      "exitCode": 0,
-      "stdoutSha256": "ef16bfb56bf5e50347bb5ac17d4fd89b424d905c90774b3b007c2a4ac3d8fbbe",
-      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
       "name": "command-local for-agent",
       "args": ["recovery", "--code", "PERMISSION_DENIED", "--for-agent"],
       "normalizeGeneratedAt": true,

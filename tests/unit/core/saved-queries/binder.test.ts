@@ -66,6 +66,35 @@ describe('rewriteToBind', () => {
     expect(out.values).toEqual([1])
   })
 
+  test('mysql: repeated :name sends one value per occurrence', () => {
+    const sql = 'SELECT * FROM t WHERE a = :x OR b = :x'
+    const out = rewriteToBind(sql, { x: 1 }, 'mysql')
+    expect(out.sql).toBe('SELECT * FROM t WHERE a = ? OR b = ?')
+    expect(out.values).toEqual([1, 1])
+  })
+
+  test('sqlite: repeated :name sends one value per occurrence', () => {
+    const sql = 'SELECT * FROM t WHERE a = :x OR (:x = 0 AND b = :y)'
+    const out = rewriteToBind(sql, { x: 1, y: 2 }, 'sqlite')
+    expect(out.sql).toBe('SELECT * FROM t WHERE a = ? OR (? = 0 AND b = ?)')
+    expect(out.values).toEqual([1, 1, 2])
+  })
+
+  test('? engines: placeholder count always equals values length', () => {
+    const sql = 'SELECT :a, :b, :a, :c, :b, :a'
+    for (const engine of ['mysql', 'sqlite'] as const) {
+      const out = rewriteToBind(sql, { a: 1, b: 2, c: 3 }, engine)
+      expect(out.sql.match(/\?/g)?.length).toBe(out.values.length)
+      expect(out.values).toEqual([1, 2, 1, 3, 2, 1])
+    }
+  })
+
+  test('reports a repeated undeclared :name only once', () => {
+    const out = rewriteToBind('SELECT :extra, :extra', {}, 'mysql')
+    expect(out.undeclared).toEqual(['extra'])
+    expect(out.values).toEqual([null, null])
+  })
+
   test('does not touch ::cast or :name inside string literal', () => {
     const sql = "SELECT created_at::date, ':not_a_param' FROM t WHERE id = :id"
     const out = rewriteToBind(sql, { id: 9 }, 'postgres')

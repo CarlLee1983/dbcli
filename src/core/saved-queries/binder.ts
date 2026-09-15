@@ -95,9 +95,17 @@ export interface RewriteResult {
 
 const NAME_RE = /(?<![\w:]):([a-zA-Z_][a-zA-Z0-9_]*)/g
 
+/**
+ * Postgres reuses `$idx` for a repeated `:name`, so one value per distinct name
+ * is right there. `?` carries no index, so a repeated name needs one value per
+ * *occurrence* — binding by distinct name sent MySQL/MariaDB/SQLite fewer values
+ * than the statement had placeholders (issue #197). The two engines therefore
+ * bind off different sequences: `order` for Postgres, `occurrences` for `?`.
+ */
 export function rewriteToBind(sqlBody: string, params: ParamMap, engine: EngineTag): RewriteResult {
   const masked = stripCommentsAndStrings(sqlBody)
   const order: string[] = []
+  const occurrences: string[] = []
   const indexByName = new Map<string, number>()
 
   // Pass 1: walk masked text to discover order & assign indices
@@ -120,20 +128,21 @@ export function rewriteToBind(sqlBody: string, params: ParamMap, engine: EngineT
     const start = m.index
     const end = start + m[0].length
     outSql += sqlBody.slice(cursor, start)
-    const idx = indexByName.get(name)!
-    outSql += engine === 'postgres' ? `$${idx}` : '?'
+    if (engine === 'postgres') {
+      outSql += `$${indexByName.get(name)!}`
+    } else {
+      outSql += '?'
+      occurrences.push(name)
+    }
     cursor = end
   }
   outSql += sqlBody.slice(cursor)
 
-  const undeclared: string[] = []
-  const values = order.map((n) => {
-    if (!Object.prototype.hasOwnProperty.call(params, n)) {
-      undeclared.push(n)
-      return null
-    }
-    return params[n]!
-  })
+  const undeclared = order.filter((n) => !Object.prototype.hasOwnProperty.call(params, n))
+  const bindOrder = engine === 'postgres' ? order : occurrences
+  const values = bindOrder.map((n) =>
+    Object.prototype.hasOwnProperty.call(params, n) ? params[n]! : null
+  )
 
   return { sql: outSql, values, undeclared }
 }

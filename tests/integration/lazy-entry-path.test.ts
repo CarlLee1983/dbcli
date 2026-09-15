@@ -17,6 +17,13 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import {
+  assertCatalogDocument,
+  assertCommandsAreLive,
+  assertRenderingsAgree,
+  CatalogContractViolation,
+} from '../helpers/capability-catalog-contract'
+import { CAPABILITY_CONTRACT_SCHEMA_VERSION } from '@/core/capabilities'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 const legacyBaseline = (await Bun.file(
@@ -170,6 +177,91 @@ describe('lazy entry path', () => {
     } finally {
       rmSync(cwd, { recursive: true, force: true })
     }
+  })
+})
+
+/**
+ * The capability catalog, guarded by its contract rather than by its bytes.
+ *
+ * These three renderings used to be three sha256 hashes in the baseline
+ * fixture. ADR-0022 derives the catalog from `ENGINE_CAPABILITIES`, so every
+ * engine change moved all three, and the repair was always to write down the
+ * new hash — three deliveries in a row. What the hashes were meant to protect
+ * is asserted here instead, and each assertion is shown failing on a catalog
+ * that breaks it, because a structural check that nothing can break is not a
+ * guard. ADR-0039.
+ */
+describe('capability catalog contract', () => {
+  const renderCatalog = () => {
+    const json = runResult('capabilities', '--format', 'json')
+    const text = runResult('capabilities')
+    const markdown = runResult('capabilities', '--format', 'markdown')
+    for (const result of [json, text, markdown]) {
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+    }
+    return { json: json.stdout, text: text.stdout, markdown: markdown.stdout }
+  }
+
+  test('the rendered catalog parses at the pinned schema version', () => {
+    const catalog = assertCatalogDocument(renderCatalog().json)
+
+    expect(catalog.schemaVersion).toBe(CAPABILITY_CONTRACT_SCHEMA_VERSION)
+    expect(catalog.capabilities.length).toBeGreaterThan(0)
+  })
+
+  test('a catalog with no schema version fails, and the message names the field', () => {
+    const catalog = JSON.parse(renderCatalog().json)
+    delete catalog.schemaVersion
+
+    expect(() => assertCatalogDocument(JSON.stringify(catalog))).toThrow(/schemaVersion/)
+  })
+
+  test('the three renderings describe the same catalog', () => {
+    const rendered = renderCatalog()
+    const catalog = assertCatalogDocument(rendered.json)
+
+    assertRenderingsAgree(catalog, { text: rendered.text, markdown: rendered.markdown })
+  })
+
+  test('a rendering that omits a capability fails, and the message names it', () => {
+    const rendered = renderCatalog()
+    const catalog = assertCatalogDocument(rendered.json)
+    const dropped = catalog.capabilities[0]!.id
+
+    expect(() =>
+      assertRenderingsAgree(catalog, {
+        text: rendered.text.replaceAll(dropped, 'removed.capability'),
+        markdown: rendered.markdown,
+      })
+    ).toThrow(new RegExp(dropped.replace('.', '\\.')))
+  })
+
+  test('an engine gaining a supported command does not fail the guard', () => {
+    // The behaviour that moved the hashes three times. The catalog is derived,
+    // so this is what an ordinary matrix change looks like from here: a longer
+    // `engines` array, and nothing the contract objects to.
+    const rendered = renderCatalog()
+    const catalog = assertCatalogDocument(rendered.json)
+    const widened = JSON.parse(rendered.json)
+    const target = widened.capabilities.find(
+      (capability: { engines: string[] }) => !capability.engines.includes('sqlite')
+    )
+    expect(target).toBeDefined()
+    target.engines = [...target.engines, 'sqlite']
+
+    const reparsed = assertCatalogDocument(JSON.stringify(widened))
+    expect(reparsed.capabilities.length).toBe(catalog.capabilities.length)
+    assertRenderingsAgree(reparsed, { text: rendered.text, markdown: rendered.markdown })
+  })
+
+  test('a capability naming a command the CLI does not carry fails the guard', () => {
+    const catalog = assertCatalogDocument(renderCatalog().json)
+
+    expect(() => assertCommandsAreLive(catalog, () => true)).not.toThrow()
+    expect(() =>
+      assertCommandsAreLive(catalog, (path) => path !== catalog.capabilities[0]!.command)
+    ).toThrow(CatalogContractViolation)
   })
 })
 

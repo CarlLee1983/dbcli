@@ -106,13 +106,15 @@ describe('the same rule applies to statements nobody assembled', () => {
     )
   })
 
-  test('an unrecognised statement names the level its own sentence promises', () => {
-    // The message says read-write+ is required; the header above it has to
-    // agree, or one of the two is telling the user to do something useless.
+  test('an unrecognised statement names admin, the only level that grants it', () => {
+    // This asserted read-write, because the sentence said read-write+. Both were
+    // wrong the same way: no tier below admin grants UNKNOWN, so a user who
+    // obtained read-write was refused again (DBCLI-037). The sentence and the
+    // header now agree on admin, and the verdict is unchanged — still refused.
     const refusal = refusalForSql('VACUUM ANALYZE', 'query-only')
 
-    expect(refusal?.requiredPermission).toBe('read-write')
-    expect(refusal?.message).toContain('read-write')
+    expect(refusal?.requiredPermission).toBe('admin')
+    expect(refusal?.message).toContain('admin')
   })
 })
 

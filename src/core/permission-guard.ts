@@ -449,6 +449,13 @@ export function checkPermissionForClassification(
         classification,
       }
     }
+    // The unrecognised-statement sentence is kept for query-only because it
+    // carries the "report it if this is read-only" link, which the generic
+    // refusal has no room for. What it may not do is name a tier: no tier below
+    // admin grants UNKNOWN, so a named read-write sent a query-only user to
+    // obtain a level that refuses the statement again (DBCLI-037). Both paths
+    // now read the tier from minimumPermissionFor, the same helper the decision
+    // uses.
     const isUnknown = permission === 'query-only' && classification.type === 'UNKNOWN'
     return {
       allowed: false,
@@ -456,9 +463,7 @@ export function checkPermissionForClassification(
         ? t('errors.unknown_statement_query_only')
         : refusalReason(classification.type, permission),
       classification,
-      // The unknown-statement sentence promises read-write+, so the header
-      // above it has to say the same thing.
-      requiredPermission: isUnknown ? 'read-write' : minimumPermissionFor(classification.type),
+      requiredPermission: minimumPermissionFor(classification.type),
     }
   }
 

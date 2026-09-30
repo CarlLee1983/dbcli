@@ -122,7 +122,7 @@ bun run src/cli.ts query "SELECT * FROM users LIMIT 10" --format json
 
 ## ForgePilot Work Control Plane
 
-ForgePilot decides what is actionable next and holds the evidence; ForgeFlowV2
+ForgePilot decides what is actionable next and holds the evidence; Warrant
 defines how work is specified and reviewed; this repository's `make verify` is
 the canonical verification. ForgePilot is an operator tool — dbcli neither
 imports nor requires it, and `.forgepilot/` is local state, not source.
@@ -132,7 +132,7 @@ Before starting engineering work:
 1. `forgepilot status`
 2. `forgepilot next`
 3. `forgepilot start <work-id>`
-4. Read that Work Item's ForgeFlow Story
+4. Read that Work Item's Warrant Story at `specs/stories/<slug>.md`
 5. Implement only that Story
 6. Commit; the worktree must be clean
 7. `forgepilot verify <work-id>` — it runs `make verify` against the exact commit
@@ -140,56 +140,39 @@ Before starting engineering work:
 
 ForgePilot's own documentation lives in its repository; do not restate it here.
 
-## ForgeFlow Story Development
+## Warrant
 
-When implementation is assigned by Story ID or from `specs/stories/`, use the
-repository-local `story-development` Skill and:
+This repository follows Warrant. Work is bounded by human-approved intent and
+proven by this repository's own verification.
 
-1. Read the approved `story.md` and `acceptance.md`, including the Story's
-   Classification and, when present, its security fixture matrix (every row
-   is a required case with an exact payload and expected persisted output) and
-   superseded behavior (change the named tests deliberately instead of
-   treating the conflict as a defect); treat `task.md` only as optional
-   progress context.
-2. Inspect the relevant existing code and implement the smallest coherent
-   in-scope change.
-3. Add or update tests for changed behavior.
-4. Run focused checks during development, then run `make verify` from the
-   repository root.
-5. Repair failures without changing the Story or weakening acceptance criteria,
-   and rerun the gate until it passes.
+**Verification command:** `make verify`
 
-A Story may now declare `## Authority`, `## Risk`, `## Architecture` and a
-`Task mode:` bullet, and its acceptance may carry an `## Acceptance Evidence`
-map — ForgeFlow 0.7.0, all optional, all in `specs/stories/_template/`. They are
-checked by upstream's own checkers, which CI runs as the `forgeflow-contract`
-job against the revision `specs/.forgeflow-adoption` pins; `make verify` stays
-offline and does not run them. A `Decision:` bullet resolves to a record in
-`docs/adr/`, named `ADR-<digits>-<slug>.md` and declaring `* Status:` as a
-bullet rather than in front matter — ADR-0029; the contract check sets
-`FORGEFLOW_DECISIONS_ROOT` itself, so nothing has to be set by hand. Authority is per-permission and nothing implies
-anything else: `modify` does not grant `commit`, and `commit` does not grant
-`push`.
+1. **Intent is approved by a human.** Work starts from a Story at
+   `specs/stories/<slug>.md` with Goal, Out of Scope, and Acceptance Criteria.
+   A Story is approved only when a human has committed it to the default
+   branch, or has explicitly assigned it in the current session. When it is
+   not committed and the human only asks you to implement it, ask once whether
+   they approve it as written; only a yes counts. A Story you
+   drafted or committed yourself is not approved: stop and wait. Approval is
+   not a work queue; the human chooses which Story to do.
+2. **Completion is proven by evidence.** Run the verification command above and
+   repair failures until it passes; if the repair lies outside the Story, stop
+   and report it. Map every acceptance criterion to a reproducible observation:
+   the command you ran and its output, or the `file:line` you inspected. If no
+   verification command is declared, report that and stop; do not choose
+   checks yourself.
+3. **The standard is not yours to change.** Do not change requirements, weaken
+   or reinterpret acceptance criteria, delete or skip failing tests, edit the
+   Story to fit the work, or widen scope. When work outside the Story is
+   needed, or a criterion conflicts with Out of Scope, stop and report it.
 
-`make verify` is the automated completion authority. PASS makes work eligible
-for human review; it does not approve or merge it. Do not bypass repository
-verification, remove failing tests to obtain PASS, or expand Story scope without
-explicit human instruction.
+Finish with a completion report of three sections: (1) each acceptance
+criterion → command run → observed result; (2) skipped or blocked checks;
+(3) residual risks. An inference or substitute check is not an observation.
+If the verification command did not pass, or any criterion lacks a passing
+observation, the report says **partial**, never done.
 
-The completion report must list changed files, implementation and test changes,
-the exact verification result, assumptions, and remaining risks.
-
-When work changes hands, `specs/handoff.md` records why: context, decisions,
-findings, remaining risks and assumptions, plus the repository baseline commit
-and worktree state, the completed Story IDs, and the last verification command
-and result.
-
-It does not record what to do next. `forgepilot next` answers that, and
-`forgepilot status` answers what is in progress or blocked. The handoff's
-`current_story` and `next_story` are pinned to the handoff contract's `none` and
-`pending`, and `bun run forgeflow:check` fails if either names a Story — two
-places recording one work queue is what ADR-0025 removed. Never restate
-ForgePilot's queue here, and never infer the next Story from list order either.
+Directories under `specs/stories/` are legacy records, not pending work.
 
 ## dbcli Usage Guidelines
 

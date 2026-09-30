@@ -51,7 +51,6 @@ const REQUIRED_STEPS = [
   'bun run docs:check',
   'bun run contract:check',
   'bun run plan:check',
-  'bun run forgeflow:check',
 ] as const
 
 /**

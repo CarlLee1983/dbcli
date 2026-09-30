@@ -1,7 +1,8 @@
 # Decision records are named so the contract can resolve them
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-09
+* Superseded by: ADR-0040
 
 ADR-0027 decided that upstream ForgeFlow's rules are run, not reimplemented: CI
 clones the adopted revision and runs `story-check` against this repository. That

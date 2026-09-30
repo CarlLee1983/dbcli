@@ -1,7 +1,8 @@
 # A delivery records itself
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-09
+* Superseded by: ADR-0040
 
 `specs/handoff.md`'s `completed_stories` was reconciled in one direction: every
 recorded Story must have a `Story:` commit trailer or a

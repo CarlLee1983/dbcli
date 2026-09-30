@@ -1,7 +1,8 @@
 # The handoff records delivery, not a work queue
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-08
+* Superseded by: ADR-0040
 
 `specs/handoff.md` stops stating which Story is current and which is next.
 ForgePilot is the only component that answers those two questions. The handoff

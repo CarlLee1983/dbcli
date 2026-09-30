@@ -1,7 +1,8 @@
 # Upstream ForgeFlow's checkers are run, not reimplemented
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-08
+* Superseded by: ADR-0040
 
 DBCLI-018 moved the adopted contract from 0.3.2 to 0.6.0, which brings
 Authority, Risk, Task mode and an Acceptance Evidence map. Each is enforced by

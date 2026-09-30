@@ -1,17 +1,24 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
-import {
-  discover,
-  preflight,
-  type RunDbcli,
-} from '../../assets/integration-kit/skill-author-consumer'
+import type { RunDbcli } from '../../assets/integration-kit/skill-author-consumer'
 import { EXTERNAL_CONSUMERS } from '../../assets/integration-kit/external-consumers'
 import { parseAgentTask } from '@/core/agent-tasks/parser'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+// skill-author-consumer 以套件名 import `@carllee1983/dbcli/core`，解析到未追蹤的 `dist/core.mjs`；
+// 靜態 import 會在 dist/ 建好之前就載入失敗，所以先 build 再動態 import。
+let discover: typeof import('../../assets/integration-kit/skill-author-consumer').discover
+let preflight: typeof import('../../assets/integration-kit/skill-author-consumer').preflight
+
+beforeAll(async () => {
+  ensureDistBuilt()
+  ;({ discover, preflight } = await import('../../assets/integration-kit/skill-author-consumer'))
+}, BUILD_HOOK_TIMEOUT_MS)
 
 function run(cwd: string): RunDbcli {
   return (args) =>

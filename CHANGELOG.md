@@ -5,6 +5,56 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.1.2] - 2026-10-01
+
+一個開發依賴的安全公告、工作規格協定從 ForgeFlow 換成 Warrant，以及三個讓測試與建置
+不再依賴執行順序或在磁碟上留下東西的修正。
+
+版本為 **9.1.2**。沒有任何指令、旗標、engine 或輸出改變。npm 套件唯一的差別是不再
+附帶 `.agents/skills/story-development/SKILL.md`——那是 dbcli 自己開發流程用的
+skill，不是給使用者的。
+
+### Changed
+
+- **工作規格改用 Warrant，ForgeFlow 的機制整套移除。** Story 從一個裝著
+  `story.md`／`acceptance.md`／`task.md` 的目錄，變成一個只有 Goal、Out of Scope、
+  Acceptance Criteria 三節的 `specs/stories/<slug>.md`；核准由人 commit 或在當次
+  session 明確指派，完成由 `make verify` 證明。ForgeFlow 留下的每一個決定都是在維護
+  協定本身而不是 dbcli：adoption marker、範本、上游 contract job、`Story:` trailer
+  對帳與 handoff 結構要彼此一致，代價是 `make verify` 裡的一道門、CI 的第二次
+  checkout、三支 checker 加上它們的函式庫與測試。這些都刪掉而不是停用，連同
+  `story-development` skill——它隨 `.agents/` 一起打包，所以已安裝的套件裡會少掉
+  它。ForgePilot 仍是控制面，`DBCLI-*` 舊目錄原封保留為歷史紀錄。決定記在
+  ADR-0040，取代 ADR-0025、0027、0029、0031、0032 與 0036。
+
+- **`assets/ui-template.html` 改為建置產物，不再進版控。** 每次 `bun run build` 都會
+  重新產生並覆寫它，`prepublishOnly` 也在每次發佈前重建，所以 commit 裡那份從來不是
+  使用者拿到的那份，只會跟建置結果漂移——每跑一次 `make verify` 就把 worktree 弄髒。
+  現在它和 `dist/` 一樣列在 `.gitignore`，由 `build:determinism` 檢查兩次建置產出
+  相同位元組，而每個會渲染 HTML 的測試自己建置所需的東西，不再靠前面的測試檔先建好。
+  發佈出去的 template 仍由 `prepublishOnly` 建置，內容不變。決定記在 ADR-0041。
+
+### Fixed
+
+- **Skill Author Integration Kit 的測試不再依賴執行順序。** 它以套件名
+  （`@carllee1983/dbcli/core`）import，解析到的是未進版控的 `dist/core.mjs`；靜態
+  import 只在更早的測試檔已建好 `dist/` 時才載入得了，CI 先跑它就在載入模組時失敗。
+  改為在 `beforeAll` 建置後動態 import。
+
+- **測試套件不再在 OS 暫存目錄留下東西。** 一次完整測試會在 `TMPDIR` 留下約 130 個
+  目錄與檔案：每個測試都呼叫的 seed helper、`beforeAll`／`beforeEach` 建了卻沒有對應
+  刪除的目錄、只還原 `HOME` 的 `finally`，以及直接寫進 `tmpdir()` 的設定檔。每個會
+  外洩的檔案現在都以 repo 既有的寫法清掉自己建的東西；從空的 `TMPDIR` 開始跑，只剩
+  第三方的 node-jiti 快取。
+
+### Security
+
+- **`brace-expansion` 的 override 提高到 `^5.0.12`。** `bun run audit` 在
+  `brace-expansion@5.0.9` 回報三個漏洞（兩個 high、一個 moderate）：
+  GHSA-qhr7-859c-m2p7、GHSA-6j4f-fj2g-mc7p、GHSA-q2hr-2g5m-vwhr。它經由 eslint 與
+  typescript-eslint 的 minimatch 引入，只存在於開發依賴，不在發佈的套件裡；提高既有的
+  override 就全部清掉。
+
 ## [9.1.1] - 2026-09-15
 
 一個使用者回報的查詢缺陷（#197），一條會把人導向無效權限階的拒絕訊息，以及兩個

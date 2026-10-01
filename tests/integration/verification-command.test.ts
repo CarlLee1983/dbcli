@@ -1,10 +1,16 @@
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, afterEach } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile, utimes } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 function sanitizeEnv(): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
@@ -40,6 +46,7 @@ interface ArtifactSeed {
 
 async function seedWork(seeds: ArtifactSeed[]): Promise<string> {
   const work = await mkdtemp(join(tmpdir(), 'dbcli-vcmd-'))
+  workDirs.push(work)
   const dir = join(work, '.dbcli', 'verification')
   await mkdir(dir, { recursive: true })
   for (const s of seeds) {
@@ -76,6 +83,7 @@ describe('dbcli verification list', () => {
 
   test('exits 0 with empty list when the directory is missing', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-vcmd-empty-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, ['verification', 'list', '--format', 'json'])
     expect(code).toBe(0)
     expect(JSON.parse(stdout).artifacts).toEqual([])
@@ -336,6 +344,7 @@ describe('dbcli verification summary', () => {
 
   test('no valid artifacts yields null latest, zero counts, exit 0', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-vsum-empty-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, ['verification', 'summary', '--format', 'json'])
     expect(code).toBe(0)
     const j = JSON.parse(stdout)
@@ -398,6 +407,7 @@ describe('dbcli verification summary', () => {
 
   test('--latest-only with no artifacts exits 0 with latest null', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-vcmd-lo-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, [
       'verification',
       'summary',
@@ -579,6 +589,7 @@ describe('dbcli verification prune', () => {
 
   test('missing directory exits 0 with empty arrays', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, [
       'verification',
       'prune',
@@ -735,6 +746,7 @@ describe('dbcli verification prune execute-mode table detail', () => {
 describe('dbcli verification --help wording', () => {
   test('parent help describes inspection + lifecycle, not globally read-only', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-vhelp-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, ['verification', '--help'])
     expect(code).toBe(0)
     expect(stdout).toContain('Inspect and manage local verification artifacts')
@@ -743,6 +755,7 @@ describe('dbcli verification --help wording', () => {
 
   test('prune --help states keep-latest is global before filters', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-vhelp-'))
+    workDirs.push(work)
     const { stdout, code } = await run(work, ['verification', 'prune', '--help'])
     expect(code).toBe(0)
     // commander wraps the option help, so assert the distinctive phrase that

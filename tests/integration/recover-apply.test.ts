@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, mkdir, cp, realpath, readdir } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, mkdir, cp, realpath, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -91,6 +91,13 @@ beforeAll(async () => {
 
   const noCfg = await mkdtemp(join(tmpdir(), 'dbcli-recover-apply-empty-'))
   NO_CONFIG = await realpath(noCfg)
+})
+
+const workDirs: string[] = []
+
+afterAll(async () => {
+  const dirs = [FIXTURE, NO_CONFIG, ...workDirs].filter(Boolean)
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 async function seedSavedEnvelope(cwd: string, envelope: Record<string, unknown>): Promise<void> {
@@ -535,6 +542,7 @@ describe('dbcli recover --apply --write-verification-artifact', () => {
 
   test('without the flag, output is unchanged and nothing is written', async () => {
     const cwd = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-verif-noflag-')))
+    workDirs.push(cwd)
     await seedSavedEnvelope(cwd, {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),

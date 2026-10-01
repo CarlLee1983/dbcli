@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test'
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -30,8 +30,15 @@ function artifact(overrides: Partial<VerificationArtifact> = {}): VerificationAr
   }
 }
 
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
 async function seed(files: Array<{ name: string; content: string }>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'dbcli-vreader-'))
+  workDirs.push(root)
   const dir = join(root, VERIFICATION_DIR_RELATIVE)
   await mkdir(dir, { recursive: true })
   for (const f of files) await writeFile(join(dir, f.name), f.content, 'utf8')
@@ -41,6 +48,7 @@ async function seed(files: Array<{ name: string; content: string }>): Promise<st
 describe('readVerificationArtifacts', () => {
   test('missing directory yields empty result without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dbcli-vreader-empty-'))
+    workDirs.push(root)
     const result = await readVerificationArtifacts(root)
     expect(result.storageDir).toBe(join(root, VERIFICATION_DIR_RELATIVE))
     expect(result.artifacts).toEqual([])
@@ -117,6 +125,7 @@ describe('readVerificationArtifacts', () => {
   test('does not follow symlinked artifact files', async () => {
     const root = await seed([])
     const external = await mkdtemp(join(tmpdir(), 'dbcli-vreader-external-'))
+    workDirs.push(external)
     const target = join(external, 'verification-outside.json')
     await writeFile(target, JSON.stringify(artifact({ id: 'ver_outside' })), 'utf8')
     await symlink(target, join(root, VERIFICATION_DIR_RELATIVE, 'verification-symlink.json'))

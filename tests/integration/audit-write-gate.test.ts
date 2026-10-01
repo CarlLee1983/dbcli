@@ -7,13 +7,19 @@
  * files, so what is asserted is the number an auditor would actually read —
  * not the mapping that produces it.
  */
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const CLI = resolve(import.meta.dir, '../../src/cli.ts')
+
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 function sanitizeEnv(): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
@@ -90,6 +96,7 @@ function plain(ts: string): Record<string, unknown> {
 
 async function seed(files: Record<string, Array<Record<string, unknown>>>): Promise<string> {
   const work = await mkdtemp(join(tmpdir(), 'dbcli-audit-write-gate-'))
+  workDirs.push(work)
   const auditDir = join(work, '.dbcli', 'audit')
   await mkdir(auditDir, { recursive: true })
   await writeFile(

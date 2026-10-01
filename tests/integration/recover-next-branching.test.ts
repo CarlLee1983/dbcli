@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, mkdtemp, mkdir, cp, realpath, chmod } from 'node:fs/promises'
+import { writeFile, mkdtemp, mkdir, cp, realpath, chmod, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -68,6 +68,10 @@ beforeAll(async () => {
   if (process.platform !== 'win32') {
     await chmod(shimPath, 0o755)
   }
+})
+
+afterAll(async () => {
+  if (FIXTURE) await rm(FIXTURE, { recursive: true, force: true })
 })
 
 async function seedConnectionEnvelope(cwd: string): Promise<void> {

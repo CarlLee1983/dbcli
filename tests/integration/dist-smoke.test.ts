@@ -7,9 +7,9 @@
  * scenario). We exercise the bundle from an OS tmpdir to mimic that.
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -54,6 +54,10 @@ describe('dist/packaged binary — runs from outside the dev tree', () => {
       })
     )
   }, BUILD_HOOK_TIMEOUT_MS)
+
+  afterAll(() => {
+    if (workdir) rmSync(workdir, { recursive: true, force: true })
+  })
 
   test('--version succeeds (sanity)', () => {
     const r = run(['--version'], workdir)

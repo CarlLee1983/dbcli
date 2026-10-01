@@ -1,7 +1,8 @@
 # The handoff carries what has no other home
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-10
+* Superseded by: ADR-0040
 
 `specs/handoff.md` reached 1,132 lines. About 870 of them were delivery
 narrative for Stories that `completed_stories` already recorded — one section

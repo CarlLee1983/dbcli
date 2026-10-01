@@ -130,11 +130,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-        with:
-          # `make verify` runs forgeflow:check, which reconciles the handoff's
-          # completed Stories against `Story:` commit trailers. A shallow clone
-          # has no trailers to read.
-          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -148,7 +143,7 @@ jobs:
       - name: Services are reachable
         run: bun run services:check
 
-      # This is the repository-owned ForgeFlow gate. The focused jobs above and
+      # This is the repository-owned verification gate. The focused jobs above and
       # below remain in place for platform-specific and fast failure signals.
       - name: Canonical verification
         run: make verify
@@ -180,36 +175,6 @@ jobs:
       - name: Stop test databases
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
-
-  forgeflow-contract:
-    # Upstream ForgeFlow's own checkers, run against this repository's Stories.
-    #
-    # Not a `make verify` step: it needs a second checkout, and the canonical
-    # gate has to run from a clone of this repository alone. The two offline
-    # ForgeFlow gates stay inside `make verify` — they check what this
-    # repository says about itself, where this job checks it against the rules
-    # this repository declared it adopted.
-    #
-    # The revision comes from `specs/.forgeflow-adoption` and the gate refuses a
-    # checkout at any other one, so an upgrade cannot land half-done with the
-    # marker moved and the rules still the old ones.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - name: ForgeFlow at the adopted revision
-        run: |
-          revision="$(sed -n 's/^revision=//p' specs/.forgeflow-adoption)"
-          git clone --quiet https://github.com/CarlLee1983/ForgeFlowV2.git "$RUNNER_TEMP/forgeflow"
-          git -C "$RUNNER_TEMP/forgeflow" checkout --quiet "$revision"
-      # No `bun install` on purpose, and it is an invariant rather than an
-      # omission: the gate imports only `bun`, `node:path` and `node:url`. Give
-      # it a dependency and this job starts failing with a module resolution
-      # error that looks nothing like its cause.
-      - name: ForgeFlow contract
-        run: FORGEFLOW_ROOT="$RUNNER_TEMP/forgeflow" bun run forgeflow:contract
 
   docs-parity:
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed

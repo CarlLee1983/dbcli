@@ -1,7 +1,8 @@
 # Delivery does not record who performed it
 
-* Status: accepted
+* Status: superseded
 * Date: 2026-09-09
+* Superseded by: ADR-0040
 * Supersedes: ADR-0030
 
 [ADR-0030](ADR-0030-a-permission-nobody-filled-in-is-not-a-control.md) decided

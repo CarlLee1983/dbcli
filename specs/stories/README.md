@@ -1,33 +1,23 @@
-# ForgeFlow Stories
+# Stories
 
-This repository adopted ForgeFlow 0.7.0 from revision
-`cb4bc97673ad3098a4689a1589e1f2c4b5175c63`; `specs/.forgeflow-adoption` is the
-machine-readable record of that. It was first adopted at 0.3.0
-(`afca7600db01279ddfe74ac030bd226444cc8b11`), then 0.3.2, then 0.6.0, then 0.7.0
-via `./scripts/bootstrap --upgrade` from a ForgeFlow checkout.
+This repository follows Warrant; the contract is the `## Warrant` section of
+`AGENTS.md`, and the reasons are in ADR-0040.
 
-The recorded revision is the `v0.7.0` tag, not the checkout `bootstrap` happened
-to be at — a marker naming an untagged revision makes "which release is this" a
-question with two answers.
+A Story is a single file, `specs/stories/<slug>.md`, with a `# Title` heading
+followed by exactly three sections: **Goal**, **Out of Scope**, and
+**Acceptance Criteria**. It carries no status, owner, priority, or lifecycle
+field. Each acceptance criterion is one statement that can be checked by
+running something or looking at something.
 
-`make verify` runs `bun run forgeflow:check`, which reconciles the handoff's
-`completed_stories` against the repository, in both directions: every recorded
-Story needs a `Story:` commit trailer, and every Story whose trailer this
-checkout's history carries needs an entry. Upstream's `story-check` and
-`handoff-check` are static structure checks that live in a ForgeFlow checkout
-and are documented as never deciding whether a declaration is truthful; this
-repository's check covers that separate layer and duplicates neither.
+A Story is approved only when a human commits it to the default branch, or
+explicitly assigns it in the current session. A Story an agent drafted or
+committed itself is not approved, and approval is not a work queue: the human,
+through ForgePilot, chooses which Story to do.
 
-**Add the `completed_stories` entry in the change that delivers the Story**, in
-the same commit as the trailer or the same pull request. Recording it after the
-merge is what left DBCLI-022 to DBCLI-027 unrecorded, and it turns `main` red in
-between. ADR-0032.
+Completion is proven by `make verify`, together with an observation for every
+acceptance criterion. Passing makes work eligible for human review; it does not
+approve or merge it.
 
-Create a Story by copying the template:
-
-```sh
-cp -R specs/stories/_template specs/stories/<story-id>
-```
-
-Complete `story.md` and `acceptance.md` before approval. `task.md` is optional
-implementation-progress context and is not a source of product requirements.
+The existing `DBCLI-*` directories, `SCENARIO-MAP.md`, and `specs/handoff.md`
+are legacy records from the earlier protocol, not pending work. They stay as
+they are because tests still read them.

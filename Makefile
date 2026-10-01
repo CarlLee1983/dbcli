@@ -75,8 +75,7 @@ verify:
 	step='bun run manifest:check' && run && \
 	step='bun run docs:check' && run && \
 	step='bun run contract:check' && run && \
-	step='bun run plan:check' && run && \
-	step='bun run forgeflow:check' && run; \
+	step='bun run plan:check' && run; \
 	status=$$?; \
 	bun run scripts/write-attestation.ts finish $$status $$started "$$step" || true; \
 	exit $$status

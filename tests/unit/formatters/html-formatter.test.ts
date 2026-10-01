@@ -3,17 +3,11 @@ import {
   generateHtmlReport,
   type DashboardDisplayInput,
 } from '../../../src/formatters/html-formatter'
-import { packageAssetPath } from '../../../src/utils/package-root'
-import { $ } from 'bun'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../../helpers/ensure-dist'
 
-beforeAll(async () => {
-  // Ensure the UI template exists for tests
-  const templatePath = packageAssetPath('ui-template.html')
-  if (!(await Bun.file(templatePath).exists())) {
-    console.log('Building UI template for tests...')
-    await $`bun run scripts/build.ts`
-  }
-})
+// assets/ui-template.html is a build output, not a tracked file (ADR-0041): build
+// it here when it is missing or stale rather than trusting a checkout to hold it.
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 const provenance = {
   version: 1,

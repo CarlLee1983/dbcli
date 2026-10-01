@@ -4,6 +4,7 @@ import {
   expect,
   beforeEach,
   afterEach,
+  beforeAll,
   afterAll,
   spyOn,
   mock as bunMock,
@@ -16,6 +17,10 @@ import { AdapterFactory } from '@/adapters'
 import { configModule } from '@/core/config'
 import { qCommand } from '@/commands/q'
 import { BlacklistRejection } from '@/adapters/redis/types'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../../helpers/ensure-dist'
+
+// HTML output reads assets/ui-template.html, a build output (ADR-0041).
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 class MockAdapter implements DatabaseAdapter {
   public lastSql = ''

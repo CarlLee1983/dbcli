@@ -3,7 +3,7 @@
  * Tests command logic, permission enforcement, formatting, and error handling
  */
 
-import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
+import { describe, test, expect, beforeAll, beforeEach, afterEach, spyOn } from 'bun:test'
 import type { DatabaseAdapter, ExecutionResult } from '@/adapters/types'
 import type { DbcliConfig } from '@/utils/validation'
 import { AdapterFactory } from '@/adapters'
@@ -15,6 +15,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { makeTestConfig } from '../../helpers/test-config'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../../helpers/ensure-dist'
+
+// HTML output reads assets/ui-template.html, a build output (ADR-0041).
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 // Mock adapter for testing
 class MockAdapter implements DatabaseAdapter {

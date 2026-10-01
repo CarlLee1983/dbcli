@@ -13,9 +13,9 @@
  * 1. Inputs are older than the moment the build *started* (not than the output
  *    mtimes). That ordering is what makes a source edited mid-build, a build
  *    killed halfway, and a coarse-granularity filesystem all read as stale.
- * 2. Every artifact still hashes to what the build produced. mtime cannot see a
- *    git checkout rewriting `assets/ui-template.html`, which is tracked — a
- *    restore sets mtime to "now" while changing the content.
+ * 2. Every artifact still hashes to what the build produced. mtime cannot see
+ *    an output rewritten in place (a git checkout, or a hand edit) — a rewrite
+ *    sets mtime to "now" while changing the content.
  *
  * Known blind spots, all requiring an mtime-preserving mutation of an *input*:
  * `node_modules` edited without touching `bun.lock` (`bun link`, patch-package),

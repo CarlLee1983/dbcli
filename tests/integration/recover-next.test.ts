@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, mkdtemp, mkdir, cp, realpath } from 'node:fs/promises'
+import { writeFile, mkdtemp, mkdir, cp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -80,6 +80,13 @@ beforeAll(async () => {
     const { chmod } = await import('node:fs/promises')
     await chmod(shimPath, 0o755)
   }
+})
+
+const workDirs: string[] = []
+
+afterAll(async () => {
+  const dirs = FIXTURE ? [FIXTURE, ...workDirs] : workDirs
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 async function seedSavedEnvelope(cwd: string, envelope: Record<string, unknown>): Promise<void> {
@@ -340,6 +347,7 @@ describe('dbcli recover --next flag precedence', () => {
     // Use a fresh empty cwd with no .dbcli/last-recovery.json — the mutual
     // exclusion check must fire before we try to read the missing envelope.
     const emptyCwd = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recover-next-empty-')))
+    workDirs.push(emptyCwd)
     const r = await run(
       ['recover', '--next', '--apply', '--after-step', '1', '--result', '{"status":"ok"}'],
       emptyCwd

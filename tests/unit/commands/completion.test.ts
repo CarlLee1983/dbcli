@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test'
-import { mkdtemp } from 'node:fs/promises'
+import { describe, test, expect, afterEach } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -90,8 +90,15 @@ const ROOT: CompletionCommandNode = {
   ],
 }
 
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
 async function writeTempScript(name: string, script: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'dbcli-completion-'))
+  workDirs.push(dir)
   const path = join(dir, name)
   await Bun.write(path, script)
   return path

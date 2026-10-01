@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, writeFile, readdir, readFile } from 'node:fs/promises'
+import { mkdtemp, writeFile, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isDbReachable, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DATABASE } from './helpers'
@@ -94,6 +94,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  if (WORK) await rm(WORK, { recursive: true, force: true })
   if (!DB_OK) return
   const { AdapterFactory } = await import('@/adapters')
   const adapter = AdapterFactory.createSqlAdapter(CONN)
@@ -231,46 +232,50 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
   test('malformed --verification-subject exits before connecting to the database', async () => {
     // No DB required: parse rejection happens before any connection attempt.
     const tmp = await mkdtemp(join(tmpdir(), 'dbcli-assert-bad-'))
-    await writeFile(
-      join(tmp, 'config.json'),
-      JSON.stringify({
-        connection: {
-          system: 'postgresql',
-          host: '203.0.113.1',
-          port: 5432,
-          user: 'u',
-          password: 'p',
-          database: 'd',
-        },
-        permission: 'query-only',
-        metadata: { createdAt: '2026-06-19T00:00:00.000Z', version: '1.0' },
-      }),
-      'utf8'
-    )
-    // --config is a global option and must precede the subcommand
-    const child = spawn(
-      'bun',
-      [
-        'run',
-        CLI,
-        '--config',
-        tmp,
-        'assert',
-        'SELECT 1',
-        '--expect',
-        'rows > 0',
-        '--write-verification-artifact',
-        '--verification-subject',
-        'bogus:x',
-      ],
-      { cwd: tmp, env: sanitizeEnv() }
-    )
-    let stderr = ''
-    const code: number = await new Promise((res) => {
-      child.stderr.on('data', (b) => (stderr += b.toString()))
-      child.on('close', (c) => res(c ?? 0))
-    })
-    expect(stderr).toContain("Unknown verification subject kind 'bogus'")
-    expect(code).toBe(1)
+    try {
+      await writeFile(
+        join(tmp, 'config.json'),
+        JSON.stringify({
+          connection: {
+            system: 'postgresql',
+            host: '203.0.113.1',
+            port: 5432,
+            user: 'u',
+            password: 'p',
+            database: 'd',
+          },
+          permission: 'query-only',
+          metadata: { createdAt: '2026-06-19T00:00:00.000Z', version: '1.0' },
+        }),
+        'utf8'
+      )
+      // --config is a global option and must precede the subcommand
+      const child = spawn(
+        'bun',
+        [
+          'run',
+          CLI,
+          '--config',
+          tmp,
+          'assert',
+          'SELECT 1',
+          '--expect',
+          'rows > 0',
+          '--write-verification-artifact',
+          '--verification-subject',
+          'bogus:x',
+        ],
+        { cwd: tmp, env: sanitizeEnv() }
+      )
+      let stderr = ''
+      const code: number = await new Promise((res) => {
+        child.stderr.on('data', (b) => (stderr += b.toString()))
+        child.on('close', (c) => res(c ?? 0))
+      })
+      expect(stderr).toContain("Unknown verification subject kind 'bogus'")
+      expect(code).toBe(1)
+    } finally {
+      await rm(tmp, { recursive: true, force: true })
+    }
   })
 })

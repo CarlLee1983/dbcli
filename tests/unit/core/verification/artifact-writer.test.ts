@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach } from 'bun:test'
-import { mkdtemp, readFile, readdir, writeFile, mkdir } from 'node:fs/promises'
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { mkdtemp, readFile, readdir, writeFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -26,6 +26,10 @@ describe('writeVerificationArtifact', () => {
   let storage = ''
   beforeEach(async () => {
     storage = await mkdtemp(join(tmpdir(), 'dbcli-verif-'))
+  })
+
+  afterEach(async () => {
+    await rm(storage, { recursive: true, force: true })
   })
 
   test('writes under .dbcli/verification and creates the directory if missing', async () => {

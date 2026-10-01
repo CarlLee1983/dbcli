@@ -9,9 +9,9 @@
  * 語句層級的案例需要一台真的伺服器（要先連上才會拿到 TABLE_NOT_FOUND），
  * 傳輸層的案例則指向一個沒人監聽的 port，兩個方向都要驗。
  */
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isDbReachable, SKIP_BY_ENV, MYSQL_HOST, MYSQL_PORT } from './helpers'
@@ -21,6 +21,12 @@ const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 const DEAD_PORT = 3999
 
 let SKIP_TESTS = SKIP_BY_ENV
+
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 function sanitizeEnv(): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
@@ -48,6 +54,7 @@ function run(args: string[], workDir: string): Promise<{ stderr: string; code: n
 
 async function workspace(port: number): Promise<string> {
   const work = await mkdtemp(join(tmpdir(), 'dbcli-error-wording-'))
+  workDirs.push(work)
   await writeFile(
     join(work, 'config.json'),
     JSON.stringify({

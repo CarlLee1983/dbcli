@@ -1,8 +1,14 @@
-import { describe, test, expect } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { describe, test, expect, afterEach } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadStepResultSummary, parseStepResultSummary } from '@/core/recovery/next-step-schema'
+
+const workDirs: string[] = []
+
+afterEach(() => {
+  for (const dir of workDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 describe('parseStepResultSummary', () => {
   test('parses a minimal ok result', () => {
@@ -82,6 +88,7 @@ describe('loadStepResultSummary', () => {
 
   test('reads @file relative to cwd', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dbcli-next-result-'))
+    workDirs.push(dir)
     writeFileSync(join(dir, 'r.json'), JSON.stringify({ status: 'ok', exitCode: 0 }))
     const r = await loadStepResultSummary('@r.json', dir)
     expect(r.ok).toBe(true)
@@ -96,6 +103,7 @@ describe('loadStepResultSummary', () => {
 
   test('rejects @file when file exceeds 64 KB', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dbcli-next-result-big-'))
+    workDirs.push(dir)
     writeFileSync(join(dir, 'big.json'), 'x'.repeat(65 * 1024))
     const r = await loadStepResultSummary('@big.json', dir)
     expect(r.ok).toBe(false)

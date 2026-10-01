@@ -1,11 +1,18 @@
-import { test, expect, mock } from 'bun:test'
-import { writeFileSync, mkdtempSync } from 'node:fs'
+import { test, expect, mock, afterEach } from 'bun:test'
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 
+const workDirs: string[] = []
+
+afterEach(() => {
+  for (const dir of workDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
 test('runShell dispatches an Elasticsearch connection to runEsShell', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dbcli-es-'))
+  workDirs.push(dir)
   const cfg = join(dir, '.dbcli')
   writeFileSync(
     cfg,
@@ -48,6 +55,7 @@ test('a query-only config refuses a write in the ES shell, and the cluster recei
 
   try {
     const dir = mkdtempSync(join(tmpdir(), 'dbcli-es-wire-'))
+    workDirs.push(dir)
     const cfg = join(dir, '.dbcli')
     writeFileSync(
       cfg,

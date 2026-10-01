@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { mkdtemp, writeFile, readdir, readFile } from 'node:fs/promises'
+import { mkdtemp, writeFile, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isDbReachable, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DATABASE } from './helpers'
@@ -137,6 +137,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  if (WORK) await rm(WORK, { recursive: true, force: true })
   if (!DB_OK) return
   const { AdapterFactory } = await import('@/adapters')
   const adapter = AdapterFactory.createSqlAdapter(CONN)

@@ -1,13 +1,18 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { collectSchemaCache } from '@/core/inspect/collect-schema-cache'
 
 describe('collectSchemaCache', () => {
-  let dir: string
+  let dir = ''
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'inspect-cache-'))
+  })
+
+  afterEach(async () => {
+    if (dir) await rm(dir, { recursive: true, force: true })
+    dir = ''
   })
 
   test('absent index.json → unavailable=false, available=false', async () => {

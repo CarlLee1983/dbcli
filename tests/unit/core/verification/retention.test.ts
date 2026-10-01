@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { parseOlderThanDays, computeCutoffMs, selectPrunePlan } from '@/core/verification'
 import type {
   ReadVerificationArtifactsResult,
@@ -219,7 +219,7 @@ describe('selectPrunePlan', () => {
   })
 })
 
-import { mkdtemp, mkdir, writeFile, utimes, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, utimes, stat, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -233,8 +233,15 @@ const NOW = Date.parse('2026-06-19T00:00:00.000Z')
 const OLD = '2026-01-01T00:00:00.000Z' // ~170d before NOW
 const RECENT = '2026-06-18T00:00:00.000Z' // 1d before NOW
 
+const workDirs: string[] = []
+
+afterEach(async () => {
+  await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
 async function seedRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'dbcli-prune-'))
+  workDirs.push(root)
   await mkdir(join(root, VERIFICATION_DIR_RELATIVE), { recursive: true })
   return root
 }
@@ -284,6 +291,7 @@ describe('isInsideStorageDir / hasArtifactFilename', () => {
 describe('pruneVerificationArtifacts', () => {
   test('missing directory yields an empty result, exit-safe', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dbcli-prune-empty-'))
+    workDirs.push(root)
     const result = await pruneVerificationArtifacts(
       root,
       { olderThanDays: 30, keepLatest: 20, includeInvalid: false },

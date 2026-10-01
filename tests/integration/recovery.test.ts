@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
 import { writeFile, readFile, mkdtemp, mkdir, cp, realpath, rm } from 'node:fs/promises'
@@ -9,6 +9,7 @@ const CLI = resolve(import.meta.dir, '../../src/cli.ts')
 
 let FIXTURE = FIXTURE_SRC
 let NO_CONFIG = ''
+const workDirs: string[] = []
 
 /**
  * Strip env vars that could let dbcli pick up an inherited connection from the
@@ -49,6 +50,7 @@ function run(
 
 beforeAll(async () => {
   const work = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recovery-')))
+  workDirs.push(work)
   await cp(FIXTURE_SRC, work, { recursive: true })
   const idxPath = resolve(work, '.dbcli/schemas/index.json')
   const raw = JSON.parse(await readFile(idxPath, 'utf8'))
@@ -58,6 +60,11 @@ beforeAll(async () => {
 
   // Truly empty workspace under tmpdir — no inherited .env, no schema cache.
   NO_CONFIG = await realpath(await mkdtemp(join(tmpdir(), 'dbcli-recovery-empty-')))
+  workDirs.push(NO_CONFIG)
+})
+
+afterAll(async () => {
+  await Promise.all(workDirs.map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 describe('dbcli recovery (CLI lookup)', () => {
@@ -211,6 +218,7 @@ describe('dbcli query --recovery (size-guard branch)', () => {
 
   beforeAll(async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-guard-'))
+    workDirs.push(work)
     const dbcliDir = resolve(work, '.dbcli')
     await mkdir(dbcliDir, { recursive: true })
     const config = {
@@ -283,6 +291,7 @@ describe('dbcli q --recovery (integration)', () => {
 describe('dbcli inspect --recovery (integration)', () => {
   test('--require-schema-cache + --recovery on a workspace with no schema cache emits SCHEMA_CACHE_MISSING envelope', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    workDirs.push(work)
     await cp(FIXTURE, work, { recursive: true })
     await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
@@ -300,6 +309,7 @@ describe('dbcli inspect --recovery (integration)', () => {
 
   test('--require-schema-cache without --recovery prints stderr and exits non-zero', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    workDirs.push(work)
     await cp(FIXTURE, work, { recursive: true })
     await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
@@ -314,6 +324,7 @@ describe('dbcli inspect --recovery (integration)', () => {
 
   test('inspect without --require-schema-cache returns the snapshot (no throw)', async () => {
     const work = await mkdtemp(join(tmpdir(), 'dbcli-recovery-no-cache-'))
+    workDirs.push(work)
     await cp(FIXTURE, work, { recursive: true })
     await rm(join(work, '.dbcli/schemas'), { recursive: true, force: true })
 
@@ -491,6 +502,7 @@ describe('dbcli recover (registered)', () => {
   test('exits 2 with helpful message when no envelope is available', async () => {
     // Use a fresh empty dir to avoid pollution from earlier auto-save tests.
     const empty = await mkdtemp(join(tmpdir(), 'dbcli-recover-empty-2-'))
+    workDirs.push(empty)
     const { stderr, code } = await run(['recover', '--apply'], empty)
     expect(code).toBe(2)
     expect(stderr).toContain('No recovery plan available')

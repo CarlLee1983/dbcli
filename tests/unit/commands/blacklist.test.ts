@@ -2,7 +2,8 @@
  * blacklist command unit tests
  */
 
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, afterEach } from 'bun:test'
+import { rm } from 'node:fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import {
@@ -17,10 +18,17 @@ import {
   isValidTableNameForSystem,
 } from '@/commands/blacklist'
 
+const configFiles: string[] = []
+
+afterEach(async () => {
+  await Promise.all(configFiles.splice(0).map((file) => rm(file, { recursive: true, force: true })))
+})
+
 // Create a temp .dbcli file for testing
 async function createTempConfig(blacklist?: any): Promise<string> {
   const dir = tmpdir()
   const configPath = join(dir, `test-dbcli-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  configFiles.push(configPath)
 
   const config = {
     connection: {

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { mkdtemp, readFile, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installCompletion, getInstallPath } from '../../../src/commands/completion'
@@ -15,6 +15,7 @@ async function withTempHome(fn: (home: string) => Promise<void>): Promise<void> 
   } finally {
     if (original === undefined) delete process.env.HOME
     else process.env.HOME = original
+    await rm(home, { recursive: true, force: true })
   }
 }
 

@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { resolve, join } from 'node:path'
-import { writeFile, readFile, mkdtemp, cp } from 'node:fs/promises'
+import { writeFile, readFile, mkdtemp, cp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
 const FIXTURE_SRC = resolve(import.meta.dir, '../fixtures/inspect/v1-postgres')
@@ -34,6 +34,10 @@ beforeAll(async () => {
   raw.metadata.lastRefreshed = new Date().toISOString()
   await writeFile(idxPath, JSON.stringify(raw, null, 2))
   FIXTURE = work
+})
+
+afterAll(async () => {
+  if (FIXTURE !== FIXTURE_SRC) await rm(FIXTURE, { recursive: true, force: true })
 })
 
 describe('dbcli guide (CLI)', () => {

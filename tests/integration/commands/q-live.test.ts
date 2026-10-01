@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeAll } from 'bun:test'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -40,6 +40,10 @@ describe.skipIf(SKIP)('dbcli q (live PostgreSQL)', () => {
         metadata: { version: '1.0' },
       })
     )
+  })
+
+  afterAll(() => {
+    if (workdir) rmSync(workdir, { recursive: true, force: true })
   })
 
   test('default param returns 1', () => {

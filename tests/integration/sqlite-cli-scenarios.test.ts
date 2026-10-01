@@ -8,10 +8,11 @@
  * 這組不掛 SKIP_INTEGRATION_TESTS：SQLite 不需要任何服務。
  */
 
-import { describe, test, expect, afterEach } from 'bun:test'
+import { describe, test, expect, beforeAll, afterEach } from 'bun:test'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ENGINE_CAPABILITIES } from '@/adapters/capabilities'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
 import {
   createContext,
   createWorkspace,
@@ -20,6 +21,9 @@ import {
 } from './sqlite-cli/harness'
 import { SQLITE_CLI_SCENARIOS } from './sqlite-cli/scenarios'
 import { formatReconciliation, reconcile } from './sqlite-cli/reconcile'
+
+// `export --format html` 讀 assets/ui-template.html，那是建置產物（ADR-0041）。
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 /** 一條情境 spawn 最多七個 CLI 程序；`bun test` 預設的 5 秒在滿載機器上不夠。 */
 const SCENARIO_TIMEOUT_MS = 30_000

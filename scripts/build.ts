@@ -17,8 +17,8 @@ const startedAt = Date.now()
 rmSync(stampFile, { force: true })
 
 // Every file this script produces. Their hashes go into the stamp because mtime
-// alone cannot see a git checkout rewriting a tracked output (assets/ui-template.html
-// is tracked) — a restore stamps mtime as "now" while changing the content.
+// alone cannot see an output rewritten in place (a git checkout, or a hand edit) —
+// a rewrite stamps mtime as "now" while changing the content.
 const artifacts = [
   'dist/cli.mjs',
   'dist/cli-runtime.mjs',

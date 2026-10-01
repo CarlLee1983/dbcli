@@ -7,10 +7,14 @@
  * the caller state the intent with --no-limit or --limit N.
  */
 
-import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
+import { describe, test, expect, beforeAll, beforeEach, afterEach, spyOn } from 'bun:test'
 import { configModule } from '@/core/config'
 import { AdapterFactory } from '@/adapters'
 import { exportCommand } from '@/commands/export'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../../helpers/ensure-dist'
+
+// HTML output reads assets/ui-template.html, a build output (ADR-0041).
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 const sqlConnection = {
   system: 'mysql' as const,

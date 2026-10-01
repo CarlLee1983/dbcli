@@ -61,3 +61,7 @@ graft/
 # never committed: a record inside the worktree would dirty the tree the next
 # verification refuses to run against, and each run would invalidate the last.
 .verification/
+
+# UI template — a build output: `bun run build` regenerates it and
+# `prepublishOnly` rebuilds it before every publish (ADR-0041).
+assets/ui-template.html

@@ -30,6 +30,7 @@ const ARTIFACTS = [
   'dist/cli-runtime.mjs',
   'dist/core.mjs',
   'dist/agent-core.mjs',
+  'assets/ui-template.html',
 ] as const
 
 async function digest(path: string): Promise<string> {

@@ -1,0 +1,8 @@
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "braces <= 3.0.3 has no patched release; it is reached only through the build-time dev dependency tailwindcss (micromatch, fast-glob) over globs this repository writes itself, never on user input or at runtime",
+    "expires": "2026-11-30"
+  }
+]

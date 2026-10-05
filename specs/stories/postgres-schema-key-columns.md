@@ -24,12 +24,14 @@ reports `"primaryKey": []` and the unique index with `"columns": []`, and
 (`src/commands/write-gate.ts:708-721`), so with an empty array no selector
 identifies a row and every structured write is classified `non_unique_where`.
 
-The second fault is ordering. For SQL engines, `update` and `delete` run the
-write gate (`src/commands/update.ts:354-360`, `src/commands/delete.ts:323-326`)
-before the executor checks the permission level
-(`src/core/data-executor.ts:140`, `:173`). A query-only connection that issues
-a write the gate would refuse is told that the statement is not limited to
-specific rows, rather than that it lacks write permission.
+The second fault is ordering. For SQL engines, `update` runs the write gate
+(`src/commands/update.ts:354-360`) before the executor checks the permission
+level (`src/core/data-executor.ts:140`). A query-only connection that issues an
+update the gate would refuse is told that the statement is not limited to
+specific rows, rather than that it lacks write permission. `delete` does not
+have this fault: it checks permission for every engine before connecting
+(`src/commands/delete.ts:131-138`), requires `data-admin`, and refuses with its
+own `delete.admin_only` message (`resources/lang/en/messages.json:234`).
 
 When this Story is done, the Postgres schema reports the key columns it already
 knows, and a write that the permission level forbids is refused for that
@@ -41,10 +43,10 @@ reason before the write gate is consulted.
   Elasticsearch.
 - The write gate's classification rules in `src/commands/write-gate.ts`, and the
   wording of any message in `resources/lang/`.
-- Permission ordering for `insert`, for raw SQL through `dbcli query`, and for
+- Permission ordering for `insert`, for raw SQL through `dbcli query`, for
   the MongoDB and Redis branches of `update` (which check permission first, at
-  `src/commands/update.ts:150` and `:234`) and of `delete`
-  (`src/commands/delete.ts:142`, `:229`).
+  `src/commands/update.ts:150` and `:234`), and any change to `delete`, its
+  permission level, or its messages.
 - `CHANGELOG.md` and any release or version change.
 - The agent demo video Story (`specs/stories/agent-demo-video.md`).
 
@@ -59,21 +61,24 @@ reason before the write gate is consulted.
    on `main` at `d4ac1e0f`.
 2. On a Postgres connection with `read-write` permission and no terminal to
    confirm, `dbcli update <table> --where "<primary key> = <value>" --set ...`
-   updates exactly that one row and exits 0, and the same holds for
-   `dbcli delete`. An integration test covers both and fails on `main` at
-   `d4ac1e0f`.
-3. On the same connection, `update` and `delete` whose `--where` does not match
-   a primary key or unique index are still refused with `non_unique_where`.
+   updates exactly that one row and exits 0; on a connection with `data-admin`
+   permission, the same holds for `dbcli delete --where "<primary key> = <value>"`.
+   An integration test covers both and fails on `main` at `d4ac1e0f`.
+3. On those connections (`read-write` for `update`, `data-admin` for `delete`),
+   a `--where` that does not match a primary key or unique index is still
+   refused with `non_unique_where`.
 4. On a Postgres connection with `query-only` permission and no terminal to
-   confirm, `dbcli update` and `dbcli delete` exit non-zero with the
-   `permission_requires_level` message
-   (`resources/lang/en/messages.json:183`), both when `--where` matches the
+   confirm, `dbcli update` exits non-zero with the `permission_requires_level`
+   message (`resources/lang/en/messages.json:183`), and `dbcli delete` exits
+   non-zero with the `delete.admin_only` message
+   (`resources/lang/en/messages.json:234`), both when `--where` matches the
    primary key and when it does not. No row changes, and no write-gate audit
-   entry is recorded. An integration test covers the four combinations and
-   fails on `main` at `d4ac1e0f`.
+   entry is recorded. An integration test covers the four combinations; the
+   two `update` cases fail on `main` at `d4ac1e0f`, and the two `delete` cases
+   guard the existing behaviour.
 5. Existing tests are not deleted, skipped, or weakened.
 6. `git diff --name-only main...HEAD` lists only
-   `src/adapters/postgresql-adapter.ts`, `src/commands/update.ts`,
-   `src/commands/delete.ts`, new or changed files under `tests/`, and this Story
+   `src/adapters/postgresql-adapter.ts`, `src/commands/update.ts`, new or
+   changed files under `tests/`, and this Story
    file (`specs/stories/postgres-schema-key-columns.md`).
 7. `make verify` passes.

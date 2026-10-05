@@ -146,6 +146,9 @@
       padding: 26px; border-radius: var(--radius-md); background: var(--green-soft);
     }
     .safety-layer:nth-child(even) { background: var(--blue-soft); }
+    .safety-demo { margin: 36px 0 0; }
+    .safety-demo video { display: block; width: 100%; height: auto; background: #1e1e2e; border: 1px solid var(--line); border-radius: 14px; }
+    .safety-demo figcaption { margin-top: 12px; color: var(--muted); font-size: .9rem; }
     .safety-icon { margin-bottom: 32px; font-size: 1.45rem; }
     .platform-groups { display: grid; gap: 30px; }
     .platform-group h3 { margin: 0 0 14px; color: var(--muted); font-size: .82rem; letter-spacing: .1em; text-transform: uppercase; }
@@ -314,6 +317,13 @@ dbcli recover</code></pre>
           <article class="safety-layer"><div class="safety-icon" aria-hidden="true">⌁</div><h3>Permissions and previews</h3><p>Permission levels limit actions, while dry runs preview writes before execution.</p><span class="command-label">permission · --dry-run</span></article>
           <article class="safety-layer"><div class="safety-icon" aria-hidden="true">✓</div><h3>Verification, recovery, and audit</h3><p>Verify outcomes, offer safe recovery steps, and retain an operational record.</p><span class="command-label">verify · recover · audit</span></article>
         </div>
+        <figure class="safety-demo">
+          <video controls muted playsinline preload="metadata" poster="assets/demo/dbcli-agent-demo-poster.webp" width="1280" height="760" aria-label="dbcli agent demo video" aria-describedby="safety-demo-caption">
+            <source src="assets/demo/dbcli-agent-demo.webm" type="video/webm">
+            <source src="assets/demo/dbcli-agent-demo.mp4" type="video/mp4">
+          </video>
+          <figcaption id="safety-demo-caption">A real recording: a Claude Code agent uses dbcli on a request that both reads and writes. The query omits the blacklisted column, the write is refused because the connection is query-only, and the agent does not raise its own permission. Waiting segments are sped up, and the security notice is briefly paused.</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -415,6 +425,18 @@ dbcli recover</code></pre>
         copyResetTimers.set(button, resetTimer);
       });
     });
+
+    // Play the demo once when it scrolls into view; with reduced motion, leave only the controls
+    const safetyDemo = document.querySelector(".safety-demo video");
+    if (safetyDemo && "IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const demoObserver = new IntersectionObserver(([entry]) => {
+        if (!entry.isIntersecting) return;
+        demoObserver.disconnect();
+        safetyDemo.play().catch(() => {});
+      }, { threshold: 0.5 });
+      safetyDemo.addEventListener("play", () => demoObserver.disconnect(), { once: true });
+      demoObserver.observe(safetyDemo);
+    }
   </script>
 </body>
 </html>

@@ -327,6 +327,11 @@ export async function updateCommand(
       }
     }
 
+    // 5b. Validate permission before opening a connection, as the Redis and
+    // MongoDB branches do. A connection that may not write at all is told that,
+    // not that its WHERE is not unique (the write gate runs after this).
+    enforcePermissionForType('UPDATE', config.permission)
+
     // 6. Parse WHERE condition string (SQL path)
     let whereConditions: Record<string, unknown>
     try {

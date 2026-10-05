@@ -315,7 +315,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const enumQuery = `
         SELECT
           c.column_name as name,
-          array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
+          array_agg(e.enumlabel::text ORDER BY e.enumsortorder) as enum_values
         FROM information_schema.columns c
         JOIN pg_catalog.pg_type AS enum_type
           ON enum_type.typname = c.udt_name
@@ -343,10 +343,10 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const fkQuery = `
         SELECT
           constraint_info.conname as name,
-          array_agg(source_column.attname ORDER BY source_key.ordinality) as columns,
+          array_agg(source_column.attname::text ORDER BY source_key.ordinality) as columns,
           referenced_schema.nspname as ref_schema,
           referenced_table.relname as ref_table,
-          array_agg(referenced_column.attname ORDER BY source_key.ordinality) as ref_columns
+          array_agg(referenced_column.attname::text ORDER BY source_key.ordinality) as ref_columns
         FROM pg_catalog.pg_constraint AS constraint_info
         JOIN pg_catalog.pg_class AS source_table
           ON source_table.oid = constraint_info.conrelid
@@ -399,7 +399,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const indexQuery = `
         SELECT
           i.relname as name,
-          array_agg(a.attname ORDER BY array_position(ix.indkey, a.attnum)) as columns,
+          array_agg(a.attname::text ORDER BY array_position(ix.indkey, a.attnum)) as columns,
           ix.indisunique as is_unique
         FROM pg_index ix
         JOIN pg_class t ON t.oid = ix.indrelid
@@ -436,7 +436,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // Extract primary key constraint
       const pkQuery = `
         SELECT
-          array_agg(primary_key_column.attname ORDER BY primary_key.ordinality) as columns
+          array_agg(primary_key_column.attname::text ORDER BY primary_key.ordinality) as columns
         FROM pg_catalog.pg_index AS index_info
         JOIN pg_catalog.pg_class AS source_table
           ON source_table.oid = index_info.indrelid

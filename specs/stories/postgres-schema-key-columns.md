@@ -23,6 +23,9 @@ reports `"primaryKey": []` and the unique index with `"columns": []`, and
 `primaryKey` and falls back to column flags only when that field is not an array
 (`src/commands/write-gate.ts:708-721`), so with an empty array no selector
 identifies a row and every structured write is classified `non_unique_where`.
+The enum query has the same fault: `array_agg(e.enumlabel ...)`
+(`src/adapters/postgresql-adapter.ts:318`) is also a `name[]`, so enum columns
+report no `enumValues`.
 
 The second fault is ordering. For SQL engines, `update` runs the write gate
 (`src/commands/update.ts:354-360`) before the executor checks the permission
@@ -60,9 +63,11 @@ reason before the write gate is consulted.
    the referencing column. An integration test asserts each of these and fails
    on `main` at `d4ac1e0f`.
 2. On a Postgres connection with `read-write` permission and no terminal to
-   confirm, `dbcli update <table> --where "<primary key> = <value>" --set ...`
+   confirm, `dbcli update <table> --where "<primary key> = <value>" --set ... --force`
    updates exactly that one row and exits 0; on a connection with `data-admin`
-   permission, the same holds for `dbcli delete --where "<primary key> = <value>"`.
+   permission, the same holds for
+   `dbcli delete <table> --where "<primary key> = <value>" --force`. `--force`
+   only skips the ordinary confirmation; the write gate does not consult it.
    An integration test covers both and fails on `main` at `d4ac1e0f`.
 3. On those connections (`read-write` for `update`, `data-admin` for `delete`),
    a `--where` that does not match a primary key or unique index is still
@@ -76,9 +81,12 @@ reason before the write gate is consulted.
    entry is recorded. An integration test covers the four combinations; the
    two `update` cases fail on `main` at `d4ac1e0f`, and the two `delete` cases
    guard the existing behaviour.
-5. Existing tests are not deleted, skipped, or weakened.
-6. `git diff --name-only main...HEAD` lists only
+5. For a Postgres column of an enum type, `PostgreSQLAdapter.getTableSchema`
+   returns the column's `enumValues` in the enum's declared order. An
+   integration test asserts this and fails on `main` at `d4ac1e0f`.
+6. Existing tests are not deleted, skipped, or weakened.
+7. `git diff --name-only main...HEAD` lists only
    `src/adapters/postgresql-adapter.ts`, `src/commands/update.ts`, new or
    changed files under `tests/`, and this Story
    file (`specs/stories/postgres-schema-key-columns.md`).
-7. `make verify` passes.
+8. `make verify` passes.

@@ -315,7 +315,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const enumQuery = `
         SELECT
           c.column_name as name,
-          array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
+          array_agg(e.enumlabel::text ORDER BY e.enumsortorder) as enum_values
         FROM information_schema.columns c
         JOIN pg_catalog.pg_type AS enum_type
           ON enum_type.typname = c.udt_name

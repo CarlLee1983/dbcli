@@ -29,6 +29,8 @@ const CONN: ConnectionOptions = {
 
 const PARENT = 'dbcli_pgkeys_parent_it'
 const CHILD = 'dbcli_pgkeys_child_it'
+const ENUM_TYPE = 'dbcli_pgkeys_mood_it'
+const ENUM_TABLE = 'dbcli_pgkeys_enum_it'
 
 const workDirs: string[] = []
 let skip = false
@@ -124,6 +126,11 @@ beforeAll(async () => {
   await withAdapter(async (a) => {
     await a.execute(`DROP TABLE IF EXISTS ${CHILD}`)
     await a.execute(`DROP TABLE IF EXISTS ${PARENT}`)
+    await a.execute(`DROP TABLE IF EXISTS ${ENUM_TABLE}`)
+    await a.execute(`DROP TYPE IF EXISTS ${ENUM_TYPE}`)
+    // Declared order deliberately differs from alphabetical order.
+    await a.execute(`CREATE TYPE ${ENUM_TYPE} AS ENUM ('sad', 'ok', 'happy')`)
+    await a.execute(`CREATE TABLE ${ENUM_TABLE} (id int PRIMARY KEY, mood ${ENUM_TYPE})`)
     await a.execute(`CREATE TABLE ${PARENT} (id int PRIMARY KEY, email text UNIQUE, status text)`)
     await a.execute(
       `CREATE TABLE ${CHILD} (id int PRIMARY KEY, parent_id int, CONSTRAINT ${CHILD}_parent_fk FOREIGN KEY (parent_id) REFERENCES ${PARENT} (id))`
@@ -136,6 +143,8 @@ afterAll(async () => {
     await withAdapter(async (a) => {
       await a.execute(`DROP TABLE IF EXISTS ${CHILD}`)
       await a.execute(`DROP TABLE IF EXISTS ${PARENT}`)
+      await a.execute(`DROP TABLE IF EXISTS ${ENUM_TABLE}`)
+      await a.execute(`DROP TYPE IF EXISTS ${ENUM_TYPE}`)
     })
   }
   await Promise.all(workDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
@@ -158,6 +167,17 @@ describe('PostgreSQLAdapter.getTableSchema key columns (AC 1)', () => {
       expect(child.foreignKeys![0]!.refColumns).toEqual(['id'])
       const col = child.columns.find((c) => c.name === 'parent_id')
       expect(col?.foreignKey).toEqual({ table: PARENT, column: 'id' })
+    })
+  })
+})
+
+describe('PostgreSQLAdapter.getTableSchema enum columns (AC 5)', () => {
+  test('reports enumValues in declared order', async () => {
+    if (skip) return
+    await withAdapter(async (a) => {
+      const schema = await a.getTableSchema(ENUM_TABLE)
+      const mood = schema.columns.find((c) => c.name === 'mood')
+      expect(mood?.enumValues).toEqual(['sad', 'ok', 'happy'])
     })
   })
 })

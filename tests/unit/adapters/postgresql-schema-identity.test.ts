@@ -72,10 +72,10 @@ function expectRelationallySafeForeignKeyQuery(sql: string): void {
     'JOIN pg_catalog.pg_attribute AS referenced_column ON referenced_column.attrelid = constraint_info.confrelid AND referenced_column.attnum = referenced_key.attnum'
   )
   expect(normalized).toContain(
-    'array_agg(source_column.attname ORDER BY source_key.ordinality) as columns'
+    'array_agg(source_column.attname::text ORDER BY source_key.ordinality) as columns'
   )
   expect(normalized).toContain(
-    'array_agg(referenced_column.attname ORDER BY source_key.ordinality) as ref_columns'
+    'array_agg(referenced_column.attname::text ORDER BY source_key.ordinality) as ref_columns'
   )
   expect(normalized).toContain("WHERE constraint_info.contype = 'f'")
   expect(normalized).toContain('source_table.relname = $1')
@@ -206,7 +206,9 @@ test('getTableSchema resolves primary-key order from the exact public table OID'
   expect(query).toContain(
     'JOIN pg_catalog.pg_attribute AS primary_key_column ON primary_key_column.attrelid = source_table.oid AND primary_key_column.attnum = primary_key.attnum'
   )
-  expect(query).toContain('array_agg(primary_key_column.attname ORDER BY primary_key.ordinality)')
+  expect(query).toContain(
+    'array_agg(primary_key_column.attname::text ORDER BY primary_key.ordinality)'
+  )
   expect(query).toContain('source_table.relname = $1')
   expect(query).toContain("source_schema.nspname = 'public'")
   expect(query).not.toContain('::regclass')

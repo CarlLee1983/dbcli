@@ -6,6 +6,10 @@ A unified database CLI tool that enables AI agents (Claude Code, Gemini, Copilot
 
 **Core Value:** AI agents can safely and intelligently access project databases through a single, permission-controlled CLI tool with sensitive data protection.
 
+[![Watch a Claude Code agent use dbcli: the blacklisted column is omitted and a write on a query-only connection is refused](docs/assets/demo/dbcli-agent-demo-thumb.webp)](https://carllee1983.github.io/dbcli/dbcli-intro.en.html#safety)
+
+*Watch a real session (42 s): the blacklist hides a sensitive column, and the agent's write is refused on a query-only connection.*
+
 > **Security update:** `dbcli init` now writes only a small project binding stub into `./.dbcli/config.json`. The full connection configuration is stored under `~/.config/dbcli/projects/<project-id>/config.json`, so sensitive settings do not live inside the project workspace by default.
 
 ## Internationalization (i18n)

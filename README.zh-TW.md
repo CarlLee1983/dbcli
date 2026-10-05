@@ -6,6 +6,10 @@
 
 **核心價值：** AI 代理可透過單一、具權限控管的 CLI 工具，在敏感資料保護下安全存取專案資料庫。
 
+[![觀看 Claude Code agent 使用 dbcli：黑名單欄位被略去，query-only 連線上的寫入被拒絕](docs/assets/demo/dbcli-agent-demo-thumb.webp)](https://carllee1983.github.io/dbcli/dbcli-intro.html#safety)
+
+*觀看一段真實 session（42 秒）：黑名單藏起敏感欄位，agent 在 query-only 連線上的寫入被拒絕。*
+
 > **安全性更新：** `dbcli init` 現在只會在 `./.dbcli/config.json` 寫入一個很小的專案綁定 stub。完整的連線設定會存放在 `~/.config/dbcli/projects/<project-id>/config.json`，因此敏感設定預設不會留在專案工作區內。
 
 ## 國際化（i18n）

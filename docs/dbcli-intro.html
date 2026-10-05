@@ -146,6 +146,9 @@
       padding: 26px; border-radius: var(--radius-md); background: var(--green-soft);
     }
     .safety-layer:nth-child(even) { background: var(--blue-soft); }
+    .safety-demo { margin: 36px 0 0; }
+    .safety-demo video { display: block; width: 100%; height: auto; background: #1e1e2e; border: 1px solid var(--line); border-radius: 14px; }
+    .safety-demo figcaption { margin-top: 12px; color: var(--muted); font-size: .9rem; }
     .safety-icon { margin-bottom: 32px; font-size: 1.45rem; }
     .platform-groups { display: grid; gap: 30px; }
     .platform-group h3 { margin: 0 0 14px; color: var(--muted); font-size: .82rem; letter-spacing: .1em; text-transform: uppercase; }
@@ -314,6 +317,13 @@ dbcli recover</code></pre>
           <article class="safety-layer"><div class="safety-icon" aria-hidden="true">⌁</div><h3>操作權限與預覽</h3><p>權限層級限制可做的事；寫入前可先用 dry-run 檢查。</p><span class="command-label">permission · --dry-run</span></article>
           <article class="safety-layer"><div class="safety-icon" aria-hidden="true">✓</div><h3>驗證、復原與稽核</h3><p>驗證結果、提供安全修復方案，並保留操作紀錄。</p><span class="command-label">verify · recover · audit</span></article>
         </div>
+        <figure class="safety-demo">
+          <video controls muted playsinline preload="metadata" poster="assets/demo/dbcli-agent-demo-poster.webp" width="1280" height="760" aria-label="dbcli agent 示範影片" aria-describedby="safety-demo-caption">
+            <source src="assets/demo/dbcli-agent-demo.webm" type="video/webm">
+            <source src="assets/demo/dbcli-agent-demo.mp4" type="video/mp4">
+          </video>
+          <figcaption id="safety-demo-caption">實錄：一個 Claude Code agent 透過 dbcli 處理同時要讀與寫的請求。查詢結果自動略去黑名單欄位，寫入因連線是 query-only 被拒，agent 沒有替自己提高權限。等待段落已加速，安全提示處短暫停格。</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -415,6 +425,18 @@ dbcli recover</code></pre>
         copyResetTimers.set(button, resetTimer);
       });
     });
+
+    // Play the demo once when it scrolls into view; with reduced motion, leave only the controls
+    const safetyDemo = document.querySelector(".safety-demo video");
+    if (safetyDemo && "IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const demoObserver = new IntersectionObserver(([entry]) => {
+        if (!entry.isIntersecting) return;
+        demoObserver.disconnect();
+        safetyDemo.play().catch(() => {});
+      }, { threshold: 0.5 });
+      safetyDemo.addEventListener("play", () => demoObserver.disconnect(), { once: true });
+      demoObserver.observe(safetyDemo);
+    }
   </script>
 </body>
 </html>

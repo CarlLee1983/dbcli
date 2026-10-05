@@ -62,7 +62,7 @@ function rootTokens(document: PageDocument) {
   )
 }
 
-describe.each(pages)('$locale intro page', ({ path, counterpart }) => {
+describe.each(pages)('$locale intro page', ({ locale, path, counterpart }) => {
   test('uses the approved semantic product-page structure', async () => {
     const { document } = await loadIntroPage(path)
     expect(document.querySelector('header.site-header')).not.toBeNull()
@@ -82,6 +82,31 @@ describe.each(pages)('$locale intro page', ({ path, counterpart }) => {
     expect(hero?.querySelector('.conversation-guardrails')).not.toBeNull()
     expect(hero?.querySelector('a[href="#workflow"]')).not.toBeNull()
     expect(hero?.querySelector('pre, .terminal, .install-command')).toBeNull()
+  })
+
+  test('shows the recorded agent demo in the safety section', async () => {
+    const { document } = await loadIntroPage(path)
+    const videos = document.querySelectorAll('section#safety video')
+    expect(videos).toHaveLength(1)
+    const video = videos[0]!
+    expect(video.hasAttribute('controls')).toBe(true)
+    expect(video.hasAttribute('muted')).toBe(true)
+    expect(video.hasAttribute('playsinline')).toBe(true)
+    expect(video.hasAttribute('autoplay')).toBe(false)
+    expect(video.getAttribute('poster')).toBe('assets/demo/dbcli-agent-demo-poster.webp')
+    const sources = [...video.querySelectorAll('source')].map((source) => [
+      source.getAttribute('src'),
+      source.getAttribute('type'),
+    ])
+    expect(sources).toEqual([
+      ['assets/demo/dbcli-agent-demo.webm', 'video/webm'],
+      ['assets/demo/dbcli-agent-demo.mp4', 'video/mp4'],
+    ])
+    const caption = document.getElementById(video.getAttribute('aria-describedby') ?? '')
+    expect(caption?.closest('section#safety')).not.toBeNull()
+    expect(caption?.textContent).toMatch(
+      locale === 'en' ? /real recording[\s\S]*sped up/ : /實錄[\s\S]*加速/
+    )
   })
 
   test('has accessible navigation and motion fallback', async () => {

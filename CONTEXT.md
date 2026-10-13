@@ -213,3 +213,19 @@ boundaries lie.
 
 Role, Method and project knowledge never enter dbcli core. dbcli answers only
 for the first two layers.
+
+## Connection configuration language
+
+**Connection string**:
+A single line that describes one connection, as copied from a database service
+or client, such as `mongodb+srv://…`.
+_Avoid_: URI, full URI, DSN
+
+**Field config**:
+The form that describes a connection as separate values — host, port, user,
+password, database and the like.
+_Avoid_: component format, per-field setup
+
+**Decompose**:
+To turn a connection string into an equivalent field config.
+_Avoid_: parse, convert

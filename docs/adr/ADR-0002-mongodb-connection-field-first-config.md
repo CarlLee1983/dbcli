@@ -1,6 +1,7 @@
 # MongoDB 連線以逐欄設定為主要形式，URI 降為進階逃生門
 
-* Status: accepted
+* Status: superseded in part
+* Superseded in part by: ADR-0043（連線字串改為寫入時拆解；`--uri` 行為改變）
 * Date: 2026-08-04
 
 MongoDB 連線的設定檔形式改以 `host` / `port` / `user` / `password` / `database`

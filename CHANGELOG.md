@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   從來沒碰到這個問題。`engines.bun`、CI 最低版本、postinstall 提示、`doctor` 的預設值與
   使用者文件都改為 1.4.0。
 
+### Security
+
+- **兩筆開發依賴的安全公告。** `source-map-js` 1.2.1 → 1.2.2（high，GHSA-68fv-2mgg-jv7q），
+  修正版在 `postcss` 的 `^1.2.1` 範圍內，只更新 lockfile。`postcss-selector-parser`
+  （moderate，GHSA-rj75-hqrm-r3gf）只在 7.1.6 修正，但 `tailwindcss@3.4.19` 與
+  `postcss-nested@6.2.0` 都要求 6.x，因此依 ADR-0042 在 `scripts/audit-exemptions.json`
+  豁免到 2026-11-30：它只在建置時解析本 repo 自己的樣式表，執行期與使用者輸入都碰不到。
+
 ## [9.1.2] - 2026-10-01
 
 一個開發依賴的安全公告、工作規格協定從 ForgeFlow 換成 Warrant，以及三個讓測試與建置

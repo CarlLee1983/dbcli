@@ -211,7 +211,7 @@ describe.skipIf(!PG_AVAILABLE)('the rest of the boundary did not move', () => {
     const { dir, storagePath } = await v1Project()
     // Every connection option is spelled out, and `--force` with it. `init`
     // validates its arguments before it reaches a writer, and refusing early
-    // for a missing `--user` or an existing `.dbcli` would let this case pass
+    // for a missing `--conn-name`/`--user` or an existing `.dbcli` would let this case pass
     // without the guard ever being consulted.
     const result = await run(
       [
@@ -219,6 +219,8 @@ describe.skipIf(!PG_AVAILABLE)('the rest of the boundary did not move', () => {
         '--no-interactive',
         '--force',
         '--skip-test',
+        '--conn-name',
+        'default',
         '--system',
         PG_OPTS.system,
         '--host',

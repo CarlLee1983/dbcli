@@ -36,6 +36,7 @@ interface Result {
 
 interface RunOptions {
   tty?: boolean
+  agentMode?: boolean
   answers?: Array<string | null>
   confirmations?: boolean[]
   closedInput?: 'readableEnded' | 'destroyed'
@@ -72,6 +73,7 @@ async function run(args: string[], options: RunOptions = {}): Promise<Result> {
     DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR: join(workspace, 'anchors'),
     DBCLI_LANG: 'en',
     DBCLI_NO_UPDATE_CHECK: '1',
+    ...(options.agentMode ? { DBCLI_AGENT_MODE: '1' } : {}),
     NODE_ENV: 'test',
     NO_COLOR: '1',
   })
@@ -587,6 +589,38 @@ describe('explicit names preserve established configuration semantics', () => {
       expect(Object.hasOwn(config, 'default')).toBe(withDefault)
       expect(config.connections.primary).toEqual(original.connections.primary)
       expect(config.connections.other).toMatchObject({ permission: 'read-write' })
+    },
+    TIMEOUT
+  )
+
+  test(
+    'explicit force cannot bypass the agent-mode configuration and permission guard',
+    async () => {
+      expectSuccess(await run(sqliteInit(['--conn-name', 'default', '--no-interactive'])))
+      const binding = await Bun.file(join(workspace, '.dbcli', 'config.json')).json()
+      await Bun.write(
+        join(binding.binding.storagePath, '.env.local'),
+        'FIXTURE_VALUE=preserve-me\n'
+      )
+      const before = await snapshot()
+      const result = await run(
+        sqliteInit([
+          '--conn-name',
+          'default',
+          '--permission',
+          'admin',
+          '--no-interactive',
+          '--force',
+        ]),
+        { agentMode: true }
+      )
+      expect(result.code).toBe(1)
+      expect(`${result.stdout}\n${result.stderr}`).toContain(
+        'Agent mode blocks configuration, permission, and credential changes.'
+      )
+      expect(result.prompts).toEqual([])
+      expect((await storedConfig()).connections.default?.permission).toBe('query-only')
+      expect(await snapshot()).toEqual(before)
     },
     TIMEOUT
   )

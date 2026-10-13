@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.0.0] - 2026-10-13
+
+這次發布整合 npm 9.1.2 之後合併的變更：明確命名連線、可不設預設連線、Bun 1.4.0
+最低版本、PostgreSQL schema 修正、帶期限的 audit 豁免，以及實錄的 agent 操作影片。
+9.2.0 曾完成發布準備，但未發布到 npm；原本的 9.2.0 與 Unreleased 更新紀錄合併於此。
+
+版本為 **10.0.0**。新連線不再自動取名，刪除預設連線也不再自動改選另一條；這兩項
+行為會影響既有腳本，所以採用 major 版本。
+
+### Breaking changes and upgrade notes
+
+- **非互動式初始化必須指定 `--conn-name <連線名稱>`。** 適用於非 TTY、
+  `--no-interactive` 與完整 env-reference 自動非互動模式；互動模式會詢問名稱。
+  `--name` 仍表示資料庫名稱，不能拿它代替 `--conn-name`。原先依賴自動命名的腳本
+  須補上連線名稱；明確指定 `--conn-name default` 仍合法。
+- **升級 Bun 至 1.4.0 以上。** 仍使用 1.3.x 的環境須先升級，原因與相依套件細節見下方。
+- **既有 v1 設定讀取與具名匯入仍保留。** 單純 `init` 與明確 `--config` 新建連線
+  改用具名 v2；全新 registry 的第一條具名連線仍會成為預設，追加連線則保留既有的
+  default/no-default 狀態，不會偷偷建立或替換預設。
+- **預設連線可以清除，刪除後不再自動補選。** 使用 `dbcli use --unset` 清除預設；
+  刪除預設連線也會留下無預設狀態，而不是選取下一條。之後須透過 `--use` 或
+  `DBCLI_CONNECTION` 選取，或以 `dbcli use <連線名稱>` 明確設定新預設；仍禁止刪除
+  最後一條連線。
+- **帶自訂 `envFile` 的直接專案 v2 設定須先遷移。** 若新增連線需要匯入舊版直接
+  專案 v2 設定，而它的 `envFile` 不是 `.env.local`，`init` 會在寫入前拒絕並保留
+  原檔。須先由管理員完成 home storage 遷移，再新增連線。
+
+### Added
+
+- **介紹頁與 README 加上一段實錄的 agent 操作影片。** 一段真實的 Claude Code session
+  對著一個用完即丟的 PostgreSQL 操作：agent 透過 dbcli 讀資料，被列入黑名單的
+  `password_hash` 欄位帶著 dbcli 的安全提示被略去，它在 query-only 連線上的寫入被拒絕。
+  影片放在兩個語系介紹頁的 #safety 區，兩份 README 各以縮圖連到自己語系的頁面。
+  `scripts/demo/` 保留 seed、設定、錄製與剪輯腳本，CLI 輸出改變時可以重錄。
+
 ### Changed
 
 - **新建或新增連線必須明確命名。** `init` 未提供 `--conn-name` 時會在互動式
@@ -28,24 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   若新增連線會匯入帶有自訂 `envFile`（非 `.env.local`）的舊版直接專案 v2
   設定，`init` 會在寫入前拒絕並保留原檔，須先由管理員完成 home storage 遷移。
 
-## [9.2.0] - 2026-10-13
-
-Bun 最低版本提高到 1.4.0、兩個讓 PostgreSQL schema 少報欄位的修正、audit gate 可以
-帶期限的豁免，以及兩頁介紹頁加上一段實錄的 agent 操作影片。
-
-版本為 **9.2.0**。使用者唯一需要處理的是 Bun：還在 1.3.x 的請升級到 1.4.0 以上。
-沒有新增或移除任何指令與旗標。
-
-### Added
-
-- **介紹頁與 README 加上一段實錄的 agent 操作影片。** 一段真實的 Claude Code session
-  對著一個用完即丟的 PostgreSQL 操作：agent 透過 dbcli 讀資料，被列入黑名單的
-  `password_hash` 欄位帶著 dbcli 的安全提示被略去，它在 query-only 連線上的寫入被拒絕。
-  影片放在兩個語系介紹頁的 #safety 區，兩份 README 各以縮圖連到自己語系的頁面。
-  `scripts/demo/` 保留 seed、設定、錄製與剪輯腳本，CLI 輸出改變時可以重錄。
-
-### Changed
-
 - **Bun 最低版本從 1.3.3 提高到 1.4.0。** `mongodb@7.2.0` 依賴 `bson: "^7.2.0"`，
   不帶 lockfile 的使用者安裝會解析到 bson 7.3+。bson 7.3.0 起，`ObjectId` 載入時會呼叫
   `v8.startupSnapshot.isBuildingSnapshot()`，Bun 1.3.x 對此丟出
@@ -60,6 +77,12 @@ Bun 最低版本提高到 1.4.0、兩個讓 PostgreSQL schema 少報欄位的修
   都印出來；過期或格式錯誤的項目讓 gate 失敗，所以豁免不會悄悄變成永久。第一筆豁免
   GHSA-vfj7-8cjw-p6xm（`braces` <= 3.0.3，沒有修正版，只經由建置期的 tailwindcss 引入）
   到 2026-11-30。決定記在 ADR-0042。
+
+- **發布流程改由版本 tag 驅動。** 合併發布準備 PR 後才在 `main` 建立 `vX.Y.Z`；
+  工作流程核對版本與來源、啟動測試資料庫並執行 `make verify`，通過後等待
+  `npm-publish` 環境審批，再透過 npm trusted publishing 發布附 provenance 的套件，
+  最後從本檔對應版本章節建立 GitHub Release。須先完成 trusted publisher 與審批環境
+  設定（#214）。
 
 ### Fixed
 

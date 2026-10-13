@@ -56,7 +56,7 @@ bun install -g @carllee1983/dbcli
 npm install -g @carllee1983/dbcli
 ```
 
-dbcli runs on Bun 1.3.3+. npm and npx are supported as distribution channels, but the
+dbcli runs on Bun 1.4.0+. npm and npx are supported as distribution channels, but the
 installed `dbcli` executable requires Bun on your `PATH`; only the `./agent-core` subpath
 export is importable from a plain Node process.
 

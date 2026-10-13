@@ -1029,7 +1029,7 @@ export const doctorCommand = new Command('doctor')
 
     // --- Environment ---
     const bunVersion = (process.versions as Record<string, string>).bun ?? 'unknown'
-    const requiredBun = (pkg.engines as Record<string, string>)?.bun?.replace('>=', '') ?? '1.3.3'
+    const requiredBun = (pkg.engines as Record<string, string>)?.bun?.replace('>=', '') ?? '1.4.0'
     results.push(runDoctorChecks.checkRuntime(await collectRuntimeInfo(pkg.version)))
     results.push(runDoctorChecks.checkBunVersion(bunVersion, requiredBun))
     results.push(await runDoctorChecks.checkLatestVersion(pkg.version))

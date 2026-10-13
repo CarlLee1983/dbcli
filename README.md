@@ -47,7 +47,7 @@ bun install -g @carllee1983/dbcli
 ```
 
 **dbcli runs on Bun.** npm and npx are supported as distribution channels, but the
-installed `dbcli` executable requires Bun 1.3.3+ on your `PATH` — install it first with
+installed `dbcli` executable requires Bun 1.4.0+ on your `PATH` — install it first with
 `curl -fsSL https://bun.sh/install | bash`. Only the `./agent-core` subpath export is
 importable from a plain Node process.
 
@@ -1333,7 +1333,7 @@ After installation, the AI agent will have access to dbcli commands and can use 
 
 ### Platform-Specific Setup
 
-Every flow below assumes Bun 1.3.3+ on your `PATH`: the installed `dbcli` executable runs under Bun regardless of which package manager fetched it.
+Every flow below assumes Bun 1.4.0+ on your `PATH`: the installed `dbcli` executable runs under Bun regardless of which package manager fetched it.
 
 #### Claude Code (Anthropic)
 
@@ -1662,7 +1662,7 @@ chmod +x dist/cli.mjs
 
 ### Runtime
 
-- **Bun:** 1.3.3+ — required. The published bundles use Bun APIs and Bun module
+- **Bun:** 1.4.0+ — required. The published bundles use Bun APIs and Bun module
   resolution; `dbcli` does not run on Node.
 - **Node.js:** only for the `./agent-core` subpath export, which is Node-importable
   (18.0.0+). `npm install -g` / `npx` work as distribution channels but still shell out

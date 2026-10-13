@@ -20,7 +20,7 @@ bun run dev -- init
 
 ### Prerequisites
 
-- Bun >= 1.3.3 (see [bun.sh](https://bun.sh)) — the only runtime dbcli runs on
+- Bun >= 1.4.0 (see [bun.sh](https://bun.sh)) — the only runtime dbcli runs on
 - Node.js >= 18.0.0 (development only: editor tooling, and the Node-compatibility checks in `tests/integration/runtime-contract.test.ts`)
 - PostgreSQL, MySQL, or MariaDB (optional, for testing)
 

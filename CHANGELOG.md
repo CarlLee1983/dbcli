@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **新建或新增連線必須明確命名。** `init` 未提供 `--conn-name` 時會在互動式
+  終端機主動詢問名稱，不再代填 `default`；空白回答會說明並再次詢問，取消或
+  結束提示不會寫入；明確傳入空白名稱則在任何模式都報錯。非 TTY、
+  `--no-interactive` 或完整 env-reference 自動非互動
+  模式缺少名稱時，會在連線測試、設定及憑證寫入前報錯。`--name` 仍是資料庫名，
+  明確指定 `--conn-name default` 仍合法。單純 `init` 與明確 `--config` 都改用
+  具名 v2 新建，既有 v1 讀取與具名匯入保留。全新 registry 仍以第一條具名連線
+  為預設，追加連線保留既有 default/no-default；同名覆寫確認及 `--force` 保護
+  維持不變（#212）。
+
 - **v2 可以不設定預設連線。** 省略 `default` 即可要求每次透過 `--use` 或
   `DBCLI_CONNECTION` 明確選取；未選取時會在連線前失敗，列出可用名稱而不洩漏
   端點或憑證。新增 `dbcli use --unset`，透過既有核准與 integrity record 保護

@@ -65,6 +65,12 @@ Standalone `dbcli --version` and `dbcli -V` checks use a lightweight launcher an
 ### Initializing a Connection
 The `init` command guides you through setting up your first connection. It can automatically parse existing `.env` files. For MongoDB, `init` walks through connection fields one at a time (Host, SRV, Port, User, Password, `authSource`, then optional `replicaSet` / `tls`) — see "MongoDB connection configuration" in the [Database Engine Support Matrix](#database-engine-support-matrix) section below for the full field list and the `--uri` advanced fallback.
 
+Every new or additional connection needs a nonblank connection name. Pass `--conn-name <name>`, or run `dbcli init` in an interactive terminal to be asked for one. The name prompt has no suggested `default`; empty or whitespace-only answers explain the requirement and prompt again. Cancelling or ending the name prompt stops before any connection test or configuration/credential write. An explicit nonblank `--conn-name` skips this prompt, and `--conn-name default` is valid. An explicitly blank `--conn-name` is an error in every mode, before connection tests or writes. `--name` still means the database name (the logical DB index for Redis), never the connection name.
+
+Without a TTY, with `--no-interactive`, or when `--use-env-refs` plus all five `--env-*` options automatically disables interaction, a missing or blank `--conn-name` fails with guidance to supply it, before database access or configuration/credential writes. Complete credentials, `--name`, `--env-file`, and `--force` do not supply a connection name.
+
+New initialization always creates named v2 configuration, including plain `init` and explicit `--config` paths; it no longer creates an unnamed v1 configuration. Existing v1 configurations remain readable and their established named v2 import is retained. The first explicitly named connection is still the default in a new registry; adding a connection preserves an existing registry's default or no-default state. An explicitly chosen duplicate name still requires interactive overwrite confirmation or `--force`; a noninteractive duplicate without `--force`, or a declined confirmation, leaves files untouched. `--remove` and `--rename` do not ask for a new connection name.
+
 Behind the scenes, `init` writes a small `version: 3` binding stub to `./.dbcli/config.json` in your project, while the real connection settings and any credentials are stored in your home directory at `~/.config/dbcli/projects/<project-name>-<sha1-12>/`. This keeps recoverable secrets out of the project workspace, so tools or AI agents that scan the repo never see them. The project `.dbcli/` only holds the binding plus non-sensitive caches (schema cache, audit log, snapshots, verification artifacts).
 
 For a connection shared by several projects, use the explicit global scope. It stores a v2 registry in `~/.config/dbcli/config.json` and never creates a project binding:
@@ -164,8 +170,9 @@ dbcli keeps the request rejected and prints the copyable root-level form, such a
 
 A v2 configuration may omit the top-level `default` field. If present, it must
 be a nonempty string naming an existing connection; `null`, `""`, and unknown
-names are invalid. Existing initialization and v1-to-v2 migration still create
-their usual default. The v1 format is unchanged.
+names are invalid. A new registry defaults to its first explicitly named
+connection; adding another preserves the existing default or no-default state.
+Existing v1 reads and named v1-to-v2 imports remain supported.
 
 ```bash
 dbcli use --unset
@@ -1419,7 +1426,7 @@ dbcli never creates a database file. A `file` path that does not exist fails at 
 
 ### Creating a SQLite connection
 
-`dbcli init --system sqlite` asks two questions — the database file path and the permission — and nothing about a host, port, user, password or database name, because a SQLite connection has none of them. Non-interactively, pass the path as `--file`:
+`dbcli init --system sqlite` first asks for a connection name unless `--conn-name` is supplied, then asks for the database file path and permission, with no questions about a host, port, user, password or database name, because a SQLite connection has none of them. Non-interactively, provide both `--conn-name` and the path as `--file`:
 
 ```bash
 dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive
@@ -1437,7 +1444,7 @@ Today, `init`, `use`, `status`, `list`, `schema`, `query`, `q`, `queries`, `expo
 
 ### MongoDB connection configuration
 
-`dbcli init --system mongodb` defaults to a field-by-field wizard, matching the SQL engines: Host, whether it is an SRV domain, Port (skipped for SRV), User, and — only when a User is set — Password plus `authSource`, followed by an optional advanced step for `replicaSet` / `tls`. Pasting a full connection string is now the explicit second choice ("Paste a full connection string (advanced)"). Non-interactive usage is unchanged: passing `--uri` skips the mode prompt entirely and behaves exactly as before.
+`dbcli init --system mongodb` defaults to a field-by-field wizard, matching the SQL engines: Host, whether it is an SRV domain, Port (skipped for SRV), User, and — only when a User is set — Password plus `authSource`, followed by an optional advanced step for `replicaSet` / `tls`. Pasting a full connection string is now the explicit second choice ("Paste a full connection string (advanced)"). Passing `--uri` still skips the connection-mode prompt; noninteractive usage also requires `--conn-name`.
 
 Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
 
@@ -1786,7 +1793,7 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 ### B. Cross-cutting scenarios
 
 - **Switch between environments (v2)**: `dbcli use prod` changes the default; `dbcli query --use staging "<SQL>"` overrides for one call only. Each named connection has its **own schema cache** at `.dbcli/schemas/<conn>/` — run `dbcli schema --use <name>` once after switching, or you may read another connection's columns. (See **Connection Management**.)
-- **Reference env vars for secrets in CI**: connection settings already live in home storage (`~/.config/dbcli/…`), never in the project `.dbcli/`. `dbcli init --use-env-refs` goes further and stores `{ "$env": "VAR" }` references resolved at runtime instead of any plaintext. In a non-interactive run you **must** pass all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext. **MongoDB differs**: only `--env-host` is required; `--env-port` / `--env-user` / `--env-password` / `--env-database` are optional, and an omitted one is written as a literal value (empty string for `user` / `password`, the resolved value for `port` / `database`) rather than an `$env` reference that would later fail closed for a field the connection was never meant to have. `init` also skips the connection test in this mode — the `$env` references have no value to connect with yet — regardless of `--skip-test`.
+- **Reference env vars for secrets in CI**: connection settings already live in home storage (`~/.config/dbcli/…`), never in the project `.dbcli/`. `dbcli init --use-env-refs` goes further and stores `{ "$env": "VAR" }` references resolved at runtime instead of any plaintext. In a non-interactive run you **must** pass `--conn-name` and all five `--env-*` flags or `init` errors out — it never silently falls back to plaintext. **MongoDB differs**: only `--env-host` is required; `--env-port` / `--env-user` / `--env-password` / `--env-database` are optional, and an omitted one is written as a literal value (empty string for `user` / `password`, the resolved value for `port` / `database`) rather than an `$env` reference that would later fail closed for a field the connection was never meant to have. `init` also skips the connection test in this mode — the `$env` references have no value to connect with yet — regardless of `--skip-test`.
 - **Verify an invariant or write outcome**: `snapshot` captures a baseline → `assert --against <snap> --tolerance <pct>` compares; `q @name --verify` runs snippet assertions; `recover --apply --write-verification-artifact` persists secret-free evidence. (See **Data Verification**.)
 - **Spot N+1 / slow queries in local dev**: run the app through `dbcli proxy <engine> --listen ... --target ...` to capture events, then `dbcli proxy analyze` aggregates them offline into N+1, slowest-query, and hot-table findings. (See **dbcli proxy**.)
 

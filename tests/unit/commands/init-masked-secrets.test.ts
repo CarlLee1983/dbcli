@@ -13,7 +13,8 @@ import { join } from 'node:path'
 import { Command } from 'commander'
 import { initCommand } from '@/commands/init'
 import { promptUser } from '@/utils/prompts'
-import { configModule } from '@/core/config'
+import * as configV2 from '@/core/config-v2'
+import * as configBinding from '@/core/config-binding'
 import { AdapterFactory, ConnectionError } from '@/adapters'
 
 const CANARY = 'Sup3r-Canary-Pw'
@@ -83,9 +84,22 @@ async function runInit(
     return Boolean(answerFor(label))
   })
 
-  const writeSpy = spyOn(configModule, 'write').mockImplementation(async (_path, config) => {
+  const writeSpy = spyOn(configV2, 'writeV2Config').mockImplementation(async (_path, config) => {
     written = config
   })
+  // Keep the named-v2 write boundary observable without creating a project
+  // binding or home-storage directory for this prompt-only unit fixture.
+  const bindingSpy = spyOn(configBinding, 'writeProjectBinding').mockImplementation(
+    async (projectPath, storagePath = '') => ({
+      version: 3,
+      binding: {
+        type: 'home-storage',
+        storagePath,
+        projectPath,
+        createdAt: new Date().toISOString(),
+      },
+    })
+  )
   const logSpy = spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
     captured.push(args.map(String).join(' '))
   })
@@ -170,6 +184,7 @@ async function runInit(
       selectSpy,
       confirmSpy,
       writeSpy,
+      bindingSpy,
       logSpy,
       errorSpy,
       warnSpy,
@@ -202,7 +217,16 @@ describe('interactive init collects credentials through the masked prompt', () =
   for (const system of ['postgresql', 'mysql', 'mariadb', 'redis', 'elasticsearch'] as const) {
     test(`${system} routes the password through the masked prompt and never echoes it`, async () => {
       const { askedByText, askedBySecret, written, output, failure } = await runInit(
-        ['--system', system, '--config', configPath, '--skip-test', '--force'],
+        [
+          '--conn-name',
+          'default',
+          '--system',
+          system,
+          '--config',
+          configPath,
+          '--skip-test',
+          '--force',
+        ],
         [
           ['host', 'db.example.com'],
           ['user', 'app'],
@@ -214,15 +238,24 @@ describe('interactive init collects credentials through the masked prompt', () =
       expect(failure).toBeUndefined()
       expect(askedBySecret.some((label) => label.toLowerCase().includes('password'))).toBe(true)
       expect(askedByText.some((label) => label.toLowerCase().includes('password'))).toBe(false)
-      expect(written?.connection?.password === CANARY).toBe(true)
-      expect(written?.connection?.user).toBe('app')
+      expect(written?.connections?.default?.password === CANARY).toBe(true)
+      expect(written?.connections?.default?.user).toBe('app')
       expect(output.includes(CANARY)).toBe(false)
     })
   }
 
   test('host, port, user, database, and env-var names stay visible prompts', async () => {
     const { askedByText, askedBySecret } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'postgresql',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [['password', CANARY]]
     )
 
@@ -237,6 +270,8 @@ describe('interactive init collects credentials through the masked prompt', () =
   test('env-ref mode asks for variable names in the clear and never a value', async () => {
     const { askedBySecret, written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'postgresql',
         '--config',
@@ -249,12 +284,21 @@ describe('interactive init collects credentials through the masked prompt', () =
     )
 
     expect(askedBySecret).toHaveLength(0)
-    expect(written?.connection?.password).toEqual({ $env: 'DB_PASSWORD' })
+    expect(written?.connections?.default?.password).toEqual({ $env: 'DB_PASSWORD' })
   })
 
   test('MongoDB field mode masks the password', async () => {
     const { askedByText, askedBySecret, written, output } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['Host', 'db.example.com'],
         ['User', 'app'],
@@ -265,13 +309,22 @@ describe('interactive init collects credentials through the masked prompt', () =
 
     expect(askedBySecret.some((label) => label.includes('Password'))).toBe(true)
     expect(askedByText.some((label) => label.includes('Password'))).toBe(false)
-    expect(written?.connection?.password === CANARY).toBe(true)
+    expect(written?.connections?.default?.password === CANARY).toBe(true)
     expect(output.includes(CANARY)).toBe(false)
   })
 
   test('MongoDB URI mode masks the pasted connection string', async () => {
     const { askedByText, askedBySecret, written, output } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['連線設定方式', '貼上完整連線字串（進階）'],
         ['連線字串', CANARY_URI],
@@ -281,7 +334,7 @@ describe('interactive init collects credentials through the masked prompt', () =
 
     expect(askedBySecret.some((label) => label.includes('連線字串'))).toBe(true)
     expect(askedByText.some((label) => label.includes('連線字串'))).toBe(false)
-    expect(written?.connection?.uri === CANARY_URI).toBe(true)
+    expect(written?.connections?.default?.uri === CANARY_URI).toBe(true)
     expect(output.includes(CANARY)).toBe(false)
     expect(output.includes(CANARY_URI)).toBe(false)
   })
@@ -291,6 +344,8 @@ describe('explicit inputs bypass the secret prompt', () => {
   test('--password is kept and never re-asked', async () => {
     const { askedBySecret, written, output } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'postgresql',
         '--config',
@@ -304,13 +359,15 @@ describe('explicit inputs bypass the secret prompt', () => {
     )
 
     expect(askedBySecret).toHaveLength(0)
-    expect(written?.connection?.password === CANARY).toBe(true)
+    expect(written?.connections?.default?.password === CANARY).toBe(true)
     expect(output.includes(CANARY)).toBe(false)
   })
 
   test('MongoDB --password is kept and never re-asked', async () => {
     const { askedBySecret, written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -327,12 +384,14 @@ describe('explicit inputs bypass the secret prompt', () => {
     )
 
     expect(askedBySecret).toHaveLength(0)
-    expect(written?.connection?.password === CANARY).toBe(true)
+    expect(written?.connections?.default?.password === CANARY).toBe(true)
   })
 
   test('MongoDB --uri skips the setup-mode and URI prompts', async () => {
     const { askedByText, askedBySecret, written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -347,12 +406,14 @@ describe('explicit inputs bypass the secret prompt', () => {
 
     expect(askedBySecret).toHaveLength(0)
     expect(askedByText.some((label) => label.includes('連線設定方式'))).toBe(false)
-    expect(written?.connection?.uri === CANARY_URI).toBe(true)
+    expect(written?.connections?.default?.uri === CANARY_URI).toBe(true)
   })
 
   test('--no-interactive never reaches a secret prompt', async () => {
     const { askedBySecret, written, exited } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'postgresql',
         '--config',
@@ -370,12 +431,21 @@ describe('explicit inputs bypass the secret prompt', () => {
 
     expect(askedBySecret).toHaveLength(0)
     expect(exited).toBe(false)
-    expect(written?.connection?.user).toBe('app')
+    expect(written?.connections?.default?.user).toBe('app')
   })
 
   test('--no-interactive with missing input fails validation and writes nothing', async () => {
     const { askedBySecret, written, failure, exited } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--no-interactive', '--skip-test'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'postgresql',
+        '--config',
+        configPath,
+        '--no-interactive',
+        '--skip-test',
+      ],
       []
     )
 
@@ -388,7 +458,16 @@ describe('explicit inputs bypass the secret prompt', () => {
 describe('the secret prompt fails closed', () => {
   test('a non-TTY run stops before writing rather than reading plaintext', async () => {
     const { written, output, exited } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'postgresql',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [['password', CANARY]],
       {
         tty: false,
@@ -407,7 +486,16 @@ describe('the secret prompt fails closed', () => {
 
   test('an unavailable masked prompt names a supported input and not --stdin', async () => {
     const { written, output } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'postgresql',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [],
       {
         secret: async (label) => {
@@ -428,7 +516,16 @@ describe('the secret prompt fails closed', () => {
 
   test('cancelling the masked prompt propagates and writes nothing', async () => {
     const { written, output, exited } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'postgresql',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [],
       {
         secret: async () => {
@@ -454,7 +551,7 @@ describe('failed connection tests do not reproduce the credential', () => {
 
   test('a SQL driver error quoting the password is redacted', async () => {
     const { output, exited } = await runInit(
-      ['--system', 'postgresql', '--config', configPath, '--force'],
+      ['--conn-name', 'default', '--system', 'postgresql', '--config', configPath, '--force'],
       [
         ['host', 'db.example.com'],
         ['user', 'app'],
@@ -475,7 +572,7 @@ describe('failed connection tests do not reproduce the credential', () => {
 
   test('a MongoDB driver error reproducing the URI is redacted', async () => {
     const { output, exited } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--force'],
+      ['--conn-name', 'default', '--system', 'mongodb', '--config', configPath, '--force'],
       [
         ['連線設定方式', '貼上完整連線字串（進階）'],
         ['連線字串', CANARY_URI],

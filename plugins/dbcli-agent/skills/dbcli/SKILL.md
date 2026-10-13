@@ -328,9 +328,10 @@ or `doctor` / `status` reports a missing or invalid config, follow this flow.
 
 ### Decision tree (ask before writing)
 
-1. **One DB or many environments?** One → v1 (single connection). Multiple
-   environments / tenants / replicas → v2 (`--conn-name <name>`, optionally
-   `--env-file <path>` per connection).
+1. **What is the connection name?** Every new connection uses named v2, even
+   for one DB. Confirm a nonblank `--conn-name <name>` (optionally an
+   `--env-file <path>` per connection). `--name` means the database, not the
+   connection. Existing v1 configs remain readable and support named v2 import.
 2. **Where do credentials live?**
    - Already in a `.env` (`DATABASE_URL` or `DB_HOST` / `DB_PORT` / `DB_USER` /
      `DB_PASSWORD` / `DB_NAME` | `DB_DATABASE`) → `init` parses it automatically.
@@ -347,31 +348,41 @@ or `doctor` / `status` reports a missing or invalid config, follow this flow.
    blacklist summary, no creds) and `dbcli doctor --format json` (env, config
    shape, connectivity, schema-cache age, Mongo SRV path).
 
+`init` asks for a connection name in an interactive TTY when `--conn-name` is
+omitted, without suggesting `default`. Blank prompt answers are explained and
+re-prompted; cancellation/end of input stops before testing or writing. An explicit
+nonblank name skips this prompt; `--conn-name default` is valid. An explicitly
+blank `--conn-name` is an error in every mode before testing or writing. Non-TTY, `--no-interactive`,
+and complete `--use-env-refs`/`--env-*` automatic noninteractive mode require an
+explicit nonblank `--conn-name` or fail before database access or config/credential
+writes. Plain `init` and explicit `--config` paths both create named v2, never new
+unnamed v1. `--remove` and `--rename` do not prompt for a new connection name.
+
 ### Per-engine essentials
 
 ```bash
-# PostgreSQL / MySQL / MariaDB (v1, plain values)
-dbcli init --system postgresql --host localhost --port 5432 \
+# PostgreSQL / MySQL / MariaDB (named v2, plain values)
+dbcli init --conn-name local --system postgresql --host localhost --port 5432 \
   --user app --password '<secret>' --name appdb --permission query-only
 
 # Reuse an existing .env (DATABASE_URL=postgresql://user:pw@host:5432/db)
 dbcli init                                                # parses .env in cwd
 
 # MongoDB — field-by-field (no auth = omit --user/--password)
-dbcli init --system mongodb --host localhost --port 27017 --name mydb
-dbcli init --system mongodb --host localhost --port 27017 \
+dbcli init --conn-name local --system mongodb --host localhost --port 27017 --name mydb
+dbcli init --conn-name local --system mongodb --host localhost --port 27017 \
   --user admin --password '<secret>' --auth-source admin --name mydb
 # MongoDB — full URI (advanced escape hatch: multi-host, non-standard driver options)
-dbcli init --system mongodb \
+dbcli init --conn-name local --system mongodb \
   --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
 
 # Redis — `--name` is the LOGICAL DB INDEX ("0".."15"), not a database name
-dbcli init --system redis --host localhost --port 6379 --password '<secret>' --name 0
+dbcli init --conn-name local --system redis --host localhost --port 6379 --password '<secret>' --name 0
 
 # Elasticsearch — basic auth, Cloud ID, or API key
-dbcli init --system elasticsearch --host localhost --port 9200 \
+dbcli init --conn-name local --system elasticsearch --host localhost --port 9200 \
   --user elastic --password '<secret>'
-dbcli init --system elasticsearch \
+dbcli init --conn-name local --system elasticsearch \
   --cloud-id "myCluster:dXMtZWFzdC0xLmF3..." --api-key "<base64>"
 # Multi-node / custom CA / self-signed: edit `.dbcli` directly to add
 # `nodes: [...]`, `protocol: https`, `caPath`, `rejectUnauthorized: false`.
@@ -411,8 +422,9 @@ a connection explicitly for its connection checks (`dbcli --use staging doctor`)
 Removing the default with `init --remove` clears it and reports that change,
 without choosing a replacement. Other removals preserve the current default or
 its absence; the last connection cannot be deleted. Renaming preserves no
-default, or updates the default name when appropriate. Existing init/v1 migration
-defaults and production confirmation rules are unchanged.
+default, or updates the default name when appropriate. The first explicitly named
+connection defaults a new registry; additions preserve an existing default or
+no-default state. Existing v1 imports and production confirmation rules are unchanged.
 
 Rotating one connection's password — nothing else in the config moves:
 
@@ -463,11 +475,12 @@ dbcli init --conn-name prod --env-file .env.production --use-env-refs --skip-tes
 
 In an **interactive terminal**, omitting the `--env-*` flags prompts for each key name
 (defaults above) — you can type a non-default name like `PROD_DB_PASSWORD` and it is stored
-as a `$env` ref. In a **non-interactive / CI** run you **must** pass all five `--env-*`
+as a `$env` ref. In a **non-interactive / CI** run you **must** pass `--conn-name` and all five `--env-*`
 flags; otherwise `init` exits with an error — it never silently falls back to plaintext.
 `--env-file <path>` is the path to the env file, independent of the `$env` key names.
 
-**MongoDB is the exception**: only `--env-host` is required non-interactively.
+**MongoDB has fewer required env-reference flags**: besides `--conn-name`, only
+`--env-host` is required non-interactively.
 `--env-port` / `--env-user` / `--env-password` / `--env-database` are optional — an
 omitted one is written as a literal value (empty string for `user` / `password`, the
 resolved value for `port` / `database`) instead of an `$env` ref, so a field the
@@ -492,8 +505,10 @@ refs have no value to connect with yet.
   values are rejected.
 - **Elasticsearch TLS** — `caPath` and `rejectUnauthorized` are not exposed as
   flags; edit `.dbcli` after `init` to add them.
-- **Re-running `init`** — refuses to overwrite without `--force`; never use
-  `--force` to "fix" a config full of `{ "$env": "..." }` refs.
+- **Re-running `init` with the same name** — requires interactive overwrite
+  confirmation or `--force`; a noninteractive duplicate without `--force` or a
+  declined confirmation leaves files untouched. Never use `--force` to "fix"
+  a config full of `{ "$env": "..." }` refs or choose a name for the user.
 
 Full flags and edge cases: see [reference.md](reference.md#init).
 
@@ -501,7 +516,7 @@ Full flags and edge cases: see [reference.md](reference.md#init).
 
 | Command | Min permission | Summary |
 |---------|-----------------|---------|
-| `init` | n/a | Create `.dbcli` (v1 single or v2 multi via `--conn-name` / `--env-file`). **Usually run by the human** — do NOT re-run to strip `{"$env"}` references; that format is intentional. |
+| `init` | n/a | Create a named v2 connection (`--conn-name` required outside an interactive TTY). **Usually run by the human** — do NOT re-run to strip `{"$env"}` references; that format is intentional. |
 | `use` | n/a | Show/switch default named connection (v2 only). |
 | `capabilities` | n/a | Static capability catalog + `check --require <ids>` requirement gate. No database connection. `--format text\|json\|markdown` (`check` is `text\|json`). Exit `0`/`1`/`2`. |
 | `list` | query-only+ | Tables (SQL), collections (MongoDB), keys (Redis), or indices (Elasticsearch). |

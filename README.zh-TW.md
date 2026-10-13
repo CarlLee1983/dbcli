@@ -159,7 +159,7 @@ dbcli export "SELECT * FROM users" --format html --output report.html
 | 設定 | 單一連線物件 | `config.json` 內 `version: 2`，含 `connections`（多個具名連線）與 `default`（預設使用哪一組） |
 | 典型檔案 | 舊版可能為單一 `.dbcli` 檔或目錄內單一連線 | `.dbcli/config.json`（目錄結構） |
 
-若你已有 **v1** 設定，之後執行 `dbcli init --conn-name ...` 追加連線時，工具會把既有連線**匯入為名稱 `default` 的連線**，再寫入 v2 結構，無須手動搬設定。
+新建立的連線一律使用 **v2**，即使只有一條連線；**v1** 只保留既有設定的讀取相容性。若你已有 **v1** 設定，之後執行 `dbcli init --conn-name ...` 追加連線時，工具會把既有連線**匯入為名稱 `default` 的連線**，再寫入 v2 結構，無須手動搬設定。
 
 ### 預設連線 vs 單次指定
 
@@ -171,7 +171,13 @@ dbcli export "SELECT * FROM users" --format html --output report.html
 
 ### 初始化與追加連線
 
-第一次可直接 `dbcli init`（可互動輸入）；要**追加**另一環境時，在 `init` 加上 **`--conn-name`**，並可搭配 **`--env-file`** 讓該連線讀獨立的環境檔：
+每次新建或新增連線都必須有非空白的連線名稱。可傳入 `--conn-name <name>`，或在互動式終端機執行 `dbcli init`，由程式主動詢問。名稱提示不會建議 `default`；輸入空字串或只有空白時，會說明名稱必填並再次詢問。取消或結束名稱提示會在連線測試、設定或憑證寫入前停止。明確提供非空白的 `--conn-name` 就不會再問名稱，`--conn-name default` 仍然合法。明確傳入空白的 `--conn-name` 則在任何模式都會於連線測試或寫入前報錯。`--name` 仍代表資料庫名稱（Redis 則是邏輯資料庫索引），不能當作連線名稱。
+
+沒有 TTY、指定 `--no-interactive`，或 `--use-env-refs` 搭配全部五個 `--env-*` 選項而自動停用互動時，缺少或空白的 `--conn-name` 會在存取資料庫、寫入設定或憑證前明確報錯，並提示補上名稱。完整憑證、`--name`、`--env-file` 與 `--force` 都不能代替連線名稱。
+
+新初始化一律建立具名 v2 設定，包含單純的 `init` 與明確的 `--config` 路徑，不再建立未命名的 v1 設定。既有 v1 設定仍可讀取，也保留原有的具名 v2 匯入流程。全新 registry 的第一條明確具名連線仍會成為預設；新增到既有 registry 時，則保留原本的預設值或無預設狀態。明確選擇已存在的名稱時，仍須互動確認覆寫或指定 `--force`；非互動同名操作未帶 `--force`，或拒絕互動確認時，都不會改動檔案。`--remove` 與 `--rename` 不會詢問新的連線名稱。
+
+可搭配 **`--env-file`** 讓具名連線讀取獨立的環境檔：
 
 ```bash
 # 使用 .env.staging 建立名為 staging 的連線
@@ -218,8 +224,8 @@ v2 設定可省略 `default`；若提供，必須是既有連線的非空名稱�
 
 移除目前的預設連線會清除預設值並回報，不會另選替代連線。移除其他連線會保留
 原本的預設值或無預設狀態；刪除最後一條連線則會被拒絕且不寫入。更名會保留
-無預設狀態，或同步更新預設名稱。既有初始化與 v1 遷移仍會建立原本的預設值，
-正式環境防護也維持不變。
+無預設狀態，或同步更新預設名稱。新 registry 的第一條明確具名連線會成為預設；
+新增連線則保留原本的預設值或無預設狀態。既有 v1 匯入與正式環境防護維持不變。
 
 ### 臨時指定連線（不改預設）
 
@@ -262,23 +268,23 @@ dbcli init [OPTIONS]
 - `--port <port>` — 埠號
 - `--user <user>` — 使用者
 - `--password <pass>` — 密碼
-- `--name <db>` — 資料庫名稱
+- `--name <db>` — 資料庫名稱，不能代替必填的 `--conn-name`
 - `--permission <level>` — 權限等級：`query-only`、`read-write`、`data-admin`、`admin`
 - **僅 MongoDB：** `--uri <uri>` — 完整連線 URI（`mongodb://…` 或 `mongodb+srv://…`）；`--auth-source <db>` — 驗證資料庫（使用帳密時預設為 `admin`）
 - `--use-env-refs` — 在設定檔中儲存環境變數名稱參照，而非實際值
 - `--skip-test` — 略過連線測試
 - `--no-interactive` — 非互動模式（須提供所有必要選項）
-- `--force` — 覆寫既有設定且不詢問確認
+- `--force` — 覆寫明確指定名稱的既有連線且不詢問確認
 
 **選項 (多重連線 v2)：**
-- `--conn-name <name>` — 建立具名連線（例如 `staging`、`prod`）
+- `--conn-name <name>` — 必填連線名稱（例如 `staging`、`prod`）；互動式終端機省略時會主動詢問
 - `--env-file <path>` — 從指定的 `.env` 檔案載入此連線的憑證
 - `--remove <name>` — 從設定中移除具名連線
 - `--rename <old:new>` — 重新命名現有連線（格式：`舊名:新名`）
 
 **行為：**
 - 若存在 `.env` 會讀取（自動帶入 DATABASE_URL、DB_* 等變數）
-- 缺少的欄位會互動提示（主機、埠、使用者、密碼、資料庫名、權限等級）
+- 先取得非空白連線名稱，再於互動式終端機詢問缺少的欄位（主機、埠、使用者、密碼、資料庫名、權限等級）
 - 在 `.dbcli/config.json` 建立專案綁定 stub，並將完整設定儲存在 `~/.config/dbcli/projects/<project-id>/`
 - 儲存前會測試資料庫連線
 
@@ -292,7 +298,7 @@ dbcli init --conn-name staging --env-file .env.staging
 dbcli init --conn-name prod --env-file .env.production --use-env-refs
 
 # 儲存環境變數參照（非互動）
-dbcli init --use-env-refs --system mysql \
+dbcli init --conn-name local --use-env-refs --system mysql \
   --env-host DB_HOST --env-port DB_PORT \
   --env-user DB_USER --env-password DB_PASSWORD \
   --env-database DB_DATABASE \

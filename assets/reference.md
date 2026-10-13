@@ -119,24 +119,24 @@ dbcli query '{}' --collection events --format json 2>/dev/null | jq '.rows | len
 Initialize `.dbcli` configuration file. Typically run manually by the developer — avoid running on behalf of the user unless explicitly requested.
 
 ```bash
-dbcli init                                              # Single connection (v1 format)
-dbcli init --system mysql --host localhost --port 3306 --user root --name mydb
+dbcli init                                              # Prompt for a name; create named v2
+dbcli init --conn-name local --system mysql --host localhost --port 3306 --user root --name mydb
 dbcli init --use-env-refs                               # Store env var references
-dbcli init --no-interactive --force                     # Non-interactive mode
+dbcli init --conn-name local --no-interactive --force    # Non-interactive; credentials from environment
 
 # MongoDB — field-by-field (primary path, same shape as SQL)
-dbcli init --system mongodb --host localhost --port 27017 --user admin --password secret --auth-source admin --name mydb
-dbcli init --system mongodb --host localhost --port 27017 --name mydb  # No auth
+dbcli init --conn-name local --system mongodb --host localhost --port 27017 --user admin --password secret --auth-source admin --name mydb
+dbcli init --conn-name local --system mongodb --host localhost --port 27017 --name mydb  # No auth
 # MongoDB — full URI (advanced fallback: multi-host, non-standard driver options)
-dbcli init --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
+dbcli init --conn-name local --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
 
 # Redis (database = logical DB index)
-dbcli init --system redis --host localhost --port 6379
-dbcli init --system redis --host localhost --port 6379 --password secret --name 0
+dbcli init --conn-name local --system redis --host localhost --port 6379
+dbcli init --conn-name local --system redis --host localhost --port 6379 --password secret --name 0
 
 # Elasticsearch
-dbcli init --system elasticsearch --host localhost --port 9200 --user elastic --password changeme
-dbcli init --system elasticsearch --cloud-id "myCluster:dXMtZWFzdC0xLmF3..." --api-key "<base64>"
+dbcli init --conn-name local --system elasticsearch --host localhost --port 9200 --user elastic --password changeme
+dbcli init --conn-name local --system elasticsearch --cloud-id "myCluster:dXMtZWFzdC0xLmF3..." --api-key "<base64>"
 
 # Multi-connection (v2 format)
 dbcli init --conn-name staging --env-file .env.staging   # Named connection with custom env file
@@ -151,6 +151,12 @@ dbcli --global init --conn-name shared --system postgresql --host db.example.com
 dbcli --global use --list
 ```
 
+Every new or additional connection needs a nonblank connection name. Pass `--conn-name <name>`, or run `dbcli init` in an interactive terminal to be asked for one. The name prompt has no suggested `default`; empty or whitespace-only answers explain the requirement and prompt again. Cancelling or ending the name prompt stops before any connection test or configuration/credential write. An explicit nonblank `--conn-name` skips this prompt, and `--conn-name default` is valid. An explicitly blank `--conn-name` is an error in every mode, before connection tests or writes. `--name` still means the database name (the logical DB index for Redis), never the connection name.
+
+Without a TTY, with `--no-interactive`, or when `--use-env-refs` plus all five `--env-*` options automatically disables interaction, a missing or blank `--conn-name` fails with guidance to supply it, before database access or configuration/credential writes. Complete credentials, `--name`, `--env-file`, and `--force` do not supply a connection name.
+
+New initialization always creates named v2 configuration, including plain `init` and explicit `--config` paths; it no longer creates an unnamed v1 configuration. Existing v1 configurations remain readable and their established named v2 import is retained. The first explicitly named connection is still the default in a new registry; adding a connection preserves an existing registry's default or no-default state. An explicitly chosen duplicate name still requires interactive overwrite confirmation or `--force`; a noninteractive duplicate without `--force`, or a declined confirmation, leaves files untouched. `--remove` and `--rename` do not ask for a new connection name.
+
 **Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
 
 **Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
@@ -161,12 +167,13 @@ dbcli --global use --list
 
 **Redis note:** the `database` (or `--name`) field is the logical DB index (`"0"` … `"15"`), not a database name.
 
-**Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
+**Multi-connection:** Every newly created connection uses v2 with an explicitly supplied or interactively entered name. Each connection can have its own env file and permission level; `--env-file` does not replace the name requirement. Existing v1 configs are automatically imported as the `default` connection when upgrading.
 
 V2 may omit the top-level `default` field; if supplied, it must be a nonempty
 string naming an existing connection. `null`, `""`, and nonexistent names are
-invalid. Existing initialization and v1 migration still establish their usual
-default; neither the v1 format nor the v2 version changes.
+invalid. The first explicitly named connection defaults a new registry; adding
+another preserves the existing default or no-default state. Existing v1 reads
+and named v1 imports remain supported; neither configuration version changes.
 
 Legacy project configuration compatibility: adding a connection cannot import a
 direct-project v2 registry when an existing connection uses an `envFile` other
@@ -3637,7 +3644,7 @@ Parser behaviour (`src/core/saved-queries/parser.ts::normaliseVisual`):
 
 MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB support as a narrower document-database path, not as a full SQL feature equivalent.
 
-`init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow and the unchanged non-interactive path via `--uri`. Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
+`init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow and the non-interactive path via `--uri` (with the required `--conn-name`). Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
 The 5000ms default server-selection timeout is often too tight for a connection over a VPN or to Atlas. Set a `timeout` field (ms) in the connection config, or override it per invocation with root-level `--timeout`, e.g. `dbcli --timeout 20000 --use <conn> list`.
 
@@ -3663,10 +3670,10 @@ The 5000ms default server-selection timeout is often too tight for a connection 
 
 ```bash
 # 1. Initialize — field-by-field (primary path)
-dbcli init --system mongodb --host localhost --port 27017 \
+dbcli init --conn-name local --system mongodb --host localhost --port 27017 \
   --user admin --password '<secret>' --auth-source admin --name mydb
 # ...or a full URI (advanced fallback, e.g. Atlas SRV clusters)
-dbcli init --system mongodb --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
+dbcli init --conn-name local --system mongodb --uri "mongodb+srv://user:pass@cluster.example.mongodb.net/mydb"
 
 # 2. List collections
 dbcli list --format json

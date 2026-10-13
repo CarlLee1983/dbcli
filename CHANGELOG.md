@@ -86,6 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Elasticsearch 整合驗證不再把未執行的 roundtrip 算成通過。** 測試的 DOM preload
+  同時保留 Bun 的 `fetch`、`AbortController` 與 `AbortSignal`，避免混用不同實作而在
+  HTTP 送出前失敗。有服務時的連線／初始化錯誤會讓測試失敗；只有明確停用整合測試，
+  或本機未要求必備服務且 TCP 端點不存在時，才記為真正的 skip。CI 必須實跑建立索引、
+  寫入、refresh、查詢、schema 斷言與清理，完成後才輸出 roundtrip 驗證紀錄。
+  這是測試基礎設施修正，沒有改變發布套件的 adapter 行為。
+
 - **PostgreSQL 的 schema 重新回報主鍵、索引與外鍵欄位。** 對 `pg_attribute.attname` 做
   `array_agg` 得到的是 `name[]`，node-postgres 把它當字串回傳，schema 因此丟掉了這些欄位，
   寫入閘門也就拒絕了每一筆結構化寫入。改為先轉成 `text`。

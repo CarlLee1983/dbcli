@@ -163,10 +163,11 @@ dbcli export "SELECT * FROM users" --format html --output report.html
 
 ### 預設連線 vs 單次指定
 
-- **`dbcli use <名稱>`** — 變更設定檔裡的**預設連線**（持久）。之後執行 `dbcli query`、`dbcli list` 等**未**加 `--use` 的指令，都會用這一組。
+- **`dbcli use <名稱>`** — 變更設定檔裡的**預設連線**（持久）。之後執行 `dbcli query`、`dbcli list` 等指令時，若沒有 `--use` 或 `DBCLI_CONNECTION`，會使用此預設值；正式環境連線仍須明確選取。
+- **`dbcli use --unset`** — 清除預設值。之後需要連線的指令必須明確指定 `--use` 或 `DBCLI_CONNECTION`。
 - **`dbcli ... --use <名稱>`**（全域選項）— **只影響這一條指令**，不改預設。適合在仍以 `dev` 為預設時，偶爾查一下 `prod`。
 
-兩者都**需要 v2 設定**；若指令回報需要 v2，請先完成至少一次具名連線初始化（見下方）。
+以上指令都**需要 v2 設定**；若指令回報需要 v2，請先完成至少一次具名連線初始化（見下方）。
 
 ### 初始化與追加連線
 
@@ -203,10 +204,22 @@ dbcli use --list          # 列出全部；* = 預設
 
 dbcli use staging         # 將預設連線改為 staging（寫入設定）
 dbcli use                 # 顯示目前預設名稱並列出連線
+dbcli use --unset         # 清除預設值，不移除連線（僅 v2）
 
 dbcli init --remove staging              # 從設定移除某具名連線
 dbcli init --rename staging:production    # 更名（格式：舊名:新名）
 ```
+
+v2 設定可省略 `default`；若提供，必須是既有連線的非空名稱，不能是 `null` 或 `""`。
+沒有預設值時，需要連線的指令必須使用 `--use` 或 `DBCLI_CONNECTION`，否則會在
+存取資料庫之前失敗，列出可用名稱而不含端點或憑證。`dbcli use` 會說明此狀態，
+文字清單不標示預設，JSON 清單每筆都回傳 `isDefault: false`；`doctor` 也接受此設定，
+但其連線檢查仍須指定 selector，例如 `dbcli --use staging doctor`。
+
+移除目前的預設連線會清除預設值並回報，不會另選替代連線。移除其他連線會保留
+原本的預設值或無預設狀態；刪除最後一條連線則會被拒絕且不寫入。更名會保留
+無預設狀態，或同步更新預設名稱。既有初始化與 v1 遷移仍會建立原本的預設值，
+正式環境防護也維持不變。
 
 ### 臨時指定連線（不改預設）
 
@@ -299,6 +312,16 @@ dbcli use [連線名稱] [選項]
 
 **選項：**
 - `--list` — 列出所有連線並顯示目前的預設值
+- `--unset` — 清除儲存的預設值；已無預設值時也會成功
+- `--format <text|json>` — 選擇清單輸出格式
+- `--confirm-production <name>` — 重複完全相同的名稱，確認設定正式環境預設值
+
+`--unset` 若同時提供連線名稱、`--list`、`--confirm-production` 或 `--format json`，
+會拒絕且不寫入。它不會轉換或覆寫 v1，並使用與切換預設值相同的核准及 integrity
+record 保護寫入流程，在 agent mode 中會被擋下。選擇優先序仍是 `--use` >
+`DBCLI_CONNECTION` > 儲存的預設值。root 與指令層級 selector 衝突、CLI selector
+空白時都會失敗；空白的環境變數 selector 則視為未設定。詳見
+[連線管理](docs/user/zh-TW/index.md#連線管理)。
 
 **範例：**
 ```bash

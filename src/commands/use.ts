@@ -5,6 +5,7 @@
 import { Command } from 'commander'
 import {
   assertProductionDefaultConfirmation,
+  clearDefaultConnection,
   connectionNotFoundMessage,
   readV2Config,
   writeV2Config,
@@ -46,7 +47,7 @@ export async function switchDefault(
   options: { confirmProduction?: string } = {}
 ): Promise<void> {
   const connection = config.connections[name]
-  if (!connection) {
+  if (!Object.hasOwn(config.connections, name) || !connection) {
     throw new ConfigError(connectionNotFoundMessage(name, Object.keys(config.connections)))
   }
   assertProductionDefaultConfirmation(name, connection.environment, options.confirmProduction)
@@ -122,7 +123,7 @@ export function listConnectionIdentities(config: DbcliConfigV2): ConnectionIdent
  * Check if config is v2 format, throw helpful error if not.
  * Supports V1 config by returning a virtual V2 config for display purposes.
  */
-async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
+async function ensureV2Config(configPath: string, allowV1 = true): Promise<DbcliConfigV2> {
   const storagePath = await resolveConfigStoragePath(configPath)
   const configFile = Bun.file(join(storagePath, 'config.json'))
 
@@ -140,6 +141,7 @@ async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
     })()
 
     if (!raw.version || raw.version !== 2 || !raw.connections) {
+      if (!allowV1) throw new ConfigError(t('use.requires_v2'))
       // It's a V1 config. Return a virtual V2 representation.
       const v1Config = await configModule.read(configPath)
       return {
@@ -167,9 +169,10 @@ async function ensureV2Config(configPath: string): Promise<DbcliConfigV2> {
 }
 
 export const useCommand = new Command('use')
-  .description('Switch or display the default database connection (v2 config)')
+  .description('Set, unset, or display the default database connection (v2 config)')
   .argument('[name]', 'Connection name to switch to')
   .option('--list', 'List all connections')
+  .option('--unset', 'Clear the default connection and require explicit selection (v2 only)')
   .option('--format <format>', 'Output format: text (default) or json', 'text')
   .option(
     '--confirm-production <name>',
@@ -178,8 +181,23 @@ export const useCommand = new Command('use')
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       validateFormat(String(options.format), ALLOWED_FORMATS, 'use')
+      if (
+        options.unset &&
+        (name !== undefined ||
+          options.list ||
+          options.confirmProduction !== undefined ||
+          options.format === 'json')
+      ) {
+        throw new ConfigError(t('use.unset_conflict'))
+      }
       const configPath = resolveConfigPath(useCommand)
-      const config = await ensureV2Config(configPath)
+      const config = await ensureV2Config(configPath, !options.unset)
+
+      if (options.unset) {
+        await clearDefaultConnection(configPath)
+        console.log(t('use.unset'))
+        return
+      }
 
       if (name && !options.list && options.format === 'json') {
         throw new ConfigError('--format json is only supported with --list')
@@ -192,7 +210,11 @@ export const useCommand = new Command('use')
         }
 
         if (!name) {
-          console.log(t_vars('use.current', { name: config.default }))
+          console.log(
+            config.default === undefined
+              ? t('use.current_none')
+              : t_vars('use.current', { name: config.default })
+          )
         }
 
         console.log('')

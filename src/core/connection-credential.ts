@@ -11,7 +11,7 @@ import { resolveConfigStoragePath } from '@/core/config-binding'
 import {
   readV2Config,
   writeV2Config,
-  connectionNotFoundMessage,
+  resolveConnection,
   detectConfigVersion,
 } from '@/core/config-v2'
 import { writeConfigWithIntegrity } from '@/core/config-integrity'
@@ -94,18 +94,12 @@ export async function resolvePasswordTarget(
   }
 
   const config = await readV2Config(projectPath)
-  const targetName = connectionName ?? config.default
-  const connection = config.connections[targetName] as
-    | { password?: unknown; envFile?: string }
-    | undefined
-  if (!connection) {
-    throw new ConfigError(connectionNotFoundMessage(targetName, Object.keys(config.connections)))
-  }
+  const { name: targetName, connection, envFile } = resolveConnection(config, connectionName)
 
   const referencedVar = envRefName(connection.password)
   return {
     connection: targetName,
-    envFile: connection.envFile ?? DEFAULT_ENV_FILE,
+    envFile: envFile ?? DEFAULT_ENV_FILE,
     varName: referencedVar ?? envVarNameFor(targetName, 'password'),
     convertedToEnvRef: referencedVar === undefined,
   }

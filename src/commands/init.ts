@@ -16,7 +16,13 @@ import { mkdir } from 'node:fs/promises'
 import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
 import { configModule } from '@/core/config'
-import { readV2Config, writeV2Config, detectConfigVersion } from '@/core/config-v2'
+import {
+  readV2Config,
+  writeV2Config,
+  detectConfigVersion,
+  ConnectionSelectionRequiredError,
+} from '@/core/config-v2'
+import { removeConnection } from '@/core/config-v2-mutations'
 import { getDefaultsForSystem } from '@/adapters/defaults'
 import { promptUser } from '@/utils/prompts'
 import { redactSecretsForDisplay } from '@/utils/redaction'
@@ -32,7 +38,7 @@ import {
   resolveConfigStoragePath,
   writeProjectBinding,
 } from '@/core/config-binding'
-import { checkOverwrite, writeV2InitConfig } from './init-shared'
+import { assertV2InitImportSupported, checkOverwrite, writeV2InitConfig } from './init-shared'
 import { handleMongoDBInit } from './init-mongodb'
 import { handleSQLiteInit } from './init-sqlite'
 
@@ -73,21 +79,12 @@ async function handleRemove(configPath: string, name: string): Promise<void> {
     throw new Error(t('init.cannot_remove_last'))
   }
 
-  const remaining = Object.fromEntries(
-    Object.entries(config.connections).filter(([connectionName]) => connectionName !== name)
-  )
-  const newDefault = config.default === name ? Object.keys(remaining)[0]! : config.default
-
-  const updated: DbcliConfigV2 = {
-    ...config,
-    default: newDefault,
-    connections: remaining,
-  }
+  const updated = removeConnection(config, name)
 
   await writeV2Config(storagePath, updated)
 
   if (config.default === name) {
-    console.log(t_vars('init.connection_removed_switched', { name, newDefault }))
+    console.log(t_vars('init.connection_removed_default_cleared', { name }))
   } else {
     console.log(t_vars('init.connection_removed', { name }))
   }
@@ -219,8 +216,15 @@ async function initCommandHandler(
   const isV2Init = !!(options.connName || options.envFile || isGlobalConfig)
   const connectionName = (options.connName as string) || 'default'
 
-  // 1. Load existing config
-  const existingConfig = await configModule.read(configPath)
+  if (isV2Init) await assertV2InitImportSupported(configPath)
+
+  // 1. Load existing config. Adding a named connection does not execute an
+  // existing target. A validated no-default registry is preserved by
+  // writeV2InitConfig below; only v1 initialization needs a resolved old config.
+  const existingConfig = await configModule.read(configPath).catch((error: unknown) => {
+    if (isV2Init && error instanceof ConnectionSelectionRequiredError) return undefined
+    throw error
+  })
 
   // 2. Determine whether to enter interactive mode
   // If --use-env-refs is set and all --env-* options are provided, automatically go non-interactive
@@ -356,10 +360,13 @@ async function initCommandHandler(
     }
 
     // Merge config and save
-    const newConfig = configModule.merge(existingConfig, {
+    const updates = {
       connection: configForWrite,
       permission: permission as (typeof VALID_PERMISSIONS)[number],
-    })
+    }
+    const newConfig = existingConfig
+      ? configModule.merge(existingConfig, updates)
+      : configModule.validate(updates)
 
     // Check existing file and prompt for overwrite confirmation
     const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)
@@ -498,10 +505,13 @@ async function initCommandHandler(
     }
   }
 
-  const newConfig = configModule.merge(existingConfig, {
+  const updates = {
     connection: configForWrite as any,
     permission: permission as 'query-only' | 'read-write' | 'data-admin' | 'admin',
-  })
+  }
+  const newConfig = existingConfig
+    ? configModule.merge(existingConfig, updates)
+    : configModule.validate(updates)
 
   // 7. Check existing file and prompt for overwrite confirmation
   const canProceed = await checkOverwrite(configPath, shouldPrompt, !!options.force)

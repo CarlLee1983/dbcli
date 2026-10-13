@@ -163,17 +163,37 @@ dbcli --global use --list
 
 **Multi-connection:** Using `--conn-name` or `--env-file` creates a v2 config with named connections. Each connection can have its own env file and permission level. Existing v1 configs are automatically imported as the `default` connection when upgrading.
 
+V2 may omit the top-level `default` field; if supplied, it must be a nonempty
+string naming an existing connection. `null`, `""`, and nonexistent names are
+invalid. Existing initialization and v1 migration still establish their usual
+default; neither the v1 format nor the v2 version changes.
+
+Legacy project configuration compatibility: adding a connection cannot import a
+direct-project v2 registry when an existing connection uses an `envFile` other
+than `.env.local`. `init` refuses before writing and retains the existing config
+and env files. An administrator must migrate the registry and custom env files
+to supported home storage before retrying. Bound/home-storage v2 configs and
+direct-project v2 configs with no `envFile` or only `.env.local` remain supported.
+
+`init --remove <name>` clears `default` and reports that change when removing its
+connection; it never chooses another connection. Removing a non-default keeps
+the saved default, and removing a connection from a no-default config keeps that
+state. The public `removeConnection` helper follows the same rules. Deleting
+the last connection is rejected without changing the config. Renaming preserves
+the no-default state, or updates the default name when renaming that connection.
+
 Use root-level `--global` with `init`, `use`, `status`, `query`, or any other command to read or mutate the user-global v2 registry at `~/.config/dbcli/config.json`. Without it, the current project binding remains the source of truth. The global registry uses the same private file mode and integrity record as project home storage.
 
 > **AI agent note on `--use-env-refs`:** If an existing `.dbcli` config contains `{"$env": "DB_HOST"}` style references, the connection values are read from environment variables at runtime. Do NOT re-run `init` to replace these references with actual values — the env-ref format is intentional for CI/CD and multi-environment setups.
 
 ### use
 
-Switch or display the default database connection (v2 multi-connection config).
+Set, clear, or display the default database connection (v2 multi-connection config).
 
 ```bash
-dbcli use                   # Show current default connection
+dbcli use                   # Show the current default, or describe no default
 dbcli use staging           # Switch default to 'staging'
+dbcli use --unset            # Clear the saved default; connections are unchanged
 dbcli use --list            # List all connections (* marks default)
 dbcli use --list --format json # Credential-free connection identity inventory
 ```
@@ -188,17 +208,43 @@ Cloud ID-only Elasticsearch connections also return `null` instead of default
 placeholders. It deliberately excludes user names, passwords, URIs, Cloud IDs,
 API keys, and env variable names.
 Misspelled selectors suggest nearby configured connection names.
+Without a default, text inventory marks no connection as default and every JSON
+item has `isDefault: false`. Inventory remains usable, and `doctor` accepts an
+omitted default as valid v2 configuration. Its connection checks still require
+an explicit selector, for example `dbcli --use staging doctor`.
 
-Any command can also use `--use <name>` to temporarily select a connection without changing the default:
+Any command can also use root-level `--use <name>` before the command to
+temporarily select a connection without changing the default. `query`, `schema`,
+`list`, `export`, and `check` also accept it after the command:
 
 ```bash
 dbcli query --use staging "SELECT * FROM users LIMIT 10"
 dbcli list --use prod
 ```
 
+Selection precedence is explicit `--use`, then `DBCLI_CONNECTION`, then the
+saved default. Conflicting root-level and command-level selectors are an error;
+blank CLI selectors are invalid, while a blank environment selector is ignored.
+Without a default, connection-dependent commands require an explicit `--use` or
+`DBCLI_CONNECTION` selection. Otherwise they fail before database access with
+an error naming both selectors and listing available connection names, never
+endpoints or credentials. No caller selects the first connection automatically.
+Unknown names and production targets retain their validation and explicit
+selection safeguards.
+
+`use --unset` removes only the persisted v2 `default` field and reports that it
+was cleared. It also succeeds when the field is already absent without changing
+connections. It rejects a connection name, `--list`, `--confirm-production`, or
+`--format json` in the same invocation before writing, and never converts or
+overwrites v1. It uses the existing approved, integrity-protected configuration
+write path and is blocked under `DBCLI_AGENT_MODE=1`. To set a default again, use
+`dbcli use <name>`; production defaults still require the exact name repeated in
+`--confirm-production <name>`, and production database access still requires an
+explicit selector even if that connection is the saved default.
+
 **Requires v2 config** (created with `dbcli init --conn-name`).
 
-**Options:** `--list`, `--format <text|json>`, `--confirm-production <name>` (required when explicitly selecting a production connection as the default).
+**Options:** `--list`, `--unset`, `--format <text|json>`, `--confirm-production <name>` (required when explicitly selecting a production connection as the default).
 
 ### password
 

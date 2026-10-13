@@ -50,6 +50,28 @@ export async function checkOverwrite(
   throw new Error(t('init.config_exists_use_force'))
 }
 
+/** Refuse a legacy import that would strand relative per-connection env files. */
+export async function assertV2InitImportSupported(configPath: string): Promise<void> {
+  if (isGlobalConfigPath(configPath)) return
+  const projectConfig = Bun.file(join(configPath, 'config.json'))
+  if (!(await projectConfig.exists())) return
+  const raw: unknown = JSON.parse(await projectConfig.text())
+  // Home-storage bindings and v1 migrations keep their existing workflow.
+  if (detectConfigVersion(raw) !== 2) return
+
+  const config = await readV2Config(configPath)
+  if (
+    Object.values(config.connections).some(
+      (connection) => connection.envFile && connection.envFile !== '.env.local'
+    )
+  ) {
+    throw new Error(
+      '此舊版專案 V2 設定包含自訂 envFile。新增連線會搬移設定，但目前僅支援搬移 .env.local。' +
+        '請先由管理員完成設定與自訂 envFile 的 home storage 遷移，再重試。原設定與 env 檔案未變更。'
+    )
+  }
+}
+
 export async function writeV2InitConfig(
   configPath: string,
   connectionName: string,
@@ -57,6 +79,7 @@ export async function writeV2InitConfig(
   permission: string,
   envFile?: string
 ): Promise<void> {
+  await assertV2InitImportSupported(configPath)
   const globalConfig = isGlobalConfigPath(configPath)
   const storagePath = globalConfig ? configPath : getProjectStoragePath(configPath)
   const configJsonPath = join(storagePath, 'config.json')
@@ -92,22 +115,10 @@ export async function writeV2InitConfig(
   } else if (await projectConfigFile.exists()) {
     const raw = JSON.parse(await projectConfigFile.text())
     if (detectConfigVersion(raw) === 2) {
-      const v1Config = await configModule.read(configPath)
-      existingV2 = {
-        version: 2,
-        default: 'default',
-        connections: {
-          default: {
-            ...v1Config.connection,
-            permission: v1Config.permission,
-          },
-        },
-        schema: v1Config.schema || {},
-        schemas: { default: v1Config.schema || {} },
-        metadata: v1Config.metadata || { version: '1.0' },
-        blacklist: v1Config.blacklist || { tables: [], columns: {} },
-        audit: v1Config.audit,
-      }
+      // Import the complete registry, including an intentionally absent default.
+      // Projecting one resolved connection here would drop its neighbours and
+      // turn a setup-only operation into an implicit target selection.
+      existingV2 = await readV2Config(configPath)
     } else {
       // V1 config in the project directory — import it as 'default' connection
       const v1Config = await configModule.read(configPath)

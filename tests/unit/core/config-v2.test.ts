@@ -106,6 +106,37 @@ describe('config-v2', () => {
       expect(result.environment).toBe('staging')
     })
 
+    test('accepts an omitted default but still rejects invalid supplied defaults', () => {
+      const { default: _default, ...withoutDefault } = v2Config
+      expect(DbcliConfigV2Schema.safeParse(withoutDefault).success).toBe(true)
+      expect(DbcliConfigV2Schema.safeParse(v2Config).success).toBe(true)
+      for (const value of [null, '', 'missing']) {
+        expect(DbcliConfigV2Schema.safeParse({ ...withoutDefault, default: value }).success).toBe(
+          false
+        )
+      }
+      expect(DbcliConfigV2Schema.safeParse({ ...withoutDefault, connections: {} }).success).toBe(
+        false
+      )
+    })
+
+    test('requires explicit selection without a default, listing names without secrets', () => {
+      const { default: _default, ...withoutDefault } = v2Config
+      expect(resolveConnection(withoutDefault, 'staging').name).toBe('staging')
+      let message = ''
+      try {
+        resolveConnection(withoutDefault, undefined)
+      } catch (error) {
+        message = (error as Error).message
+      }
+      expect(message).toContain('--use')
+      expect(message).toContain('DBCLI_CONNECTION')
+      expect(message).toContain('local, staging')
+      expect(message).not.toContain('staging.example.com')
+      expect(message).not.toContain('stagingpass')
+      expect(message).not.toContain('undefined')
+    })
+
     test('should throw for non-existent connection', () => {
       expect(() => resolveConnection(v2Config, 'nonexistent')).toThrow(/不存在/)
     })
@@ -168,6 +199,12 @@ describe('config-v2', () => {
       expect(read.version).toBe(2)
       expect(read.default).toBe('local')
       expect(read.connections.local!.host).toBe('localhost')
+
+      const { default: _default, ...withoutDefault } = config
+      await writeV2Config(configPath, withoutDefault)
+      const readWithoutDefault = await readV2Config(configPath)
+      expect(Object.hasOwn(readWithoutDefault, 'default')).toBe(false)
+      expect(readWithoutDefault.connections).toEqual(read.connections)
     })
   })
 

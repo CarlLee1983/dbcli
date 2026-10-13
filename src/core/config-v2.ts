@@ -125,12 +125,25 @@ export function findSimilarConnectionNames(
 }
 
 export function connectionNotFoundMessage(
-  requestedName: string,
+  requestedName: string | undefined,
   availableNames: readonly string[]
 ): string {
+  if (requestedName === undefined) {
+    return (
+      '尚未設定預設連線。請使用 --use <name> 或設定 DBCLI_CONNECTION 明確指定連線。' +
+      ` 可用連線：${availableNames.join(', ')}`
+    )
+  }
   const suggestions = findSimilarConnectionNames(requestedName, availableNames)
   const suggestion = suggestions.length > 0 ? ` 你是否要使用：${suggestions.join('、')}？` : ''
   return `連線 '${requestedName}' 不存在。${suggestion} 可用連線：${availableNames.join(', ')}`
+}
+
+/** A valid no-default config needs a target, not repair or reinitialization. */
+export class ConnectionSelectionRequiredError extends ConfigError {
+  constructor(availableNames: readonly string[]) {
+    super(connectionNotFoundMessage(undefined, availableNames))
+  }
 }
 
 /**
@@ -141,9 +154,12 @@ export function resolveConnection(
   name: string | undefined
 ): ResolvedConnection {
   const connectionName = name ?? config.default
+  if (connectionName === undefined) {
+    throw new ConnectionSelectionRequiredError(Object.keys(config.connections))
+  }
   const conn = config.connections[connectionName]
 
-  if (!conn) {
+  if (!Object.hasOwn(config.connections, connectionName) || !conn) {
     throw new ConfigError(
       connectionNotFoundMessage(connectionName, Object.keys(config.connections))
     )
@@ -173,10 +189,8 @@ export async function loadConnectionEnv(
   }
 }
 
-/**
- * Read and validate a v2 config from disk
- */
-export async function readV2Config(path: string): Promise<DbcliConfigV2> {
+/** Read one integrity-checked document, before schema defaults are applied. */
+async function readV2ConfigDocument(path: string): Promise<unknown> {
   const storagePath = await resolveConfigStoragePath(path)
   const configPath = join(storagePath, 'config.json')
   const file = Bun.file(configPath)
@@ -188,9 +202,24 @@ export async function readV2Config(path: string): Promise<DbcliConfigV2> {
   await assertAgentReadableFile(configPath)
   const content = await file.text()
   await assertConfigIntegrity(storagePath, content, { requireRecord: true })
-  const raw = JSON.parse(content)
+  return JSON.parse(content)
+}
 
-  return DbcliConfigV2Schema.parse(raw)
+/** Read and validate a v2 config from disk. */
+export async function readV2Config(path: string): Promise<DbcliConfigV2> {
+  return DbcliConfigV2Schema.parse(await readV2ConfigDocument(path))
+}
+
+/** Clear only the stored default; a no-op must not normalize connection fields. */
+export async function clearDefaultConnection(path: string): Promise<void> {
+  assertConfigMutationApproved()
+  const raw = await readV2ConfigDocument(path)
+  const config = DbcliConfigV2Schema.parse(raw)
+  if (config.default === undefined) return
+
+  const updated = { ...(raw as DbcliConfigV2) }
+  delete updated.default
+  await writeV2Config(path, updated)
 }
 
 /**

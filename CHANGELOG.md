@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **v2 可以不設定預設連線。** 省略 `default` 即可要求每次透過 `--use` 或
+  `DBCLI_CONNECTION` 明確選取；未選取時會在連線前失敗，列出可用名稱而不洩漏
+  端點或憑證。新增 `dbcli use --unset`，透過既有核准與 integrity record 保護
+  流程清除預設值，重複執行也安全。刪除預設連線會清除預設值，不再依 JSON
+  順序改選另一條；仍禁止刪除最後一條連線。清單與 doctor 支援無預設狀態，
+  初始化與 v1 遷移建立預設值的方式、selector 優先序與正式環境防護不變（#212）。
+  若新增連線會匯入帶有自訂 `envFile`（非 `.env.local`）的舊版直接專案 v2
+  設定，`init` 會在寫入前拒絕並保留原檔，須先由管理員完成 home storage 遷移。
+
 ## [9.2.0] - 2026-10-13
 
 Bun 最低版本提高到 1.4.0、兩個讓 PostgreSQL schema 少報欄位的修正、audit gate 可以

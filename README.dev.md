@@ -34,7 +34,7 @@ Before tagging a release (the tag triggers `npm publish` in CI):
 
 3. **Update version in package.json:**
    ```bash
-   npm version minor   # bumps version + creates git tag (in this repo)
+   npm version minor --no-git-tag-version   # bumps version without creating a tag
    # OR edit the "version" field in package.json by hand
    ```
 

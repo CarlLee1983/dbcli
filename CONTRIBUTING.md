@@ -291,6 +291,16 @@ reports the same green as a passing one. Two guards exist:
 - `REQUIRE_INTEGRATION_SERVICES=true` turns the auto-skip into a failure. CI's
   `integration` job sets it, so a job that starts no services goes red.
 
+The Elasticsearch roundtrip registers a real skip only for an explicit
+`SKIP_INTEGRATION_TESTS=true` or an optional, unreachable TCP service. Once its
+service is listening, adapter/setup failures fail the test even on a developer
+machine; required-service mode also rejects an absent service or conflicting
+skip flags. A successful run prints `Elasticsearch roundtrip verified` only
+after create, insert, refresh, query, schema assertions, and cleanup complete.
+Do not count an early return or a reachable port as completed database coverage.
+The DOM preload preserves native `fetch`, `AbortController`, and `AbortSignal`
+together so browser test globals cannot break the adapter's timed HTTP requests.
+
 Connection defaults live in one place, `tests/integration/helpers.ts`. Use them
 rather than writing an address into a test: the two spellings that grew up side
 by side (`PG_PORT` at 5433 and `PGPORT` at 5432) left several files pointing at
@@ -332,7 +342,7 @@ Run all of these before pushing a `vX.Y.Z` tag and confirm green:
 - [ ] `bun run agent-core:check` — 公開 agent-core 不含資料庫專屬詞彙或內部／CLI framework 相依
 - [ ] `bun run release:check` — 包含文件／manifest 檢查、`docs/feature-matrix.md` 的 `audit` row、`CHANGELOG.md` 的 `## [<version>]` heading，以及 GitHub Pages 文件測試（D-78）
 - [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
-- [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major`）
+- [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major --no-git-tag-version`）
 - [ ] Benchmark（`bun run test:perf`）— blocking CI gate；確認所有預算與實測輸出皆通過
 
 ### GitHub Pages

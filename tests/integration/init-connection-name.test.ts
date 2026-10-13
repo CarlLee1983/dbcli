@@ -64,6 +64,10 @@ async function run(args: string[], options: RunOptions = {}): Promise<Result> {
   Object.assign(env, {
     HOME: join(workspace, 'home'),
     XDG_CONFIG_HOME: join(workspace, 'home', '.config'),
+    // Bun's own caches are harness artifacts, not application writes. Pin both
+    // paths so snapshots stay strict regardless of the developer/CI cache env.
+    BUN_INSTALL_CACHE_DIR: join(workspace, 'harness', 'bun-install-cache'),
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: join(workspace, 'harness', 'bun-transpiler-cache'),
     DBCLI_CONFIG_HOME: join(workspace, 'registry'),
     DBCLI_CONFIG_INTEGRITY_ANCHOR_DIR: join(workspace, 'anchors'),
     DBCLI_LANG: 'en',

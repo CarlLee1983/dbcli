@@ -5,6 +5,8 @@
   "init": {
     "description": "Initialize dbcli configuration with .env parsing and interactive prompts",
     "welcome": "Welcome to dbcli",
+    "prompt_connection_name": "Connection name",
+    "connection_name_required": "Connection name is required. Provide --conn-name <name> (this is separate from the database --name).",
     "select_system": "Select database system:",
     "prompt_host": "Database host: ",
     "prompt_port": "Database port: ",

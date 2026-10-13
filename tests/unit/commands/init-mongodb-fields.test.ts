@@ -12,13 +12,14 @@ import { join } from 'node:path'
 import { Command } from 'commander'
 import { initCommand } from '@/commands/init'
 import { promptUser } from '@/utils/prompts'
-import { configModule } from '@/core/config'
+import * as configV2 from '@/core/config-v2'
+import * as configBinding from '@/core/config-binding'
 import { AdapterFactory } from '@/adapters'
 
 interface RunResult {
   /** 依序記錄每一次提問的標籤，用來斷言提問順序 */
   askedLabels: string[]
-  /** configModule.write 收到的設定內容 */
+  /** writeV2Config 收到的 named-v2 設定內容 */
   written: any
   /** init 是否走到 process.exit（錯誤路徑） */
   exited: boolean
@@ -72,9 +73,22 @@ async function runInit(
     const answer = answerFor(label)
     return answer === '' ? false : Boolean(answer)
   })
-  const writeSpy = spyOn(configModule, 'write').mockImplementation(async (_path, config) => {
+  const writeSpy = spyOn(configV2, 'writeV2Config').mockImplementation(async (_path, config) => {
     written = config
   })
+  // Keep the named-v2 write boundary observable without creating a project
+  // binding or home-storage directory for this prompt-only unit fixture.
+  const bindingSpy = spyOn(configBinding, 'writeProjectBinding').mockImplementation(
+    async (projectPath, storagePath = '') => ({
+      version: 3,
+      binding: {
+        type: 'home-storage',
+        storagePath,
+        projectPath,
+        createdAt: new Date().toISOString(),
+      },
+    })
+  )
 
   // init 的 action 會攔下例外、印訊息後 process.exit(1)。不攔截的話整個
   // 測試行程會就地死掉，後面的 test 全部不會執行。
@@ -115,6 +129,7 @@ async function runInit(
     selectSpy.mockRestore()
     confirmSpy.mockRestore()
     writeSpy.mockRestore()
+    bindingSpy.mockRestore()
     consoleErrorSpy.mockRestore()
     exitSpy.mockRestore()
   }
@@ -142,9 +157,18 @@ describe('init — MongoDB 逐欄連線設定', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  test('第一個提問是連線設定方式，且預設為逐欄填寫', async () => {
+  test('明示連線名稱後第一個提問是連線設定方式，且預設為逐欄填寫', async () => {
     const { askedLabels } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [['Database name', 'shop']]
     )
 
@@ -155,7 +179,16 @@ describe('init — MongoDB 逐欄連線設定', () => {
 
   test('逐欄分支寫出的設定含 authSource 且不含 uri', async () => {
     const { written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['Host', 'db.example.com'],
         ['Port', '27017'],
@@ -166,37 +199,57 @@ describe('init — MongoDB 逐欄連線設定', () => {
       ]
     )
 
-    expect(written.connection).toMatchObject({
+    expect(written.version).toBe(2)
+    expect(written.default).toBe('default')
+    expect(written.connections.default).toMatchObject({
       system: 'mongodb',
       host: 'db.example.com',
       user: 'app',
       database: 'shop',
       authSource: 'appdb',
     })
-    expect(written.connection.uri).toBeUndefined()
+    expect(written.connections.default.uri).toBeUndefined()
   })
 
   test('無認證時 user/password 為空字串，且不寫 authSource', async () => {
     const { written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['Host', 'db.example.com'],
         ['Database name', 'shop'],
       ]
     )
 
-    expect(written.connection.host).toBe('db.example.com')
+    expect(written.connections.default.host).toBe('db.example.com')
     // 空字串是 mongo schema 對「無認證」的既有表示法（與 Redis 一致），
     // 不是 URI 模式那種假的 host 佔位值。
-    expect(written.connection.user).toBe('')
-    expect(written.connection.password).toBe('')
-    expect(written.connection.authSource).toBeUndefined()
+    expect(written.connections.default.user).toBe('')
+    expect(written.connections.default.password).toBe('')
+    expect(written.connections.default.authSource).toBeUndefined()
   })
 
   test('Port 輸入非數字時重問，不會把 NaN 寫進設定', async () => {
     let portAsks = 0
     const { written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['Host', 'db.example.com'],
         ['Database name', 'shop'],
@@ -211,12 +264,21 @@ describe('init — MongoDB 逐欄連線設定', () => {
     )
 
     expect(portAsks).toBe(2)
-    expect(written.connection.port).toBe(27018)
+    expect(written.connections.default.port).toBe(27018)
   })
 
   test('選了貼上連線字串卻直接 Enter 時，退回逐欄而非寫出空 host', async () => {
     const { written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['連線設定方式', '貼上完整連線字串（進階）'],
         ['Host', 'db.example.com'],
@@ -224,13 +286,22 @@ describe('init — MongoDB 逐欄連線設定', () => {
       ]
     )
 
-    expect(written.connection.uri).toBeUndefined()
-    expect(written.connection.host).toBe('db.example.com')
+    expect(written.connections.default.uri).toBeUndefined()
+    expect(written.connections.default.host).toBe('db.example.com')
   })
 
   test('選擇貼上連線字串時才問 URI', async () => {
     const { askedLabels, written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--skip-test',
+        '--force',
+      ],
       [
         ['連線設定方式', '貼上完整連線字串（進階）'],
         ['連線字串', 'mongodb://user:pass@host:27017/shop'],
@@ -239,12 +310,14 @@ describe('init — MongoDB 逐欄連線設定', () => {
     )
 
     expect(askedLabels.join('\n')).toContain('連線字串')
-    expect(written.connection.uri).toBe('mongodb://user:pass@host:27017/shop')
+    expect(written.connections.default.uri).toBe('mongodb://user:pass@host:27017/shop')
   })
 
   test('--uri 非互動用法不受影響，完全不提問連線設定方式', async () => {
     const { askedLabels, written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -262,12 +335,14 @@ describe('init — MongoDB 逐欄連線設定', () => {
     )
 
     expect(askedLabels.join('\n')).not.toContain('連線設定方式')
-    expect(written.connection.uri).toBe('mongodb://user:pass@host:27017/shop')
+    expect(written.connections.default.uri).toBe('mongodb://user:pass@host:27017/shop')
   })
 
   test('--use-env-refs 讓逐欄分支的密碼存成 env 參照而非明文', async () => {
     const { written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -292,7 +367,7 @@ describe('init — MongoDB 逐欄連線設定', () => {
       []
     )
 
-    expect(written.connection).toMatchObject({
+    expect(written.connections.default).toMatchObject({
       system: 'mongodb',
       host: { $env: 'MONGO_HOST' },
       user: { $env: 'MONGO_USER' },
@@ -306,6 +381,8 @@ describe('init — MongoDB 逐欄連線設定', () => {
     try {
       const { written } = await runInit(
         [
+          '--conn-name',
+          'default',
           '--system',
           'mongodb',
           '--config',
@@ -330,7 +407,7 @@ describe('init — MongoDB 逐欄連線設定', () => {
       // env-ref 存的是變數名稱而非值，沒有東西可以拿去連線
       expect(factorySpy).not.toHaveBeenCalled()
       expect(written).not.toBeNull()
-      expect(written.connection.host).toEqual({ $env: 'MONGO_HOST' })
+      expect(written.connections.default.host).toEqual({ $env: 'MONGO_HOST' })
     } finally {
       factorySpy.mockRestore()
     }
@@ -339,6 +416,8 @@ describe('init — MongoDB 逐欄連線設定', () => {
   test('env-ref 模式下未指定的 user/password 不會被強制變成 $env 參照', async () => {
     const { written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -358,13 +437,15 @@ describe('init — MongoDB 逐欄連線設定', () => {
     )
 
     // 指向未定義環境變數的 $env 會讓之後每一個指令都拋 ConfigError
-    expect(written.connection.user).toBe('')
-    expect(written.connection.password).toBe('')
+    expect(written.connections.default.user).toBe('')
+    expect(written.connections.default.password).toBe('')
   })
 
   test('非互動 env-ref 缺少 --env-host 時報錯，不靜默套用建議變數名', async () => {
     const { exited, errors, written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -388,19 +469,31 @@ describe('init — MongoDB 逐欄連線設定', () => {
 
   test('互動 env-ref 下 database 變數名留空時，改問字面資料庫名稱而非報錯', async () => {
     const { written } = await runInit(
-      ['--system', 'mongodb', '--config', configPath, '--use-env-refs', '--skip-test', '--force'],
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--use-env-refs',
+        '--skip-test',
+        '--force',
+      ],
       [
         ['Host 的環境變數名稱', 'MONGO_HOST'],
         ['Database name', 'shop'],
       ]
     )
 
-    expect(written.connection.database).toBe('shop')
+    expect(written.connections.default.database).toBe('shop')
   })
 
   test('--env-database 對 mongo 生效', async () => {
     const { written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -419,12 +512,14 @@ describe('init — MongoDB 逐欄連線設定', () => {
       []
     )
 
-    expect(written.connection.database).toEqual({ $env: 'MONGO_DB' })
+    expect(written.connections.default.database).toEqual({ $env: 'MONGO_DB' })
   })
 
   test('--auth-source 真的會落盤（現況會被 schema 丟棄）', async () => {
     const { written } = await runInit(
       [
+        '--conn-name',
+        'default',
         '--system',
         'mongodb',
         '--config',
@@ -448,6 +543,6 @@ describe('init — MongoDB 逐欄連線設定', () => {
       []
     )
 
-    expect(written.connection.authSource).toBe('appdb')
+    expect(written.connections.default.authSource).toBe('appdb')
   })
 })

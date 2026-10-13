@@ -228,7 +228,7 @@ dbcli extends its unified interface to Redis and Elasticsearch, providing consis
 
 ```bash
 # Connect to Redis
-dbcli init --system redis --host localhost --port 6379
+dbcli init --conn-name local --system redis --host localhost --port 6379
 
 # List keys (uses SCAN)
 dbcli list
@@ -245,7 +245,7 @@ dbcli query "HGETALL user:1"
 
 ```bash
 # Connect to Elasticsearch
-dbcli init --system elasticsearch --host localhost --port 9200
+dbcli init --conn-name local --system elasticsearch --host localhost --port 9200
 
 # List indices and document counts
 dbcli list
@@ -268,7 +268,13 @@ The project `.dbcli` directory now acts as a binding + cache layer. The actual c
 
 ### Initializing Named Connections
 
-To create a named connection, use the `--conn-name` option during `init`. You can also specify a custom `.env` file for that connection.
+Every new or additional connection needs a nonblank connection name. Pass `--conn-name <name>`, or run `dbcli init` in an interactive terminal to be asked for one. The name prompt has no suggested `default`; empty or whitespace-only answers explain the requirement and prompt again. Cancelling or ending the name prompt stops before any connection test or configuration/credential write. An explicit nonblank `--conn-name` skips this prompt, and `--conn-name default` is valid. An explicitly blank `--conn-name` is an error in every mode, before connection tests or writes. `--name` still means the database name (the logical DB index for Redis), never the connection name.
+
+Without a TTY, with `--no-interactive`, or when `--use-env-refs` plus all five `--env-*` options automatically disables interaction, a missing or blank `--conn-name` fails with guidance to supply it, before database access or configuration/credential writes. Complete credentials, `--name`, `--env-file`, and `--force` do not supply a connection name.
+
+New initialization always creates named v2 configuration, including plain `init` and explicit `--config` paths; it no longer creates an unnamed v1 configuration. Existing v1 configurations remain readable and their established named v2 import is retained. The first explicitly named connection is still the default in a new registry; adding a connection preserves an existing registry's default or no-default state. An explicitly chosen duplicate name still requires interactive overwrite confirmation or `--force`; a noninteractive duplicate without `--force`, or a declined confirmation, leaves files untouched. `--remove` and `--rename` do not ask for a new connection name.
+
+Use `--env-file` to specify a custom `.env` file for a named connection:
 
 ```bash
 # Add a staging connection using .env.staging
@@ -325,8 +331,9 @@ its connection checks still require a selector, such as `dbcli --use staging doc
 Removing the current default clears it and reports that change, without choosing
 a replacement. Other removals preserve the default or its absence; deleting the
 last connection is refused without writing. Renaming preserves a missing default
-or updates its name as needed. Existing initialization and v1 migration still
-create their usual default, and production safeguards remain unchanged.
+or updates its name as needed. A new registry defaults to its first explicitly
+named connection; adding another preserves the existing default or no-default
+state. Existing v1 imports and production safeguards remain unchanged.
 
 ### Using a Specific Connection Temporarily
 
@@ -371,23 +378,23 @@ dbcli init [OPTIONS]
 - `--port <port>` — Database port
 - `--user <user>` — Database user
 - `--password <pass>` — Database password
-- `--name <db>` — Database name
+- `--name <db>` — Database name, distinct from the required `--conn-name`
 - `--permission <level>` — Permission level: `query-only`, `read-write`, `data-admin`, `admin`
 - **MongoDB only:** `--uri <uri>` — full connection URI (`mongodb://…` or `mongodb+srv://…`); `--auth-source <db>` — auth database (default `admin` when using user/password)
 - `--use-env-refs` — Store environment variable references instead of actual values in config
 - `--skip-test` — Skip connection test
 - `--no-interactive` — Non-interactive mode (requires all options)
-- `--force` — Overwrite existing config without confirmation
+- `--force` — Overwrite the explicitly named existing connection without confirmation
 
 **Options (Multi-connection v2):**
-- `--conn-name <name>` — Create a named connection (e.g., `staging`, `prod`)
+- `--conn-name <name>` — Required connection name (e.g., `staging`, `prod`); prompts when omitted in an interactive terminal
 - `--env-file <path>` — Load credentials from a specific `.env` file for this connection
 - `--remove <name>` — Remove a named connection from the config
 - `--rename <old:new>` — Rename an existing connection (format: `old:new`)
 
 **Behavior:**
 - Reads `.env` file if present (auto-fills DATABASE_URL, DB_* variables)
-- Prompts for missing values (host, port, user, password, database name, permission level)
+- Obtains a nonblank connection name first; interactive terminals then prompt for missing values (host, port, user, password, database name, permission level)
 - Creates a project binding stub in `.dbcli/config.json` and stores the full config under `~/.config/dbcli/projects/<project-id>/`
 - Tests database connection before saving
 
@@ -401,7 +408,7 @@ dbcli init --conn-name staging --env-file .env.staging
 dbcli init --conn-name prod --env-file .env.production --use-env-refs
 
 # Store env var references (non-interactive)
-dbcli init --use-env-refs --system mysql \
+dbcli init --conn-name local --use-env-refs --system mysql \
   --env-host DB_HOST --env-port DB_PORT \
   --env-user DB_USER --env-password DB_PASSWORD \
   --env-database DB_DATABASE \

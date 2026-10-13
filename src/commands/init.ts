@@ -173,7 +173,7 @@ export const initCommand = new Command('init')
   .option('--skip-test', 'Skip database connection test')
   .option('--no-interactive', 'Non-interactive mode (requires all values via flags)')
   .option('--force', 'Skip overwrite confirmation if .dbcli exists')
-  .option('--conn-name <name>', 'Connection name (creates v2 multi-connection config)')
+  .option('--conn-name <name>', 'Connection name (required in non-interactive mode)')
   .option('--env-file <path>', 'Path to env file for this connection')
   .option('--remove <name>', 'Remove a named connection')
   .option('--rename <names>', 'Rename a connection (format: old:new)')
@@ -211,22 +211,8 @@ async function initCommandHandler(
     return
   }
 
-  // Determine if this is a v2 init
-  const isGlobalConfig = isGlobalConfigPath(configPath)
-  const isV2Init = !!(options.connName || options.envFile || isGlobalConfig)
-  const connectionName = (options.connName as string) || 'default'
-
-  if (isV2Init) await assertV2InitImportSupported(configPath)
-
-  // 1. Load existing config. Adding a named connection does not execute an
-  // existing target. A validated no-default registry is preserved by
-  // writeV2InitConfig below; only v1 initialization needs a resolved old config.
-  const existingConfig = await configModule.read(configPath).catch((error: unknown) => {
-    if (isV2Init && error instanceof ConnectionSelectionRequiredError) return undefined
-    throw error
-  })
-
-  // 2. Determine whether to enter interactive mode
+  // Determine whether to enter interactive mode before reading configuration or
+  // touching a database. A missing name must never become an implicit target.
   // If --use-env-refs is set and all --env-* options are provided, automatically go non-interactive
   const isUsingEnvRefs = options.useEnvRefs
   const hasAllEnvOptions =
@@ -246,6 +232,40 @@ async function initCommandHandler(
   // `options.noInteractive` read was always undefined, so the flag suppressed
   // nothing.
   const shouldPrompt = options.interactive !== false && !hasAllEnvOptions
+
+  let connectionName: string
+  if (typeof options.connName === 'string') {
+    if (!options.connName.trim()) throw new Error(t('init.connection_name_required'))
+    connectionName = options.connName
+  } else {
+    if (!shouldPrompt || !process.stdin.isTTY) {
+      throw new Error(t('init.connection_name_required'))
+    }
+    for (;;) {
+      if (process.stdin.readableEnded || process.stdin.destroyed) {
+        throw new Error(t('init.connection_name_required'))
+      }
+      connectionName = (await promptUser.text(t('init.prompt_connection_name'))).trim()
+      if (connectionName) break
+      console.error(t('init.connection_name_required'))
+    }
+  }
+
+  // Every new connection is explicitly named and uses the existing v2 write
+  // path, including plain init and explicit project paths. Existing v1 configs
+  // remain readable and are imported by writeV2InitConfig as before.
+  const isGlobalConfig = isGlobalConfigPath(configPath)
+  const isV2Init = true
+  await assertV2InitImportSupported(configPath)
+
+  // Adding a connection does not execute an existing target. Preserve a valid
+  // registry even when it deliberately has no default.
+  const existingConfig = await configModule
+    .read(configPath, undefined, { loadLayeredSchema: false })
+    .catch((error: unknown) => {
+      if (error instanceof ConnectionSelectionRequiredError) return undefined
+      throw error
+    })
 
   // 3. Attempt to parse database config from .env
   let envConfig = null

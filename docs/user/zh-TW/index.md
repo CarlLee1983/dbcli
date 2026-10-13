@@ -63,6 +63,12 @@ dbcli 執行於 Bun 1.4.0+。npm 與 npx 可作為發布通道，但安裝後的
 ### 初始化連線
 `init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 進階備援請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
 
+每次新建或新增連線都必須有非空白的連線名稱。可傳入 `--conn-name <name>`，或在互動式終端機執行 `dbcli init`，由程式主動詢問。名稱提示不會建議 `default`；輸入空字串或只有空白時，會說明名稱必填並再次詢問。取消或結束名稱提示會在連線測試、設定或憑證寫入前停止。明確提供非空白的 `--conn-name` 就不會再問名稱，`--conn-name default` 仍然合法。明確傳入空白的 `--conn-name` 則在任何模式都會於連線測試或寫入前報錯。`--name` 仍代表資料庫名稱（Redis 則是邏輯資料庫索引），不能當作連線名稱。
+
+沒有 TTY、指定 `--no-interactive`，或 `--use-env-refs` 搭配全部五個 `--env-*` 選項而自動停用互動時，缺少或空白的 `--conn-name` 會在存取資料庫、寫入設定或憑證前明確報錯，並提示補上名稱。完整憑證、`--name`、`--env-file` 與 `--force` 都不能代替連線名稱。
+
+新初始化一律建立具名 v2 設定，包含單純的 `init` 與明確的 `--config` 路徑，不再建立未命名的 v1 設定。既有 v1 設定仍可讀取，也保留原有的具名 v2 匯入流程。全新 registry 的第一條明確具名連線仍會成為預設；新增到既有 registry 時，則保留原本的預設值或無預設狀態。明確選擇已存在的名稱時，仍須互動確認覆寫或指定 `--force`；非互動同名操作未帶 `--force`，或拒絕互動確認時，都不會改動檔案。`--remove` 與 `--rename` 不會詢問新的連線名稱。
+
 在幕後，`init` 會在專案的 `./.dbcli/config.json` 寫入一個 `version: 3` 的 binding stub，真正的連線設定與任何憑證則存放在家目錄的 `~/.config/dbcli/projects/<project-name>-<sha1-12>/`。如此可還原的敏感資料不會留在專案工作區，掃描 repo 的工具或 AI agent 也看不到。專案的 `.dbcli/` 只保留 binding 與非敏感快取（schema 快取、稽核記錄、快照、驗證產物）。
 
 若要讓多個專案共用連線，請使用明確的全域 scope。它會把 v2 registry 儲存在 `~/.config/dbcli/config.json`，且不會建立專案 binding：
@@ -152,8 +158,9 @@ dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v
 #### 不設定預設連線
 
 v2 設定可以省略最外層的 `default` 欄位。如果提供此欄位，必須是指向既有連線的
-非空字串；`null`、`""` 與不存在的名稱都無效。既有初始化與 v1 升級到 v2 的流程
-仍會建立原本的預設連線，v1 格式也維持不變。
+非空字串；`null`、`""` 與不存在的名稱都無效。新 registry 的第一條明確具名
+連線會成為預設；新增連線則保留原本的預設值或無預設狀態。既有 v1 讀取
+與具名 v1 升級到 v2 的匯入流程仍受支援。
 
 ```bash
 dbcli use --unset
@@ -1275,7 +1282,7 @@ SQLite 連線指名的是一個資料庫**檔案**，不是主機。唯一有意
 
 ### 建立 SQLite 連線
 
-`dbcli init --system sqlite` 只問兩件事——資料庫檔案路徑與權限——不會問 host、port、user、password 或資料庫名稱，因為 SQLite 連線根本沒有這些東西。非互動模式下把路徑寫在 `--file`：
+`dbcli init --system sqlite` 會先詢問連線名稱（除非已提供 `--conn-name`），再詢問資料庫檔案路徑與權限，不會問 host、port、user、password 或資料庫名稱，因為 SQLite 連線根本沒有這些東西。非互動模式下必須提供 `--conn-name`，並把路徑寫在 `--file`：
 
 ```bash
 dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permission query-only --no-interactive
@@ -1293,7 +1300,7 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 
 ### MongoDB 連線設定
 
-`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。非互動用法不受影響：傳入 `--uri` 會直接跳過連線方式提問，行為與過去完全相同。
+`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 `--uri` 仍會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
 
 逐欄連線欄位（`ConnectionConfig`，`src/types/index.ts`）：
 
@@ -1622,7 +1629,7 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 ### B. 跨領域情境
 
 - **多環境切換(v2)**:`dbcli use prod` 切換預設;`dbcli query --use staging "<SQL>"` 只覆寫單次呼叫。每個具名連線有**獨立的 schema cache**(`.dbcli/schemas/<conn>/`)——切換後先跑一次 `dbcli schema --use <name>`,否則可能讀到別的連線的欄位。(見 **連線管理**。)
-- **CI 中用環境變數參照密鑰**:連線設定本來就存放在 home storage(`~/.config/dbcli/…`),不會寫進專案 `.dbcli/`。`dbcli init --use-env-refs` 更進一步,把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照而非明文。非互動式執行時必須傳入全部五個 `--env-*` 旗標,否則 `init` 會直接報錯——絕不會默默退回明文。**MongoDB 是例外**:只有 `--env-host` 為必填,`--env-port` / `--env-user` / `--env-password` / `--env-database` 皆為選填,留空的欄位會寫入字面值(`user` / `password` 寫空字串,`port` / `database` 寫實際值)而非 `$env` 參照——避免一個使用者本來就不需要的欄位,日後因為指向未定義的環境變數而讓每個指令都 fail closed。此模式下 `init` 也不會執行連線測試(`$env` 參照此刻還沒有值可以連),無論是否帶 `--skip-test` 皆然。
+- **CI 中用環境變數參照密鑰**:連線設定本來就存放在 home storage(`~/.config/dbcli/…`),不會寫進專案 `.dbcli/`。`dbcli init --use-env-refs` 更進一步,把憑證存成執行期解析的 `{ "$env": "VAR" }` 參照而非明文。非互動式執行時必須傳入 `--conn-name` 與全部五個 `--env-*` 旗標,否則 `init` 會直接報錯——絕不會默默退回明文。**MongoDB 的 env-reference 必填旗標較少**:除了 `--conn-name`,只有 `--env-host` 為必填,`--env-port` / `--env-user` / `--env-password` / `--env-database` 皆為選填,留空的欄位會寫入字面值(`user` / `password` 寫空字串,`port` / `database` 寫實際值)而非 `$env` 參照——避免一個使用者本來就不需要的欄位,日後因為指向未定義的環境變數而讓每個指令都 fail closed。此模式下 `init` 也不會執行連線測試(`$env` 參照此刻還沒有值可以連),無論是否帶 `--skip-test` 皆然。
 - **驗證不變式或寫入結果**:`snapshot` 建基準 → `assert --against <snap> --tolerance <pct>` 比對;`q @name --verify` 跑 snippet 斷言;`recover --apply --write-verification-artifact` 留下不含機密的證據。(見 **資料驗證**。)
 - **本地開發抓 N+1 / 慢查詢**:讓應用程式走 `dbcli proxy <engine> --listen ... --target ...` 收集事件,再用 `dbcli proxy analyze` 離線聚合出 N+1、最慢查詢與熱表發現。(見 **dbcli proxy**。)
 

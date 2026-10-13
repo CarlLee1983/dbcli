@@ -5,6 +5,8 @@
   "init": {
     "description": "初始化 dbcli 配置，解析 .env 並進行互動式提示",
     "welcome": "歡迎使用 dbcli",
+    "prompt_connection_name": "連線名稱",
+    "connection_name_required": "連線名稱不可空白，請提供 --conn-name <name>（與資料庫名稱 --name 不同）。",
     "select_system": "選擇資料庫系統：",
     "prompt_host": "資料庫主機：",
     "prompt_port": "資料庫埠號：",

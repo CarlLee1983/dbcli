@@ -377,12 +377,16 @@ Publishing is done by GitHub Actions (`.github/workflows/release.yml`) through n
 3. The workflow then runs, in order: `check-tag` (tag equals `v` + `package.json` version, and the commit is an ancestor of `origin/main`), `verify` (test databases, `bun run services:check`, `make verify`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` with provenance), and `github-release` (creates the GitHub Release using the `## [X.Y.Z]` section of `CHANGELOG.md` as notes).
 4. Approve the run in the GitHub Actions UI when `publish` is waiting.
 
-A failed `check-tag` or `verify` publishes nothing; fix the cause, delete the tag (`git push origin :refs/tags/vX.Y.Z`), and tag again.
+A failed `check-tag` or `verify` publishes nothing; fix the cause, delete the tag remotely and locally (`git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`), and tag again.
+
+If `publish` succeeded but `github-release` failed, use "Re-run failed jobs", not "Re-run all jobs": re-running everything fails at `npm publish` because the version already exists.
+
+Only plain `vX.Y.Z` tags are accepted; pre-release or build tags (`v1.2.3-beta.1`) are rejected by `check-tag`.
 
 #### One-time owner setup
 
 1. **npmjs.com trusted publisher** for `@carllee1983/dbcli` (package Settings → Trusted Publisher → GitHub Actions): owner `CarlLee1983`, repository `dbcli`, workflow filename `release.yml`, environment `npm-publish`, allowed action `npm publish`. npm expires a new trusted publisher configuration that has not published within 2 days, so configure it right before the first tagged release.
-2. **GitHub environment** `npm-publish` (repository Settings → Environments) with at least one required reviewer.
+2. **GitHub environment** `npm-publish` (repository Settings → Environments) with at least one required reviewer, and "Deployment branches and tags" set to "Selected branches and tags" with only a tag rule `v*.*.*`.
 
 #### Emergency fallback
 

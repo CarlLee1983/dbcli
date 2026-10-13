@@ -11,7 +11,14 @@ import { describe, test, expect } from 'bun:test'
 const path = `${import.meta.dir}/../../../.github/workflows/release.yml`
 const raw = await Bun.file(path).text()
 
+interface Step {
+  uses?: string
+  run?: string
+  with?: Record<string, unknown>
+}
+
 interface Job {
+  steps?: Step[]
   needs?: string | string[]
   environment?: string | { name: string }
   permissions?: Record<string, string>
@@ -69,5 +76,21 @@ describe('release.yml', () => {
     expect(needs('verify')).toEqual(['check-tag'])
     expect(needs('publish')).toEqual(['verify'])
     expect(needs('github-release')).toEqual(['publish'])
+  })
+
+  test('check-tag requires a plain vX.Y.Z tag and an ancestor of main', () => {
+    const runs = (workflow.jobs['check-tag']?.steps ?? []).map((step) => step.run ?? '').join('\n')
+    expect(runs).toContain('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
+    expect(runs).toContain('merge-base --is-ancestor')
+  })
+
+  test('publish asserts npm >= 11.5.1, installs frozen, and leaves registry-url unset', () => {
+    const steps = workflow.jobs.publish?.steps ?? []
+    const runs = steps.map((step) => step.run ?? '').join('\n')
+    expect(runs).toContain('11.5.1')
+    expect(runs).toContain('bun install --frozen-lockfile')
+    const setupNode = steps.find((step) => step.uses?.startsWith('actions/setup-node@'))
+    expect(setupNode).toBeDefined()
+    expect(setupNode?.with?.['registry-url']).toBeUndefined()
   })
 })

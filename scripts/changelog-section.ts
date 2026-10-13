@@ -3,8 +3,9 @@
  *
  * Usage: `bun run scripts/changelog-section.ts <version> [changelog-path]`
  *
- * The body is everything under `## [X.Y.Z]` up to the next `## [` heading, with
- * the heading line itself left out. A missing or empty section exits non-zero:
+ * The body is everything under `## [X.Y.Z]` up to the next `## ` heading of any kind, with
+ * the heading line itself left out. Any `## ` heading ends it, not only a
+ * version one, so the oldest version does not swallow a trailing `## License`. A missing or empty section exits non-zero:
  * the release workflow runs this after the package is already on npm, and a
  * Release with blank notes would pass unnoticed where a red job gets read.
  */
@@ -14,8 +15,10 @@ export function extractChangelogSection(changelog: string, version: string): str
   const wanted = version.replace(/^v/, '')
   const lines = changelog.split(/\r?\n/)
 
-  const isHeading = (line: string) => line.startsWith('## [')
-  const start = lines.findIndex((line) => isHeading(line) && line.slice(4).startsWith(`${wanted}]`))
+  const isHeading = (line: string) => line.startsWith('## ')
+  const start = lines.findIndex(
+    (line) => line.startsWith('## [') && line.slice(4).startsWith(`${wanted}]`)
+  )
   if (start === -1) throw new Error(`CHANGELOG.md has no "## [${wanted}]" section`)
 
   const rest = lines.slice(start + 1)

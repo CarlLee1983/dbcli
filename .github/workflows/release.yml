@@ -25,8 +25,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Pre-release and build tags (v1.2.3-beta.1, v1.2.3+x) are out of scope:
+      # this workflow publishes stable releases to the default dist-tag only.
       - name: Tag matches package.json
         run: |
+          if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a plain vX.Y.Z release tag; pre-release and build tags are not published"
+            exit 1
+          fi
           version=$(node -p "require('./package.json').version")
           if [ "$GITHUB_REF_NAME" != "v${version}" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json version v${version}"
@@ -100,17 +106,23 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          # No `registry-url`: it writes an .npmrc that reads an auth-token env var
+          # and exports a placeholder for it, which would poison `bun install` and turn
+          # an OIDC failure into a misleading E401. npm defaults to registry.npmjs.org.
 
       # Trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0. The npm
-      # bundled with Node 24 can be older than that, so upgrade and then assert
-      # rather than hope: an old npm falls back to a token and fails confusingly.
+      # bundled with Node 24 can be older than that, so upgrade only when it is,
+      # then assert rather than hope: an old npm falls back to a token and fails
+      # confusingly.
       - name: npm supports trusted publishing
         run: |
-          npm install -g npm@11
+          at_least() { [ "$(printf '%s\n' 11.5.1 "$1" | sort -V | head -n1)" = "11.5.1" ]; }
+          if ! at_least "$(npm --version)"; then
+            npm install -g npm@11
+          fi
           version=$(npm --version)
           echo "npm ${version}"
-          if [ "$(printf '%s\n' 11.5.1 "$version" | sort -V | head -n1)" != "11.5.1" ]; then
+          if ! at_least "$version"; then
             echo "::error::npm ${version} is older than 11.5.1, which trusted publishing requires"
             exit 1
           fi

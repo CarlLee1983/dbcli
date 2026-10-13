@@ -66,7 +66,9 @@ git push origin vX.Y.Z
 **One-time owner setup:**
 
 - On npmjs.com, add a trusted publisher for `@carllee1983/dbcli`: owner `CarlLee1983`, repository `dbcli`, workflow `release.yml`, environment `npm-publish`, allowed action `npm publish`. npm expires a configuration that has not published within 2 days.
-- In GitHub repository Settings → Environments, create `npm-publish` with a required reviewer.
+- In GitHub repository Settings → Environments, create `npm-publish` with a required reviewer, and set "Deployment branches and tags" to "Selected branches and tags" with only a tag rule `v*.*.*`.
+
+**Recovery:** if `check-tag` or `verify` fails, nothing was published; fix the cause, delete the tag remotely and locally (`git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`), and tag again. If `publish` succeeded but `github-release` failed, use "Re-run failed jobs", not "Re-run all jobs" (which would fail at `npm publish` because the version exists). Only plain `vX.Y.Z` tags are accepted; pre-release and build tags are rejected.
 
 **Emergency fallback only** (workflow cannot run): from a clean checkout of the tagged commit on `main`, `npm login` and `npm publish` locally. That ships without provenance.
 

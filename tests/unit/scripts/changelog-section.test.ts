@@ -32,6 +32,10 @@ Nothing notable here.
 ### Added
 
 - the last section
+
+## License
+
+MIT
 `
 
 describe('extractChangelogSection', () => {
@@ -48,6 +52,10 @@ describe('extractChangelogSection', () => {
 
   test('reads the last section in the file to its end', () => {
     expect(extractChangelogSection(CHANGELOG, '9.0.0')).toBe('### Added\n\n- the last section')
+  })
+
+  test('ends at a non-version `## ` heading such as License', () => {
+    expect(extractChangelogSection(CHANGELOG, '9.0.0')).not.toContain('License')
   })
 
   test('accepts a leading v', () => {

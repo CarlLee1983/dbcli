@@ -317,7 +317,7 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging.
+The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging. Tagging itself triggers the publish workflow, see "Publishing" below.
 
 ### Pre-Release Checklist
 
@@ -346,26 +346,47 @@ curl -fsS https://carllee1983.github.io/dbcli/dbcli-intro.en.html >/dev/null
 
 ### Version Bumping
 
+Bump the version in the release PR (not on `main` afterwards):
+
 ```bash
 # Patch release (v1.0.0 -> v1.0.1)
-npm version patch
+npm version patch --no-git-tag-version
 
 # Minor release (v1.0.0 -> v1.1.0)
-npm version minor
+npm version minor --no-git-tag-version
 
 # Major release (v1.0.0 -> v2.0.0)
-npm version major
+npm version major --no-git-tag-version
 ```
+
+`--no-git-tag-version` is deliberate: the tag is created on `main` after the release PR merges, because the publish workflow rejects a tag whose commit is not on `main`.
 
 ### Publishing
 
-```bash
-# Build (also runs automatically via prepublishOnly)
-bun run build
+Publishing is done by GitHub Actions (`.github/workflows/release.yml`) through npm trusted publishing (OIDC). No npm token is stored anywhere. Flow:
 
-# Publish to npm
-npm publish
-```
+1. Merge the release PR (version bump + `CHANGELOG.md` section) into `main`.
+2. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git checkout main && git pull
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+3. The workflow then runs, in order: `check-tag` (tag equals `v` + `package.json` version, and the commit is an ancestor of `origin/main`), `verify` (test databases, `bun run services:check`, `make verify`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` with provenance), and `github-release` (creates the GitHub Release using the `## [X.Y.Z]` section of `CHANGELOG.md` as notes).
+4. Approve the run in the GitHub Actions UI when `publish` is waiting.
+
+A failed `check-tag` or `verify` publishes nothing; fix the cause, delete the tag (`git push origin :refs/tags/vX.Y.Z`), and tag again.
+
+#### One-time owner setup
+
+1. **npmjs.com trusted publisher** for `@carllee1983/dbcli` (package Settings → Trusted Publisher → GitHub Actions): owner `CarlLee1983`, repository `dbcli`, workflow filename `release.yml`, environment `npm-publish`, allowed action `npm publish`. npm expires a new trusted publisher configuration that has not published within 2 days, so configure it right before the first tagged release.
+2. **GitHub environment** `npm-publish` (repository Settings → Environments) with at least one required reviewer.
+
+#### Emergency fallback
+
+Only if the workflow cannot run (for example GitHub Actions is down), the owner can publish from a clean checkout of the tagged commit on `main` with `npm login` then `npm publish` (`prepublishOnly` runs `bun run build`). This publishes without provenance; prefer fixing the workflow.
 
 ### Changelog
 

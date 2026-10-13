@@ -6,7 +6,7 @@ Scoped package: **`@carllee1983/dbcli`**. All `npm` / `npx` examples below use t
 
 ### Pre-Publication Checklist
 
-Before running `npm publish`:
+Before tagging a release (the tag triggers `npm publish` in CI):
 
 1. **Verify build is clean:**
    ```bash
@@ -53,13 +53,24 @@ Before running `npm publish`:
 
 ### Publication
 
-Publication uses the `prepublishOnly` script in `package.json`:
+Publication is tag-driven. After the release PR is merged, tag `main` and push the tag:
 
 ```bash
-npm publish
+git checkout main && git pull
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-What runs (conceptually):
+`.github/workflows/release.yml` then runs `check-tag` (tag equals `v` + `package.json` version, commit is an ancestor of `origin/main`), `verify` (`docker-compose.test.yml` databases, `bun run services:check`, `make verify`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` through npm trusted publishing with provenance, no stored token), and `github-release` (GitHub Release whose notes are the `## [X.Y.Z]` section of `CHANGELOG.md`, extracted by `scripts/changelog-section.ts`).
+
+**One-time owner setup:**
+
+- On npmjs.com, add a trusted publisher for `@carllee1983/dbcli`: owner `CarlLee1983`, repository `dbcli`, workflow `release.yml`, environment `npm-publish`, allowed action `npm publish`. npm expires a configuration that has not published within 2 days.
+- In GitHub repository Settings → Environments, create `npm-publish` with a required reviewer.
+
+**Emergency fallback only** (workflow cannot run): from a clean checkout of the tagged commit on `main`, `npm login` and `npm publish` locally. That ships without provenance.
+
+What `npm publish` does (in CI or locally):
 
 1. **`prepublishOnly`:** `bun run build` — rebuilds `dist/cli.mjs` from `src/cli.ts` via `scripts/build.ts`.
 2. **Tarball** — paths from the **`files`** field in `package.json`, further filtered by **`.npmignore`**. (Some npm versions also merge in extra root `README*` files; use dry-run to see exactly what will ship.)

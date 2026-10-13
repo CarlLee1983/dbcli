@@ -131,6 +131,7 @@ dbcli --timeout 2000 --statement-timeout 120000 query "SELECT ... FROM big_table
 *   **列出所有連線**：`dbcli use --list`；agent 與 script 可用
     `dbcli use --list --format json` 取得不含憑證的連線清單。
 *   **切換預設連線**：`dbcli use <name>`
+*   **清除預設連線**：`dbcli use --unset`
 *   **單次執行覆蓋**：全域 selector 可放在任何指令之前；`query`、`schema`、
     `list`、`export`、`check` 也支援放在指令之後。
     ```bash
@@ -147,6 +148,45 @@ dbcli 會直接回報衝突，不會靜默挑選其中一個。Selector 需要 v
 拒絕，而不是靜默改跑那唯一的連線。
 若把 `--use` 放在不支援指令層級寫法的指令後面，dbcli 會維持拒絕並印出可直接
 複製的 root-level 寫法，例如 `dbcli --use <connection> status`。
+
+#### 不設定預設連線
+
+v2 設定可以省略最外層的 `default` 欄位。如果提供此欄位，必須是指向既有連線的
+非空字串；`null`、`""` 與不存在的名稱都無效。既有初始化與 v1 升級到 v2 的流程
+仍會建立原本的預設連線，v1 格式也維持不變。
+
+```bash
+dbcli use --unset
+dbcli --use staging query "SELECT 1"
+DBCLI_CONNECTION=staging dbcli query "SELECT 1"
+```
+
+沒有儲存的預設連線時，需要連線的指令必須透過 `--use` 或 `DBCLI_CONNECTION`
+明確選取，否則會在存取資料庫之前失敗，並列出可用的連線名稱，不包含端點或憑證。
+dbcli 不會自動挑選第一條連線。上述選擇優先序與衝突檢查仍適用：CLI selector
+不得空白，空白的環境變數 selector 則視為未設定。不存在的名稱與正式環境連線
+仍受既有的驗證及明確選取防護約束。
+
+`dbcli use --unset` 只移除 v2 設定中持久化的 `default` 欄位，並回報已清除。
+欄位已不存在時也會成功，且不會修改連線。若同時提供連線名稱、`--list`、
+`--confirm-production` 或 `--format json`，會拒絕且不寫入；它也不會轉換或
+覆寫 v1 設定。清除預設值與切換預設值使用相同的核准及 integrity record 保護
+寫入流程，在 agent mode 中仍會被擋下。
+
+`dbcli use` 會說明目前沒有預設連線；文字清單不會將任何連線標為預設，JSON
+清單的每筆連線都會是 `isDefault: false`，`doctor` 也會將省略預設值視為有效
+的 v2 設定；其連線檢查仍須明確指定 selector，例如 `dbcli --use staging doctor`。
+`dbcli init --remove <name>` 若移除的是預設連線，會清除預設值並
+回報此變更，不會另選替代連線。移除其他連線時，會保留原本的預設值或無預設
+狀態；刪除最後一條連線則會被拒絕，設定不會改變。連線更名會保留無預設狀態；
+若更名的是目前預設連線，則會同步更新預設名稱。要重新設定預設值，請使用
+`dbcli use <name>`；正式環境的確認要求維持不變。
+
+舊版專案設定相容性：如果新增連線會匯入直接存放在專案內的 v2 registry，且
+既有連線的 `envFile` 不是 `.env.local`，`init` 會在寫入前拒絕，保留原設定與
+env 檔案。請先由管理員將 registry 與自訂 env 檔案遷移到受支援的 home storage，
+再重試。一般已綁定／home-storage v2 設定，以及未設定 `envFile` 或只使用
+`.env.local` 的直接專案 v2 設定，仍可正常使用。
 
 若要提供明確且不含機密的環境標籤，可在 v2 的具名連線上設定可選的
 `environment` 欄位，例如 `"environment": "production"`。

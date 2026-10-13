@@ -384,12 +384,35 @@ dbcli init --conn-name staging --env-file .env.staging --permission query-only
 dbcli init --conn-name prod    --env-file .env.production --use-env-refs --skip-test
 dbcli use --list --format json            # safe identity inventory: name/env/permission/server/database
 dbcli use prod                            # switch default (persists — avoid for one-off queries)
-dbcli query --use staging "SELECT 1"      # one-shot override on any subcommand
+dbcli use --unset                         # clear the saved default (v2 only; approved config mutation)
+dbcli --use staging query "SELECT 1"      # root-level one-shot selector before any subcommand
 DBCLI_CONNECTION=staging dbcli query "SELECT 1"   # one-shot via env; parallel-safe
 dbcli --use staging,prod query "SELECT count(*) FROM users"   # read-only fan-out
 dbcli init --rename staging:stg           # rename
 dbcli init --remove stg                   # remove
 ```
+
+V2 may omit `default`; if present, it must be a nonempty existing connection
+name, never `null` or `""`. Without a default, connection-dependent commands
+require `--use` or `DBCLI_CONNECTION` and fail before database access with an
+available-name list, never endpoints or credentials. Do not pick the first name
+to bypass that choice. Priority remains `--use` > `DBCLI_CONNECTION` > saved
+default; conflicting root/command selectors and blank CLI selectors are errors,
+while a blank environment selector is absent. Unknown-name and production
+selection protections still apply.
+
+`use --unset` removes only the saved default, reports it cleared, and succeeds
+when already absent without changing connections. It rejects a name, `--list`,
+`--confirm-production`, or `--format json` without writing, and never converts or
+overwrites v1. This is an approved, integrity-protected config mutation, blocked
+in agent mode. `use` describes no default; text inventory has no default marker
+and JSON has `isDefault: false` throughout. `doctor` accepts this v2 shape; select
+a connection explicitly for its connection checks (`dbcli --use staging doctor`).
+Removing the default with `init --remove` clears it and reports that change,
+without choosing a replacement. Other removals preserve the current default or
+its absence; the last connection cannot be deleted. Renaming preserves no
+default, or updates the default name when appropriate. Existing init/v1 migration
+defaults and production confirmation rules are unchanged.
 
 Rotating one connection's password — nothing else in the config moves:
 

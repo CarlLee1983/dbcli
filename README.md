@@ -304,12 +304,29 @@ dbcli use staging
 # Show the current default connection
 dbcli use
 
+# Clear the default without removing any connection (v2)
+dbcli use --unset
+
 # Remove a connection
 dbcli init --remove staging
 
 # Rename a connection
 dbcli init --rename staging:production
 ```
+
+V2 configurations may omit `default`; when present, it must be a nonempty name
+of an existing connection, not `null` or `""`. Without a default, commands that
+need a connection require `--use` or `DBCLI_CONNECTION`; otherwise they fail
+before database access and list available names without endpoints or credentials.
+`dbcli use` describes this state, text lists mark no default, and JSON inventory
+uses `isDefault: false` for every connection. `doctor` accepts this configuration;
+its connection checks still require a selector, such as `dbcli --use staging doctor`.
+
+Removing the current default clears it and reports that change, without choosing
+a replacement. Other removals preserve the default or its absence; deleting the
+last connection is refused without writing. Renaming preserves a missing default
+or updates its name as needed. Existing initialization and v1 migration still
+create their usual default, and production safeguards remain unchanged.
 
 ### Using a Specific Connection Temporarily
 
@@ -404,6 +421,17 @@ dbcli use [connection-name] [OPTIONS]
 
 **Options:**
 - `--list` — List all connections and show the current default
+- `--unset` — Clear the saved default; succeeds if already absent
+- `--format <text|json>` — Select inventory output format
+- `--confirm-production <name>` — Repeat the exact name to set a production default
+
+`--unset` rejects a connection name, `--list`, `--confirm-production`, or
+`--format json` in the same invocation without writing. It never converts or
+overwrites v1 and uses the same approved, integrity-protected write path as
+switching the default; it is blocked in agent mode. Selection still follows
+`--use` > `DBCLI_CONNECTION` > saved default. Conflicting root/command selectors
+and blank CLI selectors fail; blank environment selectors are ignored. See
+[Connection Management](docs/user/en/index.md#connection-management) for details.
 
 **Examples:**
 ```bash

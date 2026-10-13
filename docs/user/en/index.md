@@ -139,6 +139,7 @@ dbcli --timeout 2000 --statement-timeout 120000 query "SELECT ... FROM big_table
 *   **List all connections**: `dbcli use --list`; agents and scripts can use
     `dbcli use --list --format json` for a credential-free connection inventory.
 *   **Switch default connection**: `dbcli use <name>`
+*   **Clear the default connection**: `dbcli use --unset`
 *   **One-shot override**: Put the global selector before any command. `query`,
     `schema`, `list`, `export`, and `check` also accept it after the command.
     ```bash
@@ -158,6 +159,55 @@ there is rejected rather than quietly running the only connection.
 When `--use` is placed after a command that does not support the command-level form,
 dbcli keeps the request rejected and prints the copyable root-level form, such as
 `dbcli --use <connection> status`.
+
+#### Working without a default
+
+A v2 configuration may omit the top-level `default` field. If present, it must
+be a nonempty string naming an existing connection; `null`, `""`, and unknown
+names are invalid. Existing initialization and v1-to-v2 migration still create
+their usual default. The v1 format is unchanged.
+
+```bash
+dbcli use --unset
+dbcli --use staging query "SELECT 1"
+DBCLI_CONNECTION=staging dbcli query "SELECT 1"
+```
+
+Without a saved default, a command that needs a connection must select one with
+`--use` or `DBCLI_CONNECTION`. Otherwise it fails before database access and
+lists the available connection names, with no endpoints or credentials. It
+never picks the first connection. The selection precedence and conflict checks
+above still apply: blank CLI selectors are invalid; a blank environment selector
+is ignored. Unknown names and production connections retain their existing
+validation and explicit-selection safeguards.
+
+`dbcli use --unset` removes only the persisted v2 `default` field and reports
+that it was cleared. It succeeds if the field is already absent, without
+changing connections. It rejects a connection name, `--list`,
+`--confirm-production`, or `--format json` in the same invocation without writing,
+and never converts or overwrites a v1 configuration. Clearing the default uses
+the same approved, integrity-protected configuration write path as switching it;
+it remains blocked in agent mode.
+
+`dbcli use` describes the no-default state. Text inventory marks no connection
+as default, JSON inventory returns `isDefault: false` for every connection, and
+`doctor` accepts an omitted default as valid v2 configuration; its connection
+checks still need an explicit selector, such as `dbcli --use staging doctor`.
+`dbcli init --remove <name>` clears the default when removing its connection and
+reports that change; it does not choose a replacement. Removing another
+connection preserves the saved default or existing no-default state. Deleting
+the last connection is refused without changing the configuration. Renaming a
+connection preserves the no-default state, or updates the default name when
+renaming the current default. To set a default again, use `dbcli use <name>`;
+production confirmation requirements remain unchanged.
+
+Legacy project configuration compatibility: if adding a connection would import
+a v2 registry stored directly in the project and an existing connection has an
+`envFile` other than `.env.local`, `init` refuses before writing. The existing
+configuration and env files remain intact. An administrator must migrate the
+registry and custom env files to supported home storage before retrying. Normal
+bound/home-storage v2 configurations and direct-project v2 configurations with
+no `envFile` or only `.env.local` remain supported.
 
 For an unambiguous, non-secret environment label, set the optional
 `environment` field on a v2 named connection (for example, `"environment":

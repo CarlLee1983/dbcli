@@ -111,10 +111,21 @@ describe('removeConnection', () => {
     expect(next.default).toBe('primary')
   })
 
-  test('removing the default reassigns default to a remaining connection', () => {
-    const next = removeConnection(twoConns(), 'primary')
+  test('removing the default clears it rather than choosing a remaining connection', () => {
+    const input = twoConns()
+    const next = removeConnection(input, 'primary')
     expect(next.connections.primary).toBeUndefined()
-    expect(next.default).toBe('staging')
+    expect(next.connections.staging).toBeDefined()
+    expect(Object.hasOwn(next, 'default')).toBe(false)
+    expect(input.default).toBe('primary')
+  })
+
+  test('removing a connection preserves an absent default', () => {
+    const input = twoConns()
+    delete input.default
+    const next = removeConnection(input, 'primary')
+    expect(Object.hasOwn(next, 'default')).toBe(false)
+    expect(next.connections.staging).toBeDefined()
   })
 
   test('throws when removing the last remaining connection', () => {

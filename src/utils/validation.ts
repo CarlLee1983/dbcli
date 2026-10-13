@@ -496,7 +496,7 @@ export const NamedConnectionSchema = z.preprocess((raw, ctx) => {
 export const DbcliConfigV2Schema = z
   .object({
     version: z.literal(2),
-    default: z.string().min(1),
+    default: z.string().min(1).optional(),
     connections: z.record(NamedConnectionSchema).refine((conns) => Object.keys(conns).length > 0, {
       message: 'At least one connection is required',
     }),
@@ -507,10 +507,13 @@ export const DbcliConfigV2Schema = z
     audit: AuditConfigSchema,
     redis: RedisConfigSchema,
   })
-  .refine((config) => config.default in config.connections, {
-    message: 'Default connection must exist in connections',
-    path: ['default'],
-  })
+  .refine(
+    (config) => config.default === undefined || Object.hasOwn(config.connections, config.default),
+    {
+      message: 'Default connection must exist in connections',
+      path: ['default'],
+    }
+  )
 
 export type NamedConnection = z.infer<typeof NamedConnectionSchema>
 export type DbcliConfigV2 = z.infer<typeof DbcliConfigV2Schema>

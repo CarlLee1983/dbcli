@@ -9,7 +9,7 @@ import { getLogger } from '@/utils/logger'
 import { checkDbVersion, type VersionCheckResult } from '@/utils/db-version-check'
 import { t_vars } from '@/i18n/message-loader'
 import { validateFormat, DbcliConfigV2Schema } from '@/utils/validation'
-import { detectConfigVersion } from '@/core/config-v2'
+import { ConnectionSelectionRequiredError, detectConfigVersion } from '@/core/config-v2'
 import { resolveConfigPath } from '@/utils/config-path'
 import { resolveConfigStoragePath } from '@/core/config-binding'
 import pkg from '../../package.json'
@@ -660,8 +660,15 @@ export const runDoctorChecks = {
       return results
     }
 
-    // Check default points to existing connection
-    if (!config.connections[config.default]) {
+    // An omitted default deliberately requires an invocation-scoped selector.
+    if (config.default === undefined) {
+      results.push({
+        group: 'Configuration',
+        label: 'Default connection',
+        status: 'pass',
+        message: '未設定預設連線；請使用 --use <name> 或設定 DBCLI_CONNECTION 明確指定連線',
+      })
+    } else if (!config.connections[config.default]) {
       results.push({
         group: 'Configuration',
         label: 'Default connection',
@@ -1164,12 +1171,28 @@ export const doctorCommand = new Command('doctor')
           })
         }
       } catch (error) {
-        results.push({
-          group: 'Configuration',
-          label: 'Config valid',
-          status: 'error',
-          message: `Config invalid: ${(error as Error).message}`,
-        })
+        if (error instanceof ConnectionSelectionRequiredError) {
+          results.push({
+            group: 'Configuration',
+            label: 'Config valid',
+            status: 'pass',
+            message: 'Config valid',
+          })
+          results.push(...(await runDoctorChecks.checkV2Config(configPath)))
+          results.push({
+            group: 'Configuration',
+            label: 'Connection selection',
+            status: 'error',
+            message: error.message,
+          })
+        } else {
+          results.push({
+            group: 'Configuration',
+            label: 'Config valid',
+            status: 'error',
+            message: `Config invalid: ${(error as Error).message}`,
+          })
+        }
       }
     }
 

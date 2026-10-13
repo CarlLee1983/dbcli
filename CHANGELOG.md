@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.2.0] - 2026-10-13
+
+Bun 最低版本提高到 1.4.0、兩個讓 PostgreSQL schema 少報欄位的修正、audit gate 可以
+帶期限的豁免，以及兩頁介紹頁加上一段實錄的 agent 操作影片。
+
+版本為 **9.2.0**。使用者唯一需要處理的是 Bun：還在 1.3.x 的請升級到 1.4.0 以上。
+沒有新增或移除任何指令與旗標。
+
+### Added
+
+- **介紹頁與 README 加上一段實錄的 agent 操作影片。** 一段真實的 Claude Code session
+  對著一個用完即丟的 PostgreSQL 操作：agent 透過 dbcli 讀資料，被列入黑名單的
+  `password_hash` 欄位帶著 dbcli 的安全提示被略去，它在 query-only 連線上的寫入被拒絕。
+  影片放在兩個語系介紹頁的 #safety 區，兩份 README 各以縮圖連到自己語系的頁面。
+  `scripts/demo/` 保留 seed、設定、錄製與剪輯腳本，CLI 輸出改變時可以重錄。
+
 ### Changed
 
 - **Bun 最低版本從 1.3.3 提高到 1.4.0。** `mongodb@7.2.0` 依賴 `bson: "^7.2.0"`，
@@ -17,6 +33,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1.4.0–1.4.3 都正常。本 repo 的 `bun.lock` 把 bson 鎖在 7.2.0，所以 CI 的 1.3.3 那一列
   從來沒碰到這個問題。`engines.bun`、CI 最低版本、postinstall 提示、`doctor` 的預設值與
   使用者文件都改為 1.4.0。
+
+- **audit gate 可以帶有期限、附理由的豁免。** `scripts/audit-exemptions.json` 逐筆列出
+  GHSA id、套件、理由與 UTC 到期日。未到期的項目轉成 `bun audit --ignore` 參數，每次執行
+  都印出來；過期或格式錯誤的項目讓 gate 失敗，所以豁免不會悄悄變成永久。第一筆豁免
+  GHSA-vfj7-8cjw-p6xm（`braces` <= 3.0.3，沒有修正版，只經由建置期的 tailwindcss 引入）
+  到 2026-11-30。決定記在 ADR-0042。
+
+### Fixed
+
+- **PostgreSQL 的 schema 重新回報主鍵、索引與外鍵欄位。** 對 `pg_attribute.attname` 做
+  `array_agg` 得到的是 `name[]`，node-postgres 把它當字串回傳，schema 因此丟掉了這些欄位，
+  寫入閘門也就拒絕了每一筆結構化寫入。改為先轉成 `text`。
+
+- **PostgreSQL 的 enum 欄位重新回報 `enumValues`。** `pg_enum.enumlabel` 的 `array_agg`
+  同樣是 `name[]`，以相同方式修正。
+
+- **SQL 引擎的 `update` 先檢查權限等級再連線。** 與 Redis、MongoDB 分支以及 `delete`
+  一致：query-only 連線現在因為權限不足被拒，而不是被寫入閘門擋下；權限檢查也排在
+  executor 的黑名單檢查之前。
 
 ### Security
 

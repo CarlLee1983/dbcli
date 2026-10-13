@@ -5,6 +5,19 @@ All notable changes to dbcli are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Bun 最低版本從 1.3.3 提高到 1.4.0。** `mongodb@7.2.0` 依賴 `bson: "^7.2.0"`，
+  不帶 lockfile 的使用者安裝會解析到 bson 7.3+。bson 7.3.0 起，`ObjectId` 載入時會呼叫
+  `v8.startupSnapshot.isBuildingSnapshot()`，Bun 1.3.x 對此丟出
+  `NotImplementedError: node:v8 isBuildingSnapshot is not yet implemented in Bun.`，
+  任何碰到 MongoDB 的指令都會失敗。實測 Bun 1.3.3 與 1.3.10–1.3.14 都會失敗，
+  1.4.0–1.4.3 都正常。本 repo 的 `bun.lock` 把 bson 鎖在 7.2.0，所以 CI 的 1.3.3 那一列
+  從來沒碰到這個問題。`engines.bun`、CI 最低版本、postinstall 提示、`doctor` 的預設值與
+  使用者文件都改為 1.4.0。
+
 ## [9.1.2] - 2026-10-01
 
 一個開發依賴的安全公告、工作規格協定從 ForgeFlow 換成 Warrant，以及三個讓測試與建置

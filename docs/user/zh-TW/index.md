@@ -55,7 +55,7 @@ bun install -g @carllee1983/dbcli
 npm install -g @carllee1983/dbcli
 ```
 
-dbcli 執行於 Bun 1.3.3+。npm 與 npx 可作為發布通道，但安裝後的 `dbcli` 執行檔需要
+dbcli 執行於 Bun 1.4.0+。npm 與 npx 可作為發布通道，但安裝後的 `dbcli` 執行檔需要
 `PATH` 上有 Bun；只有 `./agent-core` 這個 subpath export 能被純 Node 程序 import。
 
 單獨執行 `dbcli --version` 或 `dbcli -V` 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。

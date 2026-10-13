@@ -44,7 +44,7 @@ if (!bunIsAvailable()) {
     'dbcli: Bun was not found on PATH.',
     '',
     "  dbcli's executable runs under Bun (its shebang is `#!/usr/bin/env bun`), so it",
-    '  cannot start until Bun 1.3.3+ is installed:',
+    '  cannot start until Bun 1.4.0+ is installed:',
     '',
     `    ${BUN_INSTALL_HINT}`,
     '',

@@ -47,7 +47,7 @@ bun install -g @carllee1983/dbcli
 ```
 
 **dbcli 執行於 Bun。** npm 與 npx 可作為發布通道，但安裝後的 `dbcli` 執行檔需要 `PATH`
-上有 Bun 1.3.3+，請先以 `curl -fsSL https://bun.sh/install | bash` 安裝。只有
+上有 Bun 1.4.0+，請先以 `curl -fsSL https://bun.sh/install | bash` 安裝。只有
 `./agent-core` 這個 subpath export 能被純 Node 程序 import。
 
 #### 免安裝（無需事先安裝）
@@ -1222,7 +1222,7 @@ dbcli skill --install cursor
 
 ### 各平台設定
 
-以下所有流程都假設 `PATH` 上有 Bun 1.3.3+：無論用哪個套件管理器安裝，`dbcli` 執行檔都以 Bun 執行。
+以下所有流程都假設 `PATH` 上有 Bun 1.4.0+：無論用哪個套件管理器安裝，`dbcli` 執行檔都以 Bun 執行。
 
 #### Claude Code（Anthropic）
 
@@ -1539,7 +1539,7 @@ chmod +x dist/cli.mjs
 
 ### 執行環境
 
-- **Bun：** 1.3.3+ —— 必要。發布的 bundle 使用 Bun API 與 Bun 的模組解析，`dbcli`
+- **Bun：** 1.4.0+ —— 必要。發布的 bundle 使用 Bun API 與 Bun 的模組解析，`dbcli`
   無法在 Node 上執行。
 - **Node.js：** 僅 `./agent-core` 這個 subpath export 可被 Node import（18.0.0+）。
   `npm install -g` / `npx` 可作為發布通道，但執行時仍會轉交給 Bun。

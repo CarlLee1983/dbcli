@@ -1,0 +1,156 @@
+name: Release
+
+# Pushing a vX.Y.Z tag publishes that commit to npm through trusted publishing
+# (OIDC): no npm token exists in this repository or in the workflow, so there is
+# nothing to leak or rotate. The one-time setup (npmjs.com trusted publisher and
+# the `npm-publish` environment) is in CONTRIBUTING.md "Release Process".
+on:
+  push:
+    tags: ['v*.*.*']
+
+# Least privilege by default, as in ci.yml. The two jobs that need more declare
+# it themselves: `publish` (id-token) and `github-release` (contents: write).
+permissions:
+  contents: read
+
+jobs:
+  check-tag:
+    # Nothing is published unless the tag names the version in package.json and
+    # points at a commit that is already on main. A tag pushed from a branch, or
+    # one that disagrees with package.json, would otherwise ship under the wrong
+    # version number, which npm never lets you reuse.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Pre-release and build tags (v1.2.3-beta.1, v1.2.3+x) are out of scope:
+      # this workflow publishes stable releases to the default dist-tag only.
+      - name: Tag matches package.json
+        run: |
+          if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a plain vX.Y.Z release tag; pre-release and build tags are not published"
+            exit 1
+          fi
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v${version}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version v${version}"
+            exit 1
+          fi
+
+      - name: Tagged commit is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Commit $GITHUB_SHA is not an ancestor of origin/main; merge the release PR first and tag main"
+            exit 1
+          fi
+
+  verify:
+    # The same gate as ci.yml's `integration` job, run on the tagged commit
+    # itself rather than trusting that a green CI run on some branch covered it.
+    needs: check-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      - name: Start test databases
+        run: docker compose -f docker-compose.test.yml up -d --wait
+
+      - name: Services are reachable
+        run: bun run services:check
+
+      - name: Canonical verification
+        run: make verify
+
+      # `if: always()` for the same reason as in ci.yml: the attestation names
+      # the exact revision that ran, and a failed run is the one worth keeping.
+      - name: Verification attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-attestation
+          path: .verification/attestation.json
+          if-no-files-found: warn
+
+      - name: Service logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 100
+
+      - name: Stop test databases
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  publish:
+    # `environment: npm-publish` is where the owner's approval happens: the job
+    # waits for the environment's required reviewer. `id-token: write` lets npm
+    # exchange the run's OIDC identity for a publish credential and sign the
+    # provenance statement; it is granted to this job only.
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          # No `registry-url`: it writes an .npmrc that reads an auth-token env var
+          # and exports a placeholder for it, which would poison `bun install` and turn
+          # an OIDC failure into a misleading E401. npm defaults to registry.npmjs.org.
+
+      # Trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0. The npm
+      # bundled with Node 24 can be older than that, so upgrade only when it is,
+      # then assert rather than hope: an old npm falls back to a token and fails
+      # confusingly.
+      - name: npm supports trusted publishing
+        run: |
+          at_least() { [ "$(printf '%s\n' 11.5.1 "$1" | sort -V | head -n1)" = "11.5.1" ]; }
+          if ! at_least "$(npm --version)"; then
+            npm install -g npm@11
+          fi
+          version=$(npm --version)
+          echo "npm ${version}"
+          if ! at_least "$version"; then
+            echo "::error::npm ${version} is older than 11.5.1, which trusted publishing requires"
+            exit 1
+          fi
+
+      - run: bun install --frozen-lockfile
+
+      # `prepublishOnly` runs `bun run build`. Provenance is attached
+      # automatically for a public package published from a public repository.
+      - name: Publish
+        run: npm publish
+
+  github-release:
+    # After the publish only: a Release that announces a version npm does not
+    # have is worse than no Release.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Release notes from CHANGELOG.md
+        run: bun run scripts/changelog-section.ts "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Create GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}

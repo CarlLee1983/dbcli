@@ -205,6 +205,59 @@ describe('MongoDBAdapter', () => {
       }
     })
 
+    describe('srv:true 且有 user 時的 authSource', () => {
+      /** Stub DNS-over-HTTPS: one SRV host, and a TXT answer (or none when txt is null). */
+      function stubDns(txt: string | null) {
+        return spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
+          const url = String(input)
+          if (url.includes('type=SRV')) {
+            return new Response(
+              JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })
+            )
+          }
+          if (url.includes('type=TXT') && txt !== null) {
+            return new Response(JSON.stringify({ Status: 0, Answer: [{ data: txt }] }))
+          }
+          return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
+        }) as unknown as typeof fetch)
+      }
+      const srvOptions: ConnectionOptions = {
+        ...hostOptions,
+        host: 'cluster.example.com',
+        srv: true,
+      }
+
+      test('未指定 authSource 時採用 SRV TXT 給的值', async () => {
+        const fetchSpy = stubDns('"authSource=other"')
+        try {
+          const uri = await connectedUri(srvOptions)
+          expect(new URL(uri).searchParams.get('authSource')).toBe('other')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+
+      test('未指定 authSource 且無 TXT 時補 admin', async () => {
+        const fetchSpy = stubDns(null)
+        try {
+          const uri = await connectedUri(srvOptions)
+          expect(new URL(uri).searchParams.get('authSource')).toBe('admin')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+
+      test('明確的 authSource 欄位優先於 SRV TXT', async () => {
+        const fetchSpy = stubDns('"authSource=other"')
+        try {
+          const uri = await connectedUri({ ...srvOptions, authSource: 'appdb' })
+          expect(new URL(uri).searchParams.get('authSource')).toBe('appdb')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+    })
+
     test('uri 與逐欄欄位並存時，uri 優先', async () => {
       const uri = await connectedUri({
         ...hostOptions,

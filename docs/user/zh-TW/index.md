@@ -1306,7 +1306,7 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 
 | 欄位 | 型別 | 用途 |
 | --- | --- | --- |
-| `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫；有帳密時預設為 `admin`。 |
+| `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫。有帳密且未設定時預設為 `admin`；`srv: true` 時，SRV TXT record 若有提供 `authSource`，優先採用。 |
 | `replicaSet` | 字串或 `{"$env": "..."}` | 複本集名稱。 |
 | `tls` | 布林 | 是否啟用 TLS。 |
 | `options` | 字串對字串的物件 | 附加到連線 URI 的額外 driver 參數，例如 `{"retryWrites": "false", "appName": "dbcli"}`。只接受純字串（不支援 `{"$env": "..."}`）。不可重複 `authSource` / `replicaSet` / `tls` / `ssl`（不分大小寫），否則驗證失敗並指出該鍵。設定了 `uri` 時會被忽略。 |

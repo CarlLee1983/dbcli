@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`srv: true` 欄位設定的 `authSource` 改為 SRV TXT 優先。** 既有、有 `user` 但未設定
+  `authSource` 的 `srv: true` 連線，若 SRV TXT record 提供 `authSource`，現在會採用該值，
+  不再固定使用 `admin`；TXT 沒有提供時仍補 `admin`。明確設定的 `authSource` 欄位仍優先，
+  非 SRV 的欄位設定維持預設 `admin`。
+
 ## [10.0.0] - 2026-10-13
 
 這次發布整合 npm 9.1.2 之後合併的變更：明確命名連線、可不設預設連線、Bun 1.4.0

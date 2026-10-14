@@ -1450,7 +1450,7 @@ Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
 
 | Field | Type | Purpose |
 | --- | --- | --- |
-| `authSource` | string or `{"$env": "..."}` | Auth database; defaults to `admin` once a user is configured. |
+| `authSource` | string or `{"$env": "..."}` | Auth database. When a user is configured and this is unset, it defaults to `admin`; with `srv: true`, the SRV TXT record's `authSource` is used first when it provides one. |
 | `replicaSet` | string or `{"$env": "..."}` | Replica set name. |
 | `tls` | boolean | Enable TLS. |
 | `options` | object of string to string | Extra driver parameters appended to the connection URI, e.g. `{"retryWrites": "false", "appName": "dbcli"}`. Plain strings only (no `{"$env": "..."}`). Must not repeat `authSource` / `replicaSet` / `tls` / `ssl` (case-insensitive) — validation fails and names the key. Ignored when `uri` is set. |

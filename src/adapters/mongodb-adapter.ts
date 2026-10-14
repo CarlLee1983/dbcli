@@ -99,8 +99,13 @@ export class MongoDBAdapter implements QueryableAdapter {
     const path = database ? `/${encodeURIComponent(database)}` : '/'
 
     const query = new URLSearchParams()
-    // `||` not `??`: the schema allows an empty string, which must not become `authSource=`
-    if (user) query.set('authSource', authSource || 'admin')
+    // Truthy check: the schema allows an empty string, which must not become `authSource=`.
+    // With srv the default is left to buildResolvedUri(): the SRV TXT record's authSource
+    // wins, then its own `admin` fallback — forcing admin here would shadow the TXT value.
+    if (user) {
+      if (authSource) query.set('authSource', authSource)
+      else if (!srv) query.set('authSource', 'admin')
+    }
     if (replicaSet) query.set('replicaSet', replicaSet)
     if (tls !== undefined) query.set('tls', String(tls))
     // Free-form driver options; validation already rejects keys that shadow the dedicated fields above

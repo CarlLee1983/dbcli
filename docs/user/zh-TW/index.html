@@ -1046,7 +1046,7 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
             <p><code>dbcli init --system mongodb</code> 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 <code>authSource</code>，最後是可選的進階步驟（<code>replicaSet</code> / <code>tls</code>）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 <code>--uri</code> 仍會跳過連線方式提問；非互動用法也必須提供 <code>--conn-name</code>。</p>
             <p>逐欄連線欄位（<code>ConnectionConfig</code>，<code>src/types/index.ts</code>）：</p>
             <ul>
-                <li><code>authSource</code>（字串或 <code>{"$env": "..."}</code>）— 認證資料庫；有帳密時預設為 <code>admin</code>。</li>
+                <li><code>authSource</code>（字串或 <code>{"$env": "..."}</code>）— 認證資料庫。有帳密且未設定時預設為 <code>admin</code>；<code>srv: true</code> 時，SRV TXT record 若有提供 <code>authSource</code>，優先採用。</li>
                 <li><code>replicaSet</code>（字串或 <code>{"$env": "..."}</code>）— 複本集名稱。</li>
                 <li><code>tls</code>（布林）— 是否啟用 TLS。</li>
                 <li><code>options</code>（字串對字串的物件）— 附加到連線 URI 的額外 driver 參數，例如 <code>{"retryWrites": "false", "appName": "dbcli"}</code>。只接受純字串（不支援 <code>{"$env": "..."}</code>）。不可重複 <code>authSource</code> / <code>replicaSet</code> / <code>tls</code> / <code>ssl</code>（不分大小寫），否則驗證失敗並指出該鍵。設定了 <code>uri</code> 時會被忽略。</li>

@@ -30,8 +30,9 @@ ADR-0002 讓欄位設定成為主要形式，但把連線字串定位成「原�
 
 - `--uri` 寫出的設定檔形狀改變，屬行為破壞性變更，須於 CHANGELOG 標註。連線本身
   等價；既有含 `uri` 的設定檔不遷移、照常運作。
-- 退回 `uri` 的條件：多組 host，或帶有機密的 option（`authMechanismProperties`、
-  `tlsCertificateKeyFilePassword`、`proxyPassword`）。退回時警告帳密將明文存放，
+- 退回 `uri` 的條件：多組 host、帶有機密的 option（`authMechanismProperties`、
+  `tlsCertificateKeyFilePassword`、`proxyPassword`）、重複的參數鍵，或非 SCRAM 的
+  `authMechanism`（其 authSource 預設 `$external`，且常無密碼）。退回時警告帳密將明文存放，
   避免機密改從 `options` 明文落盤。
 - `options` 與正式欄位重複（如兩邊都有 `replicaSet`）時拒絕，不默默挑一邊；option
   鍵不另設允許清單，交由連線測試讓 driver 報錯。

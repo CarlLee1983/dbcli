@@ -8,7 +8,7 @@
 使用者拿著從 Atlas / Compass 複製的 MongoDB 連線字串，不論在互動流程貼上，或在 CI
 以 `dbcli init --uri` 非互動設定，dbcli 都把它拆解成欄位設定寫入，與逐欄填寫得出同一種
 形狀，日後可以單獨修改任一欄位。只有欄位設定表達不了的連線字串（多組 host、帶機密的
-option）才原樣存進 `uri`，並明確警告。非互動流程另有 `--replica-set`、
+option、重複的參數鍵、非 SCRAM 的認證機制）才原樣存進 `uri`，並明確警告。非互動流程另有 `--replica-set`、
 `--srv`、`--tls` / `--no-tls`，不必為了這三項改用 `--uri`。
 
 ## Problem Statement
@@ -53,13 +53,16 @@ ADR-0002 讓欄位設定成為主要形式，但兩個最常見的情境仍走�
 
 ## Implementation Decisions
 
-- 新增一個拆解模組：輸入連線字串，輸出「欄位設定」或「必須退回 `uri` 及原因」（多 host／帶機密 option）。
+- 新增一個拆解模組：輸入連線字串，輸出「欄位設定」或「必須退回 `uri` 及原因」（多 host／帶機密 option／重複參數鍵／非 SCRAM 認證機制）。
   以 `mongodb-connection-string-url` 解析，該套件改列為直接依賴，版本對齊 mongodb 7.2 使用的版本。
 - 拆解規則：`authSource`、`replicaSet`、`tls`／`ssl` 進正式欄位；`mongodb+srv` 對應 `srv: true` 且不寫 port；
   路徑上的資料庫名稱進 `database`；其餘 query 參數原樣進 `options`；連線字串沒寫 authSource 時不寫該欄位，
   唯一例外是非 SRV、有帳號且路徑帶資料庫時寫入 `authSource: <路徑資料庫>`——driver 對這種字串以路徑資料庫認證，
   而欄位設定沒寫 authSource 時 adapter 會補 `admin`。`--name` 只覆蓋 `database`，不改這個值。
 - 帶機密的 option 鍵：`authMechanismProperties`、`tlsCertificateKeyFilePassword`、`proxyPassword`。
+- 同一參數鍵出現多次（如兩個 `readPreferenceTags`）時退回 `uri`：`options` 是單值對應，存不下第二組。
+- `authMechanism` 不是 `SCRAM-SHA-1`／`SCRAM-SHA-256`（如 `MONGODB-X509`、`GSSAPI`、`PLAIN`、`MONGODB-AWS`）時退回 `uri`：
+  這類機制常無密碼，且 driver 的 authSource 預設是 `$external` 而非路徑資料庫，欄位設定都表達不了。
 - `MongoDBConnectionConfigSchema` 新增 `options`：字串鍵對字串值，不接受 env-ref。`options` 與正式欄位同名時於驗證階段拒絕。
 - adapter 組 URI 時附上 `options`；`srv: true` 時不再強制 `authSource=admin`，交給既有的 TXT 合併與 admin 後備。
 - `init` 新增 `--replica-set <name>`、`--srv`、`--tls` / `--no-tls`（皆未給時 `tls` 不寫入）。
@@ -100,6 +103,7 @@ ADR-0002 讓欄位設定成為主要形式，但兩個最常見的情境仍走�
 5. 字串路徑帶資料庫名稱時不問 Database name；沒帶時會問且無預設值，非互動又未給 `--name` 時報錯。
 6. 多 host 字串寫出只含 `system`、`uri`、`database` 的連線，並印出帳密將明文存放的警告。
 7. 含 `authMechanismProperties`、`tlsCertificateKeyFilePassword` 或 `proxyPassword` 任一的字串，行為同 AC-6。
+   同一參數鍵重複出現，或 `authMechanism` 為非 SCRAM 機制（如 `MONGODB-X509`）的字串，行為亦同 AC-6。
 8. 設定的 `options` 與正式欄位同名（如兩邊都有 `replicaSet`）時，驗證失敗並指出該鍵。
 9. `--replica-set rs0 --srv --tls` 非互動寫出 `replicaSet: 'rs0'`、`srv: true`、`tls: true`；`--no-tls` 寫出 `tls: false`；兩者皆無時不寫 `tls`。
 10. `--uri` 與 `--host`、`--port`、`--user`、`--password`、`--auth-source`、`--replica-set`、`--srv`、`--tls` 任一並用時報錯；與 `--name` 並用時以 `--name` 為資料庫名稱。

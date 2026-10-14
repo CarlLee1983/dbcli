@@ -1300,7 +1300,9 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 
 ### MongoDB 連線設定
 
-`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 `--uri` 會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上從 Atlas / Compass 複製的連線字串是明示的第二選項（「貼上連線字串（Atlas / Compass 複製的）」）。傳入 `--uri` 會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+
+**貼上的連線字串同樣會拆解。** 互動貼上與 `--uri` 套用完全相同的規則（同樣的欄位對應；多組 host、帶機密 option、重複鍵、非 SCRAM 認證機制的字串同樣退回 `uri` 並警告帳密明文存放）。拆解成功後，終端會列出將寫入的每個欄位——密碼顯示為 `<redacted>`、`options` 逐鍵列出——然後直接進入權限選擇與連線測試，不再多一次確認。字串路徑帶資料庫名稱（或已給 `--name`）時不會問 `Database name`；否則必填且沒有預設值（互動終端下的 `--uri` 同樣如此，原本預設為 `testdb`）。字串無法解析（例如埠號不合法、`authSource=` 沒有值）時會印出不含原字串的錯誤並再問一次；直接按 Enter 則退回逐欄填寫。搭配 `--use-env-refs` 時，貼上的字串只會得到警告：帳密仍以字面值寫入，不會變成環境變數參照。
 
 **`--uri` 寫入前會先拆解。** 以 `--uri` 傳入的連線字串（例如從 Atlas 複製的）不再整條存成不透明的 `uri`，而是拆成上述欄位設定：`authSource`、`replicaSet`、`tls`（含別名 `ssl`）進各自的正式欄位，`mongodb+srv` 對應 `srv: true` 且不寫 `port`，路徑上的資料庫名稱進 `database`（`--name` 可覆蓋），其餘 query 參數（`retryWrites`、`w`、`appName` 等）進 `options`。字串沒寫 `authSource` 就不寫該欄位，唯一例外：非 SRV、有帳號、路徑帶資料庫時會寫入 `authSource: <路徑資料庫>`，因為 driver 對這種字串以路徑資料庫認證，而沒寫 `authSource` 的欄位設定會預設成 `admin`。帳號與密碼會做百分比解碼。字串路徑沒有資料庫名稱時必須給 `--name`。
 

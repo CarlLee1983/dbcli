@@ -67,18 +67,6 @@ type BuiltMongoConfig =
   | { kind: 'env-ref'; config: Record<string, unknown> }
   | { kind: 'decomposed'; config: MongoFieldConfig }
   | { kind: 'uri-fallback'; config: { system: 'mongodb'; uri: string; database: string } }
-  | {
-      kind: 'pasted-uri'
-      config: {
-        system: 'mongodb'
-        uri: string | undefined
-        database: string
-        host: string
-        port: number
-        user: string
-        password: string
-      }
-    }
   | { kind: 'fields'; config: Record<string, unknown> & { password: string } }
 
 /** 連線測試失敗時要從終端訊息遮蔽的密碼；env-ref 只有變數名稱，沒有密碼。 */
@@ -88,9 +76,53 @@ function passwordOf(built: BuiltMongoConfig): string {
     case 'uri-fallback':
       return ''
     case 'decomposed':
-    case 'pasted-uri':
     case 'fields':
       return built.config.password
+  }
+}
+
+/**
+ * 列出實際會寫入的欄位。密碼依鍵直接輸出遮蔽標記（不對整行做子字串取代，
+ * 免得密碼剛好等於帳號或某個 option 值時，連帶遮掉別的欄位）。
+ */
+function printDecomposed(config: MongoFieldConfig): void {
+  const { options, ...fields } = config
+  const mask = redactSecretsForDisplay(config.password, [config.password])
+  const lines = [
+    ...Object.entries(fields)
+      .filter(([, value]) => value !== '')
+      .map(([key, value]) => `  ${key}: ${key === 'password' ? mask : String(value)}`),
+    ...Object.entries(options ?? {}).map(([key, value]) => `  options.${key}: ${value}`),
+  ]
+  console.log(t('init.mongo_decomposed_header'))
+  for (const line of lines) console.log(line)
+}
+
+/**
+ * 互動貼上連線字串：解析失敗時印出不含原字串的錯誤並再問一次。
+ * 直接按 Enter 回傳 null，由呼叫端退回逐欄填寫。
+ */
+async function promptPastedConnectionString(): Promise<{
+  decomposed: DecomposeResult
+  connectionString: string
+} | null> {
+  for (;;) {
+    // The string is credential-bearing by construction, so it is collected the
+    // same way a password is rather than echoed into scrollback.
+    const input = (
+      await promptUser.secret(
+        'MongoDB 連線字串 / connection string (mongodb://user:pass@host:27017/db)',
+        { unavailable: t('init.secret_alternatives_mongo_uri') }
+      )
+    ).trim()
+    if (!input) return null
+    try {
+      return { decomposed: decomposeConnectionString(input), connectionString: input }
+    } catch (error) {
+      // 錯誤訊息本來就不含原字串；仍過一次遮蔽，避免日後的訊息帶出帳密
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(redactSecretsForDisplay(message, [input]))
+    }
   }
 }
 
@@ -131,44 +163,24 @@ export async function handleMongoDBInit(ctx: {
   // Use TTY check for interactive prompts (Commander --no-interactive sets options.interactive=false)
   const isInteractive = options.interactive !== false && process.stdin.isTTY
 
-  // Field-by-field is the primary path; a full URI is the advanced escape hatch.
+  // Field-by-field is the primary path; pasting a connection string (Atlas / Compass) is the
+  // second choice and is decomposed into fields too (ADR-0043).
   // See docs/adr/ADR-0002-mongodb-connection-field-first-config.md.
-  const SETUP_MODES = ['逐欄填寫（建議）', '貼上完整連線字串（進階）'] as const
-  const URI_MODE_INDEX = 1
+  const SETUP_MODES = ['逐欄填寫（建議）', t('init.mongo_setup_mode_paste')] as const
+  const CONNECTION_STRING_MODE_INDEX = 1
 
   // Env-ref mode stores variable names instead of values, so it never asks for
-  // the values themselves. It applies to the field path only — a full `uri`
-  // carrying credentials is an existing hand-edited escape hatch.
+  // the values themselves. It applies to the field path only — a connection string
+  // carries its credentials, so --uri rejects it and a pasted string only warns.
   const useEnvRefs = Boolean(options.useEnvRefs)
 
   let mongoUri = options.uri as string | undefined
   // An explicit --uri keeps its existing non-interactive behaviour: no mode prompt.
-  let useUriMode = Boolean(mongoUri)
+  let useConnectionStringMode = Boolean(mongoUri)
 
-  if (!mongoUri && isInteractive) {
-    const mode = await promptUser.select('連線設定方式 / Connection setup', [...SETUP_MODES])
-    useUriMode = mode === SETUP_MODES[URI_MODE_INDEX]
-
-    while (useUriMode && !mongoUri) {
-      // The URI is credential-bearing by construction, so it is collected the
-      // same way a password is rather than echoed into scrollback.
-      const input = await promptUser.secret(
-        'MongoDB 連線字串 / connection string (mongodb://user:pass@host:27017/db)',
-        { unavailable: t('init.secret_alternatives_mongo_uri') }
-      )
-      if (input.trim()) {
-        mongoUri = input.trim()
-      } else {
-        // Empty input is not a valid URI config; fall back to the field path
-        // rather than writing a connection with no host.
-        console.log('未輸入連線字串，改用逐欄填寫。')
-        useUriMode = false
-      }
-    }
-  }
-
-  // --uri 旗標的字串寫入前先拆解（ADR-0043）；互動貼上的字串仍原樣存成 uri。
+  // 連線字串（--uri 旗標或互動貼上）寫入前先拆解（ADR-0043），兩條路徑共用同一套規則。
   let decomposed: DecomposeResult | null = null
+  let pastedConnectionString = false
   if (options.uri) {
     const conflicts = conflictingFieldFlags(options)
     if (conflicts.length > 0) {
@@ -178,13 +190,30 @@ export async function handleMongoDBInit(ctx: {
     decomposed = decomposeConnectionString(options.uri as string)
   }
 
-  const useFieldEnvRefs = useEnvRefs && !useUriMode
-  if (useEnvRefs && useUriMode) {
-    // Silently writing a plaintext URI under --use-env-refs would leave the user
-    // believing their credentials were kept out of the config file.
-    console.warn(
-      '⚠️  --use-env-refs 不適用於完整連線字串：URI 會原樣寫入設定檔，帳密不會被抽成環境變數參照。'
-    )
+  if (!mongoUri && isInteractive) {
+    const mode = await promptUser.select('連線設定方式 / Connection setup', [...SETUP_MODES])
+    useConnectionStringMode = mode === SETUP_MODES[CONNECTION_STRING_MODE_INDEX]
+
+    if (useConnectionStringMode) {
+      const pasted = await promptPastedConnectionString()
+      if (pasted) {
+        decomposed = pasted.decomposed
+        mongoUri = pasted.connectionString
+        pastedConnectionString = true
+      } else {
+        // Empty input is not a valid connection config; fall back to the field path
+        // rather than writing a connection with no host.
+        console.log('未輸入連線字串，改用逐欄填寫。')
+        useConnectionStringMode = false
+      }
+    }
+  }
+
+  const useFieldEnvRefs = useEnvRefs && !useConnectionStringMode
+  if (useEnvRefs && useConnectionStringMode) {
+    // Silently writing plaintext credentials under --use-env-refs would leave the
+    // user believing they were kept out of the config file.
+    console.warn(t('init.mongo_paste_env_refs_warning'))
   }
 
   // Field-mode values. In env-ref mode these stay at their defaults — the
@@ -210,7 +239,7 @@ export async function handleMongoDBInit(ctx: {
     }
   }
 
-  if (!useUriMode && isInteractive) {
+  if (!useConnectionStringMode && isInteractive) {
     if (!useFieldEnvRefs) {
       fields.host = await promptUser.text('Host（主機位址）', fields.host)
     }
@@ -251,20 +280,32 @@ export async function handleMongoDBInit(ctx: {
     }
   }
 
-  if (!useUriMode && fields.srv && (useFieldEnvRefs ? options.envPort : options.port)) {
+  if (
+    !useConnectionStringMode &&
+    fields.srv &&
+    (useFieldEnvRefs ? options.envPort : options.port)
+  ) {
     // Dropping a given port silently would leave the user thinking it took effect.
     console.warn(
       `⚠️  SRV 連線會忽略 ${useFieldEnvRefs ? '--env-port' : '--port'}：SRV 記錄自帶埠號，設定檔不會寫入 port。`
     )
   }
 
-  // Database name (required even in URI mode for schema cache labelling)
+  // Database name (required even in connection-string mode for schema cache labelling)
   let database =
     (options.name as string | undefined) ||
     (decomposed?.kind === 'fields' ? decomposed.config.database : decomposed?.database) ||
     ''
-  if (!database && isInteractive && !useFieldEnvRefs) {
+  if (!database && isInteractive && useConnectionStringMode) {
+    // 連線字串路徑沒有資料庫：必填且沒有預設值，避免誤連到 testdb 之類的測試庫
+    while (!database) database = (await promptUser.text('Database name')).trim()
+  } else if (!database && isInteractive && !useFieldEnvRefs) {
     database = await promptUser.text('Database name', 'testdb')
+  }
+
+  // 列出的內容要等於實際寫入的，所以在資料庫名稱確定（--name 覆蓋、提問）之後才印
+  if (pastedConnectionString && decomposed?.kind === 'fields') {
+    printDecomposed({ ...decomposed.config, database })
   }
 
   /**
@@ -339,20 +380,6 @@ export async function handleMongoDBInit(ctx: {
     }
     if (decomposed?.kind === 'uri') {
       return { kind: 'uri-fallback', config: { system: 'mongodb', uri: mongoUri!, database } }
-    }
-    if (useUriMode) {
-      return {
-        kind: 'pasted-uri',
-        config: {
-          system: 'mongodb',
-          uri: mongoUri,
-          database,
-          host: '',
-          port: 27017,
-          user: '',
-          password: '',
-        },
-      }
     }
     return {
       kind: 'fields',

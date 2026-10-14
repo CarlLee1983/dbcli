@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Command } from 'commander'
 import { initCommand } from '@/commands/init'
+import { t } from '@/i18n/message-loader'
 import { promptUser } from '@/utils/prompts'
 import * as configV2 from '@/core/config-v2'
 import * as configBinding from '@/core/config-binding'
@@ -326,7 +327,7 @@ describe('interactive init collects credentials through the masked prompt', () =
         '--force',
       ],
       [
-        ['連線設定方式', '貼上完整連線字串（進階）'],
+        ['連線設定方式', t('init.mongo_setup_mode_paste')],
         ['連線字串', CANARY_URI],
         ['Database name', 'shop'],
       ]
@@ -334,7 +335,9 @@ describe('interactive init collects credentials through the masked prompt', () =
 
     expect(askedBySecret.some((label) => label.includes('連線字串'))).toBe(true)
     expect(askedByText.some((label) => label.includes('連線字串'))).toBe(false)
-    expect(written?.connections?.default?.uri === CANARY_URI).toBe(true)
+    // ADR-0043：貼上的字串拆解成欄位設定，密碼不再藏在 uri 字串裡
+    expect(written?.connections?.default?.password === CANARY).toBe(true)
+    expect(written?.connections?.default?.uri).toBeUndefined()
     expect(output.includes(CANARY)).toBe(false)
     expect(output.includes(CANARY_URI)).toBe(false)
   })
@@ -576,7 +579,7 @@ describe('failed connection tests do not reproduce the credential', () => {
     const { output, exited } = await runInit(
       ['--conn-name', 'default', '--system', 'mongodb', '--config', configPath, '--force'],
       [
-        ['連線設定方式', '貼上完整連線字串（進階）'],
+        ['連線設定方式', t('init.mongo_setup_mode_paste')],
         ['連線字串', CANARY_URI],
         ['Database name', 'shop'],
       ],

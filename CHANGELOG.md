@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **破壞性變更：`dbcli init --uri` 寫出的設定形狀改變。** 以 `--uri` 傳入的 MongoDB
   連線字串現在寫入前先拆解成欄位設定（`host`、`user`、`password`、`database`、
-  `authSource`、`replicaSet`、`tls`、`srv`，其餘參數進 `options`），不再原樣存成 `uri`；
+  `authSource`、`replicaSet`、`tls`、`srv`，其餘參數進 `options`），不再原樣存成 `uri`（互動 init 貼上的連線字串也一樣：拆解後列出結果並直接進連線測試，選單第二項改稱「貼上連線字串（Atlas / Compass 複製的）」）；互動終端下 `--uri` 字串沒帶資料庫名稱時，`Database name` 改為必填、不再預設 `testdb`；
   讀取 `uri` 欄位的腳本須改讀欄位。多組 host、帶 `authMechanismProperties`、
   `tlsCertificateKeyFilePassword`、`proxyPassword`、同一 query 鍵重複出現，或 `authMechanism`
   不是 `SCRAM-SHA-1`／`SCRAM-SHA-256` 的字串無法拆解，仍存成只含 `system`、

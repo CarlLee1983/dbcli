@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   只有之後重新以 `--uri` 執行 init 才會套用新的拆解行為。多組 host、帶 `authMechanismProperties`、
   `tlsCertificateKeyFilePassword`、`proxyPassword`、同一 query 鍵重複出現，或 `authMechanism`
   不是 `SCRAM-SHA-1`／`SCRAM-SHA-256` 的字串無法拆解，仍存成只含 `system`、
-  `uri`、`database` 的連線並警告帳密明文存放（除此之外一律拆解成欄位）。`--uri` 與 `--host`／`--port`／`--user`／
+  `uri`、`database` 的連線並警告帳密明文存放（除此之外一律拆解成欄位）。字串裡的 `ssl` 寫成 `tls`；
+  非 SRV、有帳號、路徑帶資料庫且未寫 `authSource` 的字串，拆解後寫入 `authSource: <路徑資料庫>`，
+  與 driver 對原字串的認證對象一致。`--uri` 與 `--host`／`--port`／`--user`／
   `--password`／`--auth-source`／`--replica-set`／`--srv`／`--tls`／`--no-tls` 並用，
   以及與 `--use-env-refs` 並用，現在都會報錯（後者原本只警告）。
 - **`srv: true` 欄位設定的 `authSource` 改為 SRV TXT 優先。** 既有、有 `user` 但未設定

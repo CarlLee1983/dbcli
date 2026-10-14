@@ -7,21 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.0.0] - 2026-10-14
+
+版本為 **11.0.0**。`dbcli init --uri` 寫出的設定形狀改變，且 `--uri` 與欄位 flag 並用會報錯，
+會影響既有腳本，所以採用 major 版本。已存在、含 `uri` 的設定不會被遷移，連線行為不變。
+
 ### Changed
 
 - **破壞性變更：`dbcli init --uri` 寫出的設定形狀改變。** 以 `--uri` 傳入的 MongoDB
   連線字串現在寫入前先拆解成欄位設定（`host`、`user`、`password`、`database`、
   `authSource`、`replicaSet`、`tls`、`srv`，其餘參數進 `options`），不再原樣存成 `uri`（互動 init 貼上的連線字串也一樣：拆解後列出結果並直接進連線測試，選單第二項改稱「貼上連線字串（Atlas / Compass 複製的）」）；互動終端下 `--uri` 字串沒帶資料庫名稱時，`Database name` 改為必填、不再預設 `testdb`；
-  讀取 `uri` 欄位的腳本須改讀欄位。多組 host、帶 `authMechanismProperties`、
+  讀取 `uri` 欄位的腳本須改讀欄位。**既有設定檔裡已存成 `uri` 的連線不會被遷移，照常連線**；
+  只有之後重新以 `--uri` 執行 init 才會套用新的拆解行為。多組 host、帶 `authMechanismProperties`、
   `tlsCertificateKeyFilePassword`、`proxyPassword`、同一 query 鍵重複出現，或 `authMechanism`
   不是 `SCRAM-SHA-1`／`SCRAM-SHA-256` 的字串無法拆解，仍存成只含 `system`、
-  `uri`、`database` 的連線並警告帳密明文存放。`--uri` 與 `--host`／`--port`／`--user`／
+  `uri`、`database` 的連線並警告帳密明文存放（除此之外一律拆解成欄位）。`--uri` 與 `--host`／`--port`／`--user`／
   `--password`／`--auth-source`／`--replica-set`／`--srv`／`--tls`／`--no-tls` 並用，
   以及與 `--use-env-refs` 並用，現在都會報錯（後者原本只警告）。
 - **`srv: true` 欄位設定的 `authSource` 改為 SRV TXT 優先。** 既有、有 `user` 但未設定
   `authSource` 的 `srv: true` 連線，若 SRV TXT record 提供 `authSource`，現在會採用該值，
   不再固定使用 `admin`；TXT 沒有提供時仍補 `admin`。明確設定的 `authSource` 欄位仍優先，
   非 SRV 的欄位設定維持預設 `admin`。
+
+### Added
+
+- **MongoDB 欄位設定新增 `options`**：字串對字串的物件，內容附加到連線 URI 的 query
+  （例如 `{"retryWrites": "false", "appName": "dbcli"}`）。只接受純字串，不支援 env-ref；
+  鍵若與 `authSource`／`replicaSet`／`tls`／`ssl` 同名（不分大小寫）會驗證失敗並指出該鍵，
+  請改設專屬欄位。設定了 `uri` 時 `options` 被忽略。
+- **`dbcli init` 新增 MongoDB flag**：`--replica-set <name>`、`--srv`、`--tls` / `--no-tls`。
+  `--srv` 寫入 `srv: true` 且不寫 `port`，並在同時給 `--port`／`--env-port` 時警告該 port 被忽略；
+  `--tls` 與 `--no-tls` 皆未給時不寫 `tls`，沿用 driver 預設。互動精靈不會再問已用 flag
+  給的值；搭配 `--use-env-refs` 時這些 flag 同樣生效。
+- **`dbcli doctor` 在 `uri` 與 `options` 並存時警告**：`uri` 優先，`options` 會被忽略
+  （原本只檢查 `host`／`user`，現在 `options` 也納入）。
 
 ## [10.0.0] - 2026-10-13
 

@@ -61,7 +61,7 @@ dbcli 執行於 Bun 1.4.0+。npm 與 npx 可作為發布通道，但安裝後的
 單獨執行 `dbcli --version` 或 `dbcli -V` 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。
 
 ### 初始化連線
-`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 進階備援請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
+`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 的拆解規則請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
 
 每次新建或新增連線都必須有非空白的連線名稱。可傳入 `--conn-name <name>`，或在互動式終端機執行 `dbcli init`，由程式主動詢問。名稱提示不會建議 `default`；輸入空字串或只有空白時，會說明名稱必填並再次詢問。取消或結束名稱提示會在連線測試、設定或憑證寫入前停止。明確提供非空白的 `--conn-name` 就不會再問名稱，`--conn-name default` 仍然合法。明確傳入空白的 `--conn-name` 則在任何模式都會於連線測試或寫入前報錯。`--name` 仍代表資料庫名稱（Redis 則是邏輯資料庫索引），不能當作連線名稱。
 
@@ -1300,22 +1300,31 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 
 ### MongoDB 連線設定
 
-`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 `--uri` 仍會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上從 Atlas / Compass 複製的連線字串是明示的第二選項（「貼上連線字串（Atlas / Compass 複製的）」）。傳入 `--uri` 會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+
+**貼上的連線字串同樣會拆解。** 互動貼上與 `--uri` 套用完全相同的規則（同樣的欄位對應；多組 host、帶機密 option、重複鍵、非 SCRAM 認證機制的字串同樣退回 `uri` 並警告帳密明文存放）。拆解成功後，終端會列出將寫入的每個欄位——密碼顯示為 `<redacted>`、`options` 逐鍵列出——然後直接進入權限選擇與連線測試，不再多一次確認。字串路徑帶資料庫名稱（或已給 `--name`）時不會問 `Database name`；否則必填且沒有預設值（互動終端下的 `--uri` 同樣如此，原本預設為 `testdb`）。字串無法解析（例如埠號不合法、`authSource=` 沒有值）時會印出不含原字串的錯誤並再問一次；直接按 Enter 則退回逐欄填寫。搭配 `--use-env-refs` 時，貼上的字串只會得到警告：帳密仍以字面值寫入，不會變成環境變數參照。
+
+**`--uri` 寫入前會先拆解。** 以 `--uri` 傳入的連線字串（例如從 Atlas 複製的）不再整條存成不透明的 `uri`，而是拆成上述欄位設定：`authSource`、`replicaSet`、`tls`（含別名 `ssl`）進各自的正式欄位，`mongodb+srv` 對應 `srv: true` 且不寫 `port`，路徑上的資料庫名稱進 `database`（`--name` 可覆蓋），其餘 query 參數（`retryWrites`、`w`、`appName` 等）進 `options`。字串沒寫 `authSource` 就不寫該欄位，唯一例外：非 SRV、有帳號、路徑帶資料庫時會寫入 `authSource: <路徑資料庫>`，因為 driver 對這種字串以路徑資料庫認證，而沒寫 `authSource` 的欄位設定會預設成 `admin`。帳號與密碼會做百分比解碼。字串路徑沒有資料庫名稱時必須給 `--name`。
+
+欄位設定表達不了的字串會原樣存進 `uri`（寫出的連線只含 `system`、`uri`、`database`），並警告帳密將明文存放於設定檔：含多組 host 的字串；帶機密 option 的字串（`authMechanismProperties`、`tlsCertificateKeyFilePassword`、`proxyPassword`，不分大小寫），拆進 `options` 會以明文落盤；同一 query 鍵出現多次的字串（不分大小寫，例如兩個 `readPreferenceTags`），因為欄位或 `options` 每個鍵只能存一個值；以及 `authMechanism` 不是 `SCRAM-SHA-1`／`SCRAM-SHA-256` 的字串（如 X509、GSSAPI、PLAIN、AWS）。警告會指出重複的鍵或該機制。明寫 SCRAM 的 `authMechanism` 照常拆解，留在 `options`。
+
+`--uri` 不能與 `--host`、`--port`、`--user`、`--password`、`--auth-source`、`--replica-set`、`--srv`、`--tls`、`--no-tls` 並用（錯誤訊息會指出衝突的 flag），也不能與 `--use-env-refs` 並用：請拿掉 `--use-env-refs` 讓 dbcli 拆解字串寫入欄位設定，或改用 `--env-*` flag 逐欄給變數名稱。`--name` 可與 `--uri` 並用。
 
 逐欄連線欄位（`ConnectionConfig`，`src/types/index.ts`）：
 
 | 欄位 | 型別 | 用途 |
 | --- | --- | --- |
-| `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫；有帳密時預設為 `admin`。 |
+| `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫。有帳密且未設定時預設為 `admin`；`srv: true` 時，SRV TXT record 若有提供 `authSource`，優先採用。 |
 | `replicaSet` | 字串或 `{"$env": "..."}` | 複本集名稱。 |
 | `tls` | 布林 | 是否啟用 TLS。 |
+| `options` | 字串對字串的物件 | 附加到連線 URI 的額外 driver 參數，例如 `{"retryWrites": "false", "appName": "dbcli"}`。只接受純字串（不支援 `{"$env": "..."}`）。不可重複 `authSource` / `replicaSet` / `tls` / `ssl`（不分大小寫），否則驗證失敗並指出該鍵。設定了 `uri` 時會被忽略。 |
 | `srv` | 布林（預設 `false`） | 組出 `mongodb+srv://` 並透過 DNS SRV 展開 host；啟用時 `port` 會被忽略。 |
 | `timeout` | 數字（毫秒，100～600000） | 連線 timeout；可用 root-level `--timeout <ms>` 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與本表其他欄位不同，它不接受 `{"$env": "..."}` 參照，只接受字面數字。 |
 | `statementTimeout` | 數字（毫秒，0～3600000） | 一句語句能跑多久，與連線 timeout 獨立；可用 root-level `--statement-timeout <ms>` 覆寫。未設定時退回 `timeout`，兩者都沒有則交給伺服器自己的設定。`0` 表示取消上限。與 `timeout` 一樣只接受字面數字。 |
 
-`--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
+`--auth-source <db>`、`--replica-set <name>`、`--srv`、`--tls` / `--no-tls` 都是 `init` 的 flag，CI 不必改用連線字串就能設定複本集、SRV（Atlas）與 TLS。`--srv` 會寫入 `srv: true` 且不寫 `port`；`--tls` 與 `--no-tls` 皆未給時不寫 `tls`，沿用 driver 預設。互動精靈中，已用 flag 給的值不會再問（SRV 提問，以及進階步驟的 `replicaSet` / `tls`）。搭配 `--use-env-refs` 時這些 flag 同樣生效，因為它們不是機密。
 
-若設定同時存在 `uri` 與逐欄值（`host` / `user`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
+若設定同時存在 `uri` 與逐欄值（`host` / `user` / `options`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
 
 逐欄模式下只填 `user` 沒填 `password`，現在會直接拋出錯誤，不再靜默降級成無認證連線。`user`、`database`、`password` 中的值在組成 URI 時皆會一致跳脫，帳號或資料庫名稱中含 `@`、`/` 等字元不會再讓 driver 誤判 authority 的邊界。
 

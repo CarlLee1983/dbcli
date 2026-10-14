@@ -148,13 +148,19 @@ export const initCommand = new Command('init')
   .option('--api-key <key>', 'Elasticsearch API Key')
   .option(
     '--uri <uri>',
-    'MongoDB connection URI (mongodb://user:pass@host:27017/db?authSource=admin)'
+    'MongoDB connection string, decomposed into fields on write (mongodb://user:pass@host:27017/db?authSource=admin)'
   )
 
   .option(
     '--auth-source <authSource>',
     'MongoDB auth database (default: admin when user/password are set)'
   )
+  .option('--replica-set <name>', 'MongoDB replica set name')
+  .option('--srv', 'MongoDB: connect via a mongodb+srv:// DNS SRV domain (port is not written)')
+  // Both forms are declared so Commander leaves the value undefined when neither is given
+  // (a lone --no-tls would default it to true).
+  .option('--tls', 'MongoDB: enable TLS (omit both --tls and --no-tls to use the driver default)')
+  .option('--no-tls', 'MongoDB: disable TLS')
   .option(
     '--permission <permission>',
     'Permission level (query-only, read-write, data-admin, admin)',

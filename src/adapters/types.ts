@@ -100,6 +100,8 @@ export interface ConnectionOptions {
   replicaSet?: string
   /** MongoDB TLS switch (optional, field-based config; implied true when srv) */
   tls?: boolean
+  /** MongoDB extra driver options appended to the URI query string (field-based config, plain strings only) */
+  options?: Record<string, string>
   /** MongoDB SRV lookup — build a mongodb+srv:// URI from host (optional, field-based config) */
   srv?: boolean
   /** Connection timeout in milliseconds (default: 5000) */

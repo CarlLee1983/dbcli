@@ -453,6 +453,32 @@ describe('doctor checks', () => {
     expect(conflict?.message).toContain('uri')
   })
 
+  test('collectMongoDoctorResults warns when uri and a non-empty options coexist', async () => {
+    const adapter = {
+      connect: async () => {},
+      disconnect: async () => {},
+      getServerVersion: async () => '7.0.0',
+      listCollections: async () => [],
+      testConnection: async () => true,
+      execute: async () => ({ rows: [], affectedRows: 0 }),
+    }
+    const results = await collectMongoDoctorResults(
+      {
+        connection: {
+          system: 'mongodb',
+          uri: 'mongodb://elsewhere.example.com:27017/other',
+          options: { appName: 'dbcli' },
+        },
+        metadata: {},
+      } as any,
+      mongoRuntime(adapter as unknown as ReturnType<typeof AdapterFactory.createMongoDBAdapter>)
+    )
+
+    const conflict = results.find((result) => result.label === 'MongoDB connection fields')
+    expect(conflict?.status).toBe('warn')
+    expect(conflict?.message).toContain('options')
+  })
+
   test('collectMongoDoctorResults runs the SRV check for field-based srv:true config', async () => {
     const adapter = {
       connect: async () => {},

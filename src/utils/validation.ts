@@ -111,6 +111,35 @@ export function parseStatementTimeoutOption(value: string): number {
 }
 
 /**
+ * Option keys owned by dedicated MongoDB fields, lowercased -> field to use instead.
+ * The driver matches option names case-insensitively, so `TLS` shadows `tls` too;
+ * `ssl` is the legacy alias of `tls`.
+ */
+export const RESERVED_MONGODB_OPTION_KEYS: Readonly<Record<string, string>> = {
+  authsource: 'authSource',
+  replicaset: 'replicaSet',
+  tls: 'tls',
+  ssl: 'tls',
+}
+
+/**
+ * Free-form MongoDB driver options: plain strings only (no env-ref). A key that
+ * shadows a dedicated field is rejected so one setting never has two sources.
+ */
+const MongoDBOptionsSchema = z.record(z.string(), z.string()).superRefine((options, ctx) => {
+  for (const key of Object.keys(options)) {
+    const field = RESERVED_MONGODB_OPTION_KEYS[key.toLowerCase()]
+    if (field) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `options.${key} duplicates the dedicated '${field}' field; set '${field}' instead`,
+      })
+    }
+  }
+})
+
+/**
  * MongoDB connection schema — all SQL fields optional (defaulted), uri optional.
  * After parse(), host/port/user/password/database are always strings (empty by default).
  *
@@ -129,6 +158,7 @@ export const MongoDBConnectionConfigSchema = z.object({
   authSource: z.union([z.string(), EnvRefSchema]).optional(),
   replicaSet: z.union([z.string(), EnvRefSchema]).optional(),
   tls: z.boolean().optional(),
+  options: MongoDBOptionsSchema.optional(),
   srv: z.boolean().optional().default(false),
   ...TimeoutField,
 })

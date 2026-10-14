@@ -248,6 +248,60 @@ describe('validation', () => {
       })
     })
 
+    test('應該接受字串鍵對字串值的 options', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        host: 'localhost',
+        database: 'shop',
+        options: { retryWrites: 'false', w: 'majority' },
+      })
+
+      expect(parsed).toMatchObject({ options: { retryWrites: 'false', w: 'majority' } })
+    })
+
+    for (const key of [
+      'authSource',
+      'replicaSet',
+      'tls',
+      'ssl',
+      'authsource',
+      'REPLICASET',
+      'TLS',
+      'SSL',
+    ]) {
+      test(`options 含正式欄位同名鍵 ${key} 時驗證失敗並指出該鍵`, () => {
+        expect(() =>
+          ConnectionConfigSchema.parse({
+            system: 'mongodb',
+            host: 'localhost',
+            database: 'shop',
+            options: { [key]: 'x' },
+          })
+        ).toThrow(new RegExp(key))
+      })
+    }
+
+    test('options 的值不接受 env-ref', () => {
+      expect(() =>
+        ConnectionConfigSchema.parse({
+          system: 'mongodb',
+          host: 'localhost',
+          database: 'shop',
+          options: { appName: { $env: 'APP_NAME' } },
+        })
+      ).toThrow(ZodError)
+    })
+
+    test('只含 uri 的既有設定照常通過驗證', () => {
+      const parsed = ConnectionConfigSchema.parse({
+        system: 'mongodb',
+        uri: 'mongodb://localhost:27017/shop?retryWrites=true',
+      })
+
+      expect(parsed).toMatchObject({ uri: 'mongodb://localhost:27017/shop?retryWrites=true' })
+      expect((parsed as any).options).toBeUndefined()
+    })
+
     test('tls 只接受布林值', () => {
       expect(() =>
         ConnectionConfigSchema.parse({

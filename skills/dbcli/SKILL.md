@@ -372,7 +372,7 @@ dbcli init                                                # parses .env in cwd
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 --name mydb
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 \
   --user admin --password '<secret>' --auth-source admin --name mydb
-# MongoDB — full URI (advanced escape hatch: multi-host, non-standard driver options)
+# MongoDB — full URI (decomposed into fields on write; multi-host / secret-option strings stay as `uri` with a warning)
 dbcli init --conn-name local --system mongodb \
   --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
 
@@ -494,9 +494,10 @@ refs have no value to connect with yet.
   natively or via the DoH fallback; useful when the runtime restricts DNS.
 - **MongoDB `authSource` / `replicaSet` / `tls` / `srv`** — `init` asks for
   these interactively (`authSource` only when a user is set; `replicaSet` /
-  `tls` behind an "advanced options?" prompt); `--auth-source <db>` is the
-  only one with a dedicated non-interactive flag, so set `replicaSet` / `tls`
-  interactively or edit `.dbcli` afterward. If a config has both `uri` and
+  `tls` behind an "advanced options?" prompt); non-interactive flags are
+  `--auth-source <db>`, `--replica-set <name>`, `--srv` (no `port` written) and
+  `--tls` / `--no-tls` (neither given writes no `tls`); a flag you pass skips
+  its prompt. If a config has both `uri` and
   per-field values, `uri` wins silently — `dbcli doctor` flags this and also
   warns when `srv: true` is combined with a non-default `port`.
 - **MySQL/Postgres password with `@` `:` `/`** — when using `DATABASE_URL`,

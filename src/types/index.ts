@@ -65,6 +65,8 @@ export interface MongoDBConnectionConfig {
   authSource?: string | { $env: string }
   replicaSet?: string | { $env: string }
   tls?: boolean
+  /** Extra driver options appended to the URI query string; plain strings, no env-ref */
+  options?: Record<string, string>
   /** Build a mongodb+srv:// URI from host and expand it via DNS SRV lookup */
   srv?: boolean
 }

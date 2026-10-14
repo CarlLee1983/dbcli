@@ -1,7 +1,9 @@
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test'
+import { MongoClient } from 'mongodb'
 import { MongoDBAdapter } from 'src/adapters/mongodb-adapter'
 import type { ConnectionOptions } from 'src/adapters/types'
 import { ConnectionError } from 'src/adapters/types'
+import { decomposeConnectionString } from 'src/core/mongodb-connection-string'
 
 const mockDocs = [
   { _id: '1', name: 'Alice', age: 30 },
@@ -120,6 +122,34 @@ describe('MongoDBAdapter', () => {
       expect(parsed.searchParams.get('tls')).toBe('true')
     })
 
+    test('options 的每個鍵值都帶進 URI 參數', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        options: { retryWrites: 'false', w: 'majority', appName: 'dbcli' },
+      })
+
+      const params = new URL(uri).searchParams
+      expect(params.get('retryWrites')).toBe('false')
+      expect(params.get('w')).toBe('majority')
+      expect(params.get('appName')).toBe('dbcli')
+    })
+
+    test('options 與 authSource / replicaSet / tls 欄位並存', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        authSource: 'appdb',
+        replicaSet: 'rs0',
+        tls: true,
+        options: { appName: 'dbcli' },
+      })
+
+      const params = new URL(uri).searchParams
+      expect(params.get('authSource')).toBe('appdb')
+      expect(params.get('replicaSet')).toBe('rs0')
+      expect(params.get('tls')).toBe('true')
+      expect(params.get('appName')).toBe('dbcli')
+    })
+
     test('未指定 authSource 時，有帳密則預設 admin', async () => {
       const uri = await connectedUri(hostOptions)
       expect(new URL(uri).searchParams.get('authSource')).toBe('admin')
@@ -175,6 +205,152 @@ describe('MongoDBAdapter', () => {
       } finally {
         fetchSpy.mockRestore()
       }
+    })
+
+    describe('srv:true 且有 user 時的 authSource', () => {
+      /** Stub DNS-over-HTTPS: one SRV host, and a TXT answer (or none when txt is null). */
+      function stubDns(txt: string | null) {
+        return spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
+          const url = String(input)
+          if (url.includes('type=SRV')) {
+            return new Response(
+              JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })
+            )
+          }
+          if (url.includes('type=TXT') && txt !== null) {
+            return new Response(JSON.stringify({ Status: 0, Answer: [{ data: txt }] }))
+          }
+          return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
+        }) as unknown as typeof fetch)
+      }
+      const srvOptions: ConnectionOptions = {
+        ...hostOptions,
+        host: 'cluster.example.com',
+        srv: true,
+      }
+
+      test('未指定 authSource 時採用 SRV TXT 給的值', async () => {
+        const fetchSpy = stubDns('"authSource=other"')
+        try {
+          const uri = await connectedUri(srvOptions)
+          expect(new URL(uri).searchParams.get('authSource')).toBe('other')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+
+      test('未指定 authSource 且無 TXT 時補 admin', async () => {
+        const fetchSpy = stubDns(null)
+        try {
+          const uri = await connectedUri(srvOptions)
+          expect(new URL(uri).searchParams.get('authSource')).toBe('admin')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+
+      test('明確的 authSource 欄位優先於 SRV TXT', async () => {
+        const fetchSpy = stubDns('"authSource=other"')
+        try {
+          const uri = await connectedUri({ ...srvOptions, authSource: 'appdb' })
+          expect(new URL(uri).searchParams.get('authSource')).toBe('appdb')
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+    })
+
+    describe('連線字串原樣作 uri 與拆解成欄位設定，連到同一處（ADR-0043）', () => {
+      function stubSrvDns() {
+        return spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
+          const url = String(input)
+          if (url.includes('type=SRV')) {
+            return new Response(
+              JSON.stringify({ Status: 0, Answer: [{ data: '0 0 27017 a.example.com.' }] })
+            )
+          }
+          return new Response(JSON.stringify({ Status: 3 }), { status: 200 })
+        }) as unknown as typeof fetch)
+      }
+
+      /** 展開後 URI 的主機、帳密、路徑與參數集合（鍵名不分大小寫）；SRV 案例用。 */
+      function destination(uri: string) {
+        const parsed = new URL(uri)
+        return {
+          host: parsed.host,
+          username: decodeURIComponent(parsed.username),
+          password: decodeURIComponent(parsed.password),
+          pathname: parsed.pathname,
+          params: [...parsed.searchParams.entries()]
+            .map(([key, value]) => [key.toLowerCase(), value])
+            .sort(([a], [b]) => a!.localeCompare(b!)),
+        }
+      }
+
+      /**
+       * driver 自己解析出的有效連線設定（new MongoClient 不會連線）。獨立於拆解模組的規則：
+       * 預設 authSource、ssl 別名等語意都由 driver 決定，而不是由測試重算。
+       */
+      function driverView(uri: string) {
+        const o = new MongoClient(uri).options
+        return {
+          hosts: o.hosts.map((h) => `${h.host}:${h.port}`),
+          credentials: o.credentials && {
+            username: o.credentials.username,
+            password: o.credentials.password,
+            source: o.credentials.source,
+            mechanism: o.credentials.mechanism,
+          },
+          dbName: o.dbName,
+          tls: o.tls,
+          replicaSet: o.replicaSet,
+          retryWrites: o.retryWrites,
+          w: o.writeConcern?.w,
+          appName: o.appName,
+        }
+      }
+
+      function fieldsOf(original: string): ConnectionOptions {
+        const decomposed = decomposeConnectionString(original)
+        if (decomposed.kind !== 'fields') throw new Error('expected a field config')
+        return { ...decomposed.config, port: decomposed.config.port ?? 27017 }
+      }
+
+      test.each([
+        [
+          '帶 authSource / replicaSet / ssl 的字串（AC-3）',
+          'mongodb://u:p@db.internal:27017/app?authSource=appdb&replicaSet=rs0&ssl=true',
+        ],
+        ['非 SRV、有帳號、無 authSource 的字串', 'mongodb://u:p@db.internal:27017/app'],
+        [
+          '帶 Atlas 參數的非 SRV 字串',
+          'mongodb://u:p@db.internal:27017/app?retryWrites=true&w=majority&appName=Cluster0',
+        ],
+      ])('非 SRV：%s，driver 解析出同樣的連線', async (_label, original) => {
+        const asUri = await connectedUri({ ...uriOptions, uri: original })
+        const asFields = await connectedUri(fieldsOf(original))
+
+        expect(driverView(asFields)).toEqual(driverView(asUri))
+      })
+
+      test('SRV：Atlas 字串（AC-1）展開後的主機、路徑與參數集合相同', async () => {
+        const original =
+          'mongodb+srv://u:s3cr3tPw@cluster0.example.mongodb.net/app?retryWrites=true&w=majority&appName=Cluster0'
+        const fetchSpy = stubSrvDns()
+        try {
+          const asUri = await connectedUri({ ...uriOptions, uri: original })
+          const asFields = await connectedUri(fieldsOf(original))
+
+          expect(destination(asFields)).toEqual(destination(asUri))
+        } finally {
+          fetchSpy.mockRestore()
+        }
+      })
+
+      test('非 SRV、有帳號、路徑帶資料庫的字串拆解後寫入 authSource', () => {
+        const decomposed = decomposeConnectionString('mongodb://u:p@db.internal:27017/app')
+        expect(decomposed.kind === 'fields' && decomposed.config.authSource).toBe('app')
+      })
     })
 
     test('uri 與逐欄欄位並存時，uri 優先', async () => {

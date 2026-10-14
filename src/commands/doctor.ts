@@ -768,14 +768,17 @@ export async function collectMongoDoctorResults(
   // Surface config shapes that silently do nothing, so "I edited the field and
   // nothing changed" is diagnosable instead of mysterious.
   if (mongoConn) {
-    const hasFieldConfig = Boolean(mongoConn.host) || Boolean(mongoConn.user)
+    const hasFieldConfig =
+      Boolean(mongoConn.host) ||
+      Boolean(mongoConn.user) ||
+      Object.keys(mongoConn.options ?? {}).length > 0
     if (mongoUriString && hasFieldConfig) {
       results.push({
         group: 'Connection & Data',
         label: 'MongoDB connection fields',
         status: 'warn',
         message:
-          'Both uri and per-field settings (host/user) are present; uri takes precedence and the per-field values are ignored.',
+          'Both uri and per-field settings (host/user/options) are present; uri takes precedence and the per-field values are ignored.',
       })
     }
 

@@ -18,6 +18,7 @@
     "mongo_uri_conflicts_fields": "--uri cannot be combined with {flags}: the connection string already carries those settings. Use one or the other (--name may be combined to override the database name).",
     "mongo_uri_with_env_refs": "--uri cannot be combined with --use-env-refs: the connection string is decomposed into config fields, and its credentials are not moved into environment variables. Either remove --use-env-refs so dbcli decomposes the string into the field config, or use the --env-* flags (--env-host, --env-user, --env-password, ...) to name one variable per field.",
     "mongo_uri_fallback_warning": "⚠️  This connection string {reasons}, so it cannot become fields. It is stored as-is in uri, and its credentials will sit in plaintext in the config file.",
+    "mongo_uri_reason_unix_socket": "uses a Unix domain socket",
     "mongo_uri_reason_multi_host": "contains more than one host (a field config holds only one)",
     "mongo_uri_reason_secret_option": "contains secret option(s) ({keys}) that would land in plaintext options",
     "mongo_uri_reason_duplicate_key": "repeats the query key(s) {keys} (a field config can hold only one value per key)",

@@ -39,6 +39,7 @@ const SCRAM_MECHANISMS = ['scram-sha-1', 'scram-sha-256'] as const
 
 export type FallbackReason =
   | { type: 'multi-host' }
+  | { type: 'unix-socket' }
   | { type: 'secret-option'; keys: string[] }
   | { type: 'duplicate-key'; keys: string[] }
   | { type: 'non-scram-mechanism'; mechanism: string }
@@ -87,6 +88,11 @@ export function decomposeConnectionString(uri: string): DecomposeResult {
     (SECRET_OPTION_KEYS as readonly string[]).includes(key.toLowerCase())
   )
   const reasons: FallbackReason[] = []
+  // Match the driver's HostAddress socket discriminator before TCP decomposition.
+  // Keeping the raw URI also preserves encoded paths and their case.
+  if (!parsed.isSRV && parsed.hosts.some((host) => host.endsWith('.sock'))) {
+    reasons.push({ type: 'unix-socket' })
+  }
   if (parsed.hosts.length > 1) reasons.push({ type: 'multi-host' })
   if (secretKeys.length > 0) reasons.push({ type: 'secret-option', keys: secretKeys })
 

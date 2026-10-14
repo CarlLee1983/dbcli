@@ -120,6 +120,34 @@ describe('MongoDBAdapter', () => {
       expect(parsed.searchParams.get('tls')).toBe('true')
     })
 
+    test('options 的每個鍵值都帶進 URI 參數', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        options: { retryWrites: 'false', w: 'majority', appName: 'dbcli' },
+      })
+
+      const params = new URL(uri).searchParams
+      expect(params.get('retryWrites')).toBe('false')
+      expect(params.get('w')).toBe('majority')
+      expect(params.get('appName')).toBe('dbcli')
+    })
+
+    test('options 與 authSource / replicaSet / tls 欄位並存', async () => {
+      const uri = await connectedUri({
+        ...hostOptions,
+        authSource: 'appdb',
+        replicaSet: 'rs0',
+        tls: true,
+        options: { appName: 'dbcli' },
+      })
+
+      const params = new URL(uri).searchParams
+      expect(params.get('authSource')).toBe('appdb')
+      expect(params.get('replicaSet')).toBe('rs0')
+      expect(params.get('tls')).toBe('true')
+      expect(params.get('appName')).toBe('dbcli')
+    })
+
     test('未指定 authSource 時，有帳密則預設 admin', async () => {
       const uri = await connectedUri(hostOptions)
       expect(new URL(uri).searchParams.get('authSource')).toBe('admin')

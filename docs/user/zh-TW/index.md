@@ -1309,13 +1309,14 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 | `authSource` | 字串或 `{"$env": "..."}` | 認證資料庫；有帳密時預設為 `admin`。 |
 | `replicaSet` | 字串或 `{"$env": "..."}` | 複本集名稱。 |
 | `tls` | 布林 | 是否啟用 TLS。 |
+| `options` | 字串對字串的物件 | 附加到連線 URI 的額外 driver 參數，例如 `{"retryWrites": "false", "appName": "dbcli"}`。只接受純字串（不支援 `{"$env": "..."}`）。不可重複 `authSource` / `replicaSet` / `tls` / `ssl`（不分大小寫），否則驗證失敗並指出該鍵。設定了 `uri` 時會被忽略。 |
 | `srv` | 布林（預設 `false`） | 組出 `mongodb+srv://` 並透過 DNS SRV 展開 host；啟用時 `port` 會被忽略。 |
 | `timeout` | 數字（毫秒，100～600000） | 連線 timeout；可用 root-level `--timeout <ms>` 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與本表其他欄位不同，它不接受 `{"$env": "..."}` 參照，只接受字面數字。 |
 | `statementTimeout` | 數字（毫秒，0～3600000） | 一句語句能跑多久，與連線 timeout 獨立；可用 root-level `--statement-timeout <ms>` 覆寫。未設定時退回 `timeout`，兩者都沒有則交給伺服器自己的設定。`0` 表示取消上限。與 `timeout` 一樣只接受字面數字。 |
 
 `--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
 
-若設定同時存在 `uri` 與逐欄值（`host` / `user`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
+若設定同時存在 `uri` 與逐欄值（`host` / `user` / `options`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
 
 逐欄模式下只填 `user` 沒填 `password`，現在會直接拋出錯誤，不再靜默降級成無認證連線。`user`、`database`、`password` 中的值在組成 URI 時皆會一致跳脫，帳號或資料庫名稱中含 `@`、`/` 等字元不會再讓 driver 誤判 authority 的邊界。
 

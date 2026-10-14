@@ -1453,13 +1453,14 @@ Field-based connection options (`ConnectionConfig`, `src/types/index.ts`):
 | `authSource` | string or `{"$env": "..."}` | Auth database; defaults to `admin` once a user is configured. |
 | `replicaSet` | string or `{"$env": "..."}` | Replica set name. |
 | `tls` | boolean | Enable TLS. |
+| `options` | object of string to string | Extra driver parameters appended to the connection URI, e.g. `{"retryWrites": "false", "appName": "dbcli"}`. Plain strings only (no `{"$env": "..."}`). Must not repeat `authSource` / `replicaSet` / `tls` / `ssl` (case-insensitive) — validation fails and names the key. Ignored when `uri` is set. |
 | `srv` | boolean (default `false`) | Build a `mongodb+srv://` URI and resolve hosts via DNS SRV; `port` is ignored when `true`. |
 | `timeout` | number (ms, 100–600000) | Connection timeout; overridable per invocation with root-level `--timeout <ms>`. Defaults to the adapter's built-in 5000ms when neither is set. Unlike the other fields in this table, it does not accept an `{"$env": "..."}` reference — only a literal number. |
 | `statementTimeout` | number (ms, 0–3600000) | How long one statement may run, independent of the connection timeout; overridable with root-level `--statement-timeout <ms>`. Falls back to `timeout` when unset, and to the server's own setting when neither is given. `0` removes the limit. Literal numbers only, like `timeout`. |
 
 `--auth-source <db>` is available as a non-interactive `init` flag. `replicaSet` and `tls` have no dedicated flag yet — set them through the interactive advanced step, or edit `.dbcli` directly afterward (the same pattern already used for Elasticsearch's `caPath` / `rejectUnauthorized`).
 
-If a config carries both `uri` and per-field values (`host` / `user`), `uri` wins and the per-field values are silently ignored, exactly as before — but `dbcli doctor` now reports this as a warning, so an edited field that "did nothing" is diagnosable instead of mysterious. `doctor` also warns when `srv: true` is combined with a non-default `port`, since SRV records carry their own ports.
+If a config carries both `uri` and per-field values (`host` / `user` / `options`), `uri` wins and the per-field values are silently ignored, exactly as before — but `dbcli doctor` now reports this as a warning, so an edited field that "did nothing" is diagnosable instead of mysterious. `doctor` also warns when `srv: true` is combined with a non-default `port`, since SRV records carry their own ports.
 
 A field-mode `user` with no `password` now fails closed with an error instead of silently downgrading to an unauthenticated connection. `user`, `database`, and `password` values are consistently percent-encoded when the URI is assembled, so characters such as `@` or `/` in a username or database name no longer shift where the driver parses the authority.
 

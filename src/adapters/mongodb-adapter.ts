@@ -62,7 +62,8 @@ export class MongoDBAdapter implements QueryableAdapter {
    */
   private buildUri(): string {
     if (this.options.uri) return this.options.uri
-    const { user, password, host, port, database, authSource, replicaSet, tls, srv } = this.options
+    const { user, password, host, port, database, authSource, replicaSet, tls, srv, options } =
+      this.options
 
     // Reject anything that would move the authority boundary or silently turn
     // into an unreadable driver error. `:` is included because the port belongs
@@ -102,6 +103,8 @@ export class MongoDBAdapter implements QueryableAdapter {
     if (user) query.set('authSource', authSource || 'admin')
     if (replicaSet) query.set('replicaSet', replicaSet)
     if (tls !== undefined) query.set('tls', String(tls))
+    // Free-form driver options; validation already rejects keys that shadow the dedicated fields above
+    for (const [key, value] of Object.entries(options ?? {})) query.set(key, value)
 
     const search = query.toString()
     return `${scheme}${userInfo}${authority}${path}${search ? `?${search}` : ''}`

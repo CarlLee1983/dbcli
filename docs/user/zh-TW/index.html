@@ -1049,12 +1049,13 @@ dbcli impact assess --design ./dbcli.design.json --against-orm ./prisma/schema.p
                 <li><code>authSource</code>（字串或 <code>{"$env": "..."}</code>）— 認證資料庫；有帳密時預設為 <code>admin</code>。</li>
                 <li><code>replicaSet</code>（字串或 <code>{"$env": "..."}</code>）— 複本集名稱。</li>
                 <li><code>tls</code>（布林）— 是否啟用 TLS。</li>
+                <li><code>options</code>（字串對字串的物件）— 附加到連線 URI 的額外 driver 參數，例如 <code>{"retryWrites": "false", "appName": "dbcli"}</code>。只接受純字串（不支援 <code>{"$env": "..."}</code>）。不可重複 <code>authSource</code> / <code>replicaSet</code> / <code>tls</code> / <code>ssl</code>（不分大小寫），否則驗證失敗並指出該鍵。設定了 <code>uri</code> 時會被忽略。</li>
                 <li><code>srv</code>（布林，預設 <code>false</code>）— 組出 <code>mongodb+srv://</code> 並透過 DNS SRV 展開 host；啟用時 <code>port</code> 會被忽略。</li>
                 <li><code>timeout</code>（數字，毫秒，100～600000）— 連線 timeout；可用 root-level <code>--timeout &lt;ms&gt;</code> 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與上述其他欄位不同，它不接受 <code>{"$env": "..."}</code> 參照，只接受字面數字。</li>
                 <li><code>statementTimeout</code>（數字，毫秒，0～3600000）— 一句語句能跑多久，與連線 timeout 獨立；可用 root-level <code>--statement-timeout &lt;ms&gt;</code> 覆寫。未設定時退回 <code>timeout</code>，兩者都沒有則交給伺服器自己的設定。<code>0</code> 表示取消上限。與 <code>timeout</code> 一樣只接受字面數字。</li>
             </ul>
             <p><code>--auth-source &lt;db&gt;</code> 已是非互動的 <code>init</code> flag。<code>replicaSet</code> 與 <code>tls</code> 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 <code>.dbcli</code>（與 Elasticsearch 的 <code>caPath</code> / <code>rejectUnauthorized</code> 是同一套模式）。</p>
-            <p>若設定同時存在 <code>uri</code> 與逐欄值（<code>host</code> / <code>user</code>），<code>uri</code> 仍會優先，逐欄值一樣被忽略——這點沒變，但 <code>dbcli doctor</code> 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。<code>doctor</code> 也會在 <code>srv: true</code> 又同時指定非預設 <code>port</code> 時發出警告，因為 SRV 記錄自帶埠號。</p>
+            <p>若設定同時存在 <code>uri</code> 與逐欄值（<code>host</code> / <code>user</code> / <code>options</code>），<code>uri</code> 仍會優先，逐欄值一樣被忽略——這點沒變，但 <code>dbcli doctor</code> 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。<code>doctor</code> 也會在 <code>srv: true</code> 又同時指定非預設 <code>port</code> 時發出警告，因為 SRV 記錄自帶埠號。</p>
             <p>逐欄模式下只填 <code>user</code> 沒填 <code>password</code>，現在會直接拋出錯誤，不再靜默降級成無認證連線。<code>user</code>、<code>database</code>、<code>password</code> 中的值在組成 URI 時皆會一致跳脫，帳號或資料庫名稱中含 <code>@</code>、<code>/</code> 等字元不會再讓 driver 誤判 authority 的邊界。</p>
             <p>連線失敗訊息依成因分類提示：認證失敗會提示檢查 <code>user</code> / <code>password</code> / <code>authSource</code>（Atlas 與多數自架環境為 <code>admin</code>）；DNS/SRV 失敗會提示檢查 <code>srv</code> 設定與本機網路的 DNS 限制；TLS/憑證失敗會提示 <code>tls</code> 欄位與 CA 信任鏈設定。</p>
 

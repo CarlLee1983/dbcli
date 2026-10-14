@@ -18,10 +18,103 @@ import {
   migrateLegacyProjectEnvLocal,
   writeProjectBinding,
 } from '@/core/config-binding'
+import {
+  decomposeConnectionString,
+  type DecomposeResult,
+  type FallbackReason,
+  type MongoFieldConfig,
+} from '@/core/mongodb-connection-string'
 import { checkOverwrite, writeV2InitConfig } from './init-shared'
 import { mkdir } from 'node:fs/promises'
 
+/** --uri 不能與這些欄位 flag 並用：兩邊都給時無從判斷哪邊生效。 */
+const FIELD_FLAGS: ReadonlyArray<readonly [optionKey: string, flag: string]> = [
+  ['host', '--host'],
+  ['port', '--port'],
+  ['user', '--user'],
+  ['password', '--password'],
+  ['authSource', '--auth-source'],
+  ['replicaSet', '--replica-set'],
+  ['srv', '--srv'],
+]
+
+function conflictingFieldFlags(options: Record<string, unknown>): string[] {
+  const flags = FIELD_FLAGS.filter(([key]) => options[key] !== undefined).map(([, flag]) => flag)
+  // Commander 兩種形式都宣告，所以只有使用者真的給了才會是 boolean
+  if (options.tls !== undefined) flags.push(options.tls ? '--tls' : '--no-tls')
+  return flags
+}
+
+function describeFallbackReasons(reasons: FallbackReason[]): string {
+  return reasons
+    .map((reason) => {
+      switch (reason.type) {
+        case 'multi-host':
+          return t('init.mongo_uri_reason_multi_host')
+        case 'secret-option':
+          return t_vars('init.mongo_uri_reason_secret_option', { keys: reason.keys.join(', ') })
+        case 'duplicate-key':
+          return t_vars('init.mongo_uri_reason_duplicate_key', { keys: reason.keys.join(', ') })
+        case 'non-scram-mechanism':
+          return t_vars('init.mongo_uri_reason_non_scram', { mechanism: reason.mechanism })
+      }
+    })
+    .join('; ')
+}
+
+/** 要寫入的連線設定；用 kind 區分來源，這樣取密碼時不必型別逃逸。 */
+type BuiltMongoConfig =
+  | { kind: 'env-ref'; config: Record<string, unknown> }
+  | { kind: 'decomposed'; config: MongoFieldConfig }
+  | { kind: 'uri-fallback'; config: { system: 'mongodb'; uri: string; database: string } }
+  | {
+      kind: 'pasted-uri'
+      config: {
+        system: 'mongodb'
+        uri: string | undefined
+        database: string
+        host: string
+        port: number
+        user: string
+        password: string
+      }
+    }
+  | { kind: 'fields'; config: Record<string, unknown> & { password: string } }
+
+/** 連線測試失敗時要從終端訊息遮蔽的密碼；env-ref 只有變數名稱，沒有密碼。 */
+function passwordOf(built: BuiltMongoConfig): string {
+  switch (built.kind) {
+    case 'env-ref':
+    case 'uri-fallback':
+      return ''
+    case 'decomposed':
+    case 'pasted-uri':
+    case 'fields':
+      return built.config.password
+  }
+}
+
 const VALID_PERMISSIONS = ['query-only', 'read-write', 'data-admin', 'admin'] as const
+
+/**
+ * 欄位設定與 env-ref 設定共用的可選鍵：沒有值就不寫入。
+ * SRV 記錄自帶埠號，所以 srv 時不寫 port。
+ */
+function optionalFieldKeys(fields: {
+  port: number | { $env: string }
+  authSource: string
+  replicaSet: string
+  tls: boolean | undefined
+  srv: boolean
+}): Record<string, unknown> {
+  return {
+    ...(fields.srv ? {} : { port: fields.port }),
+    ...(fields.authSource ? { authSource: fields.authSource } : {}),
+    ...(fields.replicaSet ? { replicaSet: fields.replicaSet } : {}),
+    ...(fields.tls !== undefined ? { tls: fields.tls } : {}),
+    ...(fields.srv ? { srv: true } : {}),
+  }
+}
 
 export async function handleMongoDBInit(ctx: {
   options: Record<string, unknown>
@@ -72,6 +165,17 @@ export async function handleMongoDBInit(ctx: {
         useUriMode = false
       }
     }
+  }
+
+  // --uri 旗標的字串寫入前先拆解（ADR-0043）；互動貼上的字串仍原樣存成 uri。
+  let decomposed: DecomposeResult | null = null
+  if (options.uri) {
+    const conflicts = conflictingFieldFlags(options)
+    if (conflicts.length > 0) {
+      throw new Error(t_vars('init.mongo_uri_conflicts_fields', { flags: conflicts.join(', ') }))
+    }
+    if (useEnvRefs) throw new Error(t('init.mongo_uri_with_env_refs'))
+    decomposed = decomposeConnectionString(options.uri as string)
   }
 
   const useFieldEnvRefs = useEnvRefs && !useUriMode
@@ -155,7 +259,10 @@ export async function handleMongoDBInit(ctx: {
   }
 
   // Database name (required even in URI mode for schema cache labelling)
-  let database = (options.name as string | undefined) || ''
+  let database =
+    (options.name as string | undefined) ||
+    (decomposed?.kind === 'fields' ? decomposed.config.database : decomposed?.database) ||
+    ''
   if (!database && isInteractive && !useFieldEnvRefs) {
     database = await promptUser.text('Database name', 'testdb')
   }
@@ -214,15 +321,10 @@ export async function handleMongoDBInit(ctx: {
     envRefConfig = {
       system: 'mongodb' as const,
       host: hostRef,
-      // SRV records carry their own ports, so no port is written for srv
-      ...(fields.srv ? {} : { port: portRef ?? fields.port }),
       user: userRef ?? '',
       password: passwordRef ?? '',
       database: databaseRef ?? database,
-      ...(fields.authSource ? { authSource: fields.authSource } : {}),
-      ...(fields.replicaSet ? { replicaSet: fields.replicaSet } : {}),
-      ...(fields.tls !== undefined ? { tls: fields.tls } : {}),
-      ...(fields.srv ? { srv: true } : {}),
+      ...optionalFieldKeys({ ...fields, port: portRef ?? fields.port }),
     }
   }
 
@@ -230,31 +332,53 @@ export async function handleMongoDBInit(ctx: {
     throw new Error(t('errors.require_name'))
   }
 
-  // Build connection config
-  const mongoConfig =
-    envRefConfig ??
-    (useUriMode
-      ? {
-          system: 'mongodb' as const,
+  const buildMongoConfig = (): BuiltMongoConfig => {
+    if (envRefConfig) return { kind: 'env-ref', config: envRefConfig }
+    if (decomposed?.kind === 'fields') {
+      return { kind: 'decomposed', config: { ...decomposed.config, database } }
+    }
+    if (decomposed?.kind === 'uri') {
+      return { kind: 'uri-fallback', config: { system: 'mongodb', uri: mongoUri!, database } }
+    }
+    if (useUriMode) {
+      return {
+        kind: 'pasted-uri',
+        config: {
+          system: 'mongodb',
           uri: mongoUri,
           database,
           host: '',
           port: 27017,
           user: '',
           password: '',
-        }
-      : {
-          system: 'mongodb' as const,
-          host: fields.host,
-          ...(fields.srv ? {} : { port: fields.port }),
-          user: fields.user,
-          password: fields.password,
-          database,
-          ...(fields.user ? { authSource: fields.authSource || 'admin' } : {}),
-          ...(fields.replicaSet ? { replicaSet: fields.replicaSet } : {}),
-          ...(fields.tls !== undefined ? { tls: fields.tls } : {}),
-          ...(fields.srv ? { srv: true } : {}),
-        })
+        },
+      }
+    }
+    return {
+      kind: 'fields',
+      config: {
+        system: 'mongodb',
+        host: fields.host,
+        user: fields.user,
+        password: fields.password,
+        database,
+        ...optionalFieldKeys({
+          ...fields,
+          authSource: fields.user ? fields.authSource || 'admin' : '',
+        }),
+      },
+    }
+  }
+  const built = buildMongoConfig()
+  const mongoConfig = built.config
+
+  if (decomposed?.kind === 'uri') {
+    console.warn(
+      t_vars('init.mongo_uri_fallback_warning', {
+        reasons: describeFallbackReasons(decomposed.reasons),
+      })
+    )
+  }
 
   // Permission
   let permission = (options.permission as string) || 'query-only'
@@ -290,7 +414,10 @@ export async function handleMongoDBInit(ctx: {
       // The driver reproduces the resolved URI — credentials included — in its
       // own error text, so nothing from this path reaches the terminal raw.
       const safe = (text: string) =>
-        redactSecretsForDisplay(text, [fields.password, mongoUri ?? ''])
+        redactSecretsForDisplay(
+          text,
+          [fields.password, passwordOf(built), mongoUri ?? ''].filter(Boolean)
+        )
       if (error instanceof ConnectionError) {
         console.error(t_vars('errors.connection_failed', { message: safe(error.message) }))
         console.error(t('init.connection_hints'))

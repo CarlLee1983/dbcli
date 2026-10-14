@@ -127,7 +127,7 @@ dbcli init --conn-name local --no-interactive --force    # Non-interactive; cred
 # MongoDB — field-by-field (primary path, same shape as SQL)
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 --user admin --password secret --auth-source admin --name mydb
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 --name mydb  # No auth
-# MongoDB — full URI (advanced fallback: multi-host, non-standard driver options)
+# MongoDB — full URI (decomposed into fields on write; multi-host / secret-option strings stay as `uri` with a warning)
 dbcli init --conn-name local --system mongodb --uri "mongodb://user:pass@host:27017/mydb?authSource=admin"
 
 # Redis (database = logical DB index)
@@ -161,7 +161,7 @@ New initialization always creates named v2 configuration, including plain `init`
 
 **Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
 
-**MongoDB-specific options:** `--uri <uri>` (full connection URI — advanced fallback), `--auth-source <db>` (auth database, default: `admin` when user/password set). `--replica-set <name>` (writes `replicaSet`), `--srv` (writes `srv: true` and no `port`; builds `mongodb+srv://` and resolves hosts via DNS SRV), `--tls` / `--no-tls` (writes `tls: true` / `tls: false`; neither flag writes no `tls` key, so the driver default applies). Interactive `init` skips the prompt for any of these given as a flag; otherwise it asks `srv` right after `host` (before `port`) and `replicaSet` / `tls` under an "advanced options?" prompt. The flags also apply with `--use-env-refs`.
+**MongoDB-specific options:** `--uri <uri>` (full connection URI, decomposed into field config on write: `authSource`/`replicaSet`/`tls`(`ssl`) become dedicated fields, `mongodb+srv` becomes `srv: true`, the path database becomes `database`, other parameters go to `options`; multi-host strings, strings carrying `authMechanismProperties`/`tlsCertificateKeyFilePassword`/`proxyPassword`, strings repeating a query key, and strings whose `authMechanism` is not SCRAM-SHA-1/SCRAM-SHA-256 are stored as-is in `uri` with a plaintext-credentials warning; cannot be combined with `--host`/`--port`/`--user`/`--password`/`--auth-source`/`--replica-set`/`--srv`/`--tls`/`--no-tls` or `--use-env-refs`; `--name` may be combined), `--auth-source <db>` (auth database, default: `admin` when user/password set). `--replica-set <name>` (writes `replicaSet`), `--srv` (writes `srv: true` and no `port`; builds `mongodb+srv://` and resolves hosts via DNS SRV), `--tls` / `--no-tls` (writes `tls: true` / `tls: false`; neither flag writes no `tls` key, so the driver default applies). Interactive `init` skips the prompt for any of these given as a flag; otherwise it asks `srv` right after `host` (before `port`) and `replicaSet` / `tls` under an "advanced options?" prompt. The flags also apply with `--use-env-refs`.
 
 **Elasticsearch-specific options:** `--cloud-id <id>` (Elastic Cloud), `--api-key <key>` (ApiKey auth). Other ES fields (`nodes[]`, `protocol`, `caPath`, `rejectUnauthorized`) can be edited directly in `.dbcli`.
 
@@ -3644,7 +3644,7 @@ Parser behaviour (`src/core/saved-queries/parser.ts::normaliseVisual`):
 
 MongoDB connections use a JSON-based query model instead of SQL. Treat MongoDB support as a narrower document-database path, not as a full SQL feature equivalent.
 
-`init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow and the non-interactive path via `--uri` (with the required `--conn-name`). Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
+`init --system mongodb` defaults to a field-by-field wizard (`host`, `srv`, `port`, `user`, `password` + `authSource`, then optional `replicaSet` / `tls`); a full `uri` is an explicit advanced choice in the interactive flow (stored as-is) and the non-interactive path via `--uri` (with the required `--conn-name`), where the string is decomposed into the field config on write. Optional fields `authSource`, `replicaSet`, `tls`, and `srv` express what previously required embedding options in the `uri` query string. Atlas-style `mongodb+srv://` URIs are supported both as a full `uri` and via the per-field `srv: true` option. `list` and `query` run against the database configured for the connection, and `query` always requires `--collection <name>`.
 
 The 5000ms default server-selection timeout is often too tight for a connection over a VPN or to Atlas. Set a `timeout` field (ms) in the connection config, or override it per invocation with root-level `--timeout`, e.g. `dbcli --timeout 20000 --use <conn> list`.
 

@@ -15,6 +15,7 @@ import { promptUser } from '@/utils/prompts'
 import * as configV2 from '@/core/config-v2'
 import * as configBinding from '@/core/config-binding'
 import { AdapterFactory } from '@/adapters'
+import { MessageLoader, t } from '@/i18n/message-loader'
 
 interface RunResult {
   /** 依序記錄每一次提問的標籤，用來斷言提問順序 */
@@ -335,7 +336,50 @@ describe('init — MongoDB 逐欄連線設定', () => {
     )
 
     expect(askedLabels.join('\n')).not.toContain('連線設定方式')
-    expect(written.connections.default.uri).toBe('mongodb://user:pass@host:27017/shop')
+    // ADR-0043：--uri 寫入前先拆解成欄位設定，不再原樣存成 uri
+    expect(written.connections.default).toMatchObject({
+      system: 'mongodb',
+      host: 'host',
+      port: 27017,
+      user: 'user',
+      password: 'pass',
+      database: 'shop',
+      authSource: 'shop',
+    })
+    expect(written.connections.default.uri).toBeUndefined()
+  })
+
+  test('--uri 傳入 Atlas 字串，寫出 srv 欄位設定與 options（AC-2）', async () => {
+    const { written, errors } = await runInit(
+      [
+        '--conn-name',
+        'default',
+        '--system',
+        'mongodb',
+        '--config',
+        configPath,
+        '--uri',
+        'mongodb+srv://u:s3cr3tPw@cluster0.example.mongodb.net/app?retryWrites=true&w=majority&appName=Cluster0',
+        '--skip-test',
+        '--force',
+      ],
+      []
+    )
+
+    expect(errors).toBe('')
+    const conn = written.connections.default
+    expect(conn).toMatchObject({
+      system: 'mongodb',
+      srv: true,
+      host: 'cluster0.example.mongodb.net',
+      database: 'app',
+      user: 'u',
+      password: 's3cr3tPw',
+      options: { retryWrites: 'true', w: 'majority', appName: 'Cluster0' },
+    })
+    expect(conn.uri).toBeUndefined()
+    expect(conn.port).toBeUndefined()
+    expect(conn.authSource).toBeUndefined()
   })
 
   test('--use-env-refs 讓逐欄分支的密碼存成 env 參照而非明文', async () => {
@@ -708,6 +752,282 @@ describe('init — MongoDB 逐欄連線設定', () => {
       )
 
       expect(askedLabels.join('\n')).not.toContain('Port')
+    })
+  })
+  describe('--uri 寫入前先拆解（ADR-0043）', () => {
+    // 使用者訊息走 i18n：預設以英文斷言，另有 zh-TW 的測試
+    const originalLang = Bun.env.DBCLI_LANG || 'en'
+    beforeEach(() => MessageLoader.getInstance().setLanguage('en'))
+    afterEach(() => MessageLoader.getInstance().setLanguage(originalLang))
+
+    /** 非互動跑一次 --uri，順便收集 console.warn 的輸出 */
+    async function runUri(uri: string, extra: string[] = [], skipTest = true) {
+      const warnLines: string[] = []
+      const warnSpy = spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+        warnLines.push(args.map(String).join(' '))
+      })
+      try {
+        const result = await runInit(
+          [
+            '--conn-name',
+            'default',
+            '--system',
+            'mongodb',
+            '--config',
+            configPath,
+            '--uri',
+            uri,
+            '--permission',
+            'query-only',
+            '--force',
+            '--no-interactive',
+            ...(skipTest ? ['--skip-test'] : []),
+            ...extra,
+          ],
+          []
+        )
+        return { ...result, warnings: warnLines.join('\n') }
+      } finally {
+        warnSpy.mockRestore()
+      }
+    }
+
+    test('authSource / replicaSet / ssl 分別進正式欄位，不留在 options（AC-3）', async () => {
+      const { written, errors } = await runUri(
+        'mongodb://u:p@h:27017/app?authSource=appdb&replicaSet=rs0&ssl=true'
+      )
+
+      expect(errors).toBe('')
+      const conn = written.connections.default
+      expect(conn).toMatchObject({ authSource: 'appdb', replicaSet: 'rs0', tls: true })
+      expect(conn.options).toBeUndefined()
+    })
+
+    test('路徑帶資料庫名稱時直接採用，不需要 --name（AC-5）', async () => {
+      const { written } = await runUri('mongodb://h:27017/shop')
+      expect(written.connections.default.database).toBe('shop')
+    })
+
+    test('路徑沒有資料庫又未給 --name 時報錯（AC-5）', async () => {
+      const { written, exited, errors } = await runUri('mongodb://u:p@h:27017')
+
+      expect(exited).toBe(true)
+      expect(errors).toContain(t('errors.require_name'))
+      expect(written).toBeNull()
+    })
+
+    test('--name 覆蓋路徑資料庫，但不改寫 authSource（AC-10）', async () => {
+      const { written } = await runUri('mongodb://u:p@h:27017/app', ['--name', 'other'])
+
+      expect(written.connections.default).toMatchObject({ database: 'other', authSource: 'app' })
+    })
+
+    test('帳號與密碼中的百分比跳脫會還原', async () => {
+      const { written } = await runUri('mongodb://u%40corp:p%3Aw%2Fd@h:27017/app')
+      expect(written.connections.default).toMatchObject({ user: 'u@corp', password: 'p:w/d' })
+    })
+
+    test('多組 host 退回 uri，只寫 system / uri / database 並警告明文存放（AC-6）', async () => {
+      const uri = 'mongodb://u:p@a:27017,b:27017/app?replicaSet=rs0'
+      const { written, warnings } = await runUri(uri)
+
+      // permission 由 v2 寫入流程附加；連線本身不再有空的 host / port / user / password
+      expect(written.connections.default).toEqual({
+        system: 'mongodb',
+        uri,
+        database: 'app',
+        permission: 'query-only',
+      })
+      expect(warnings).toContain('plaintext')
+      expect(warnings).toContain('more than one host')
+    })
+
+    for (const key of [
+      'authMechanismProperties',
+      'tlsCertificateKeyFilePassword',
+      'proxyPassword',
+    ]) {
+      test(`帶 ${key} 的字串退回 uri 並警告（AC-7）`, async () => {
+        // 鍵名大小寫混用，確認比對不分大小寫
+        const uri = `mongodb://u:p@h:27017/app?${key.toUpperCase()}=secret`
+        const { written, warnings } = await runUri(uri)
+
+        // permission 由 v2 寫入流程附加；連線本身不再有空的 host / port / user / password
+        expect(written.connections.default).toEqual({
+          system: 'mongodb',
+          uri,
+          database: 'app',
+          permission: 'query-only',
+        })
+        expect(warnings).toContain('plaintext')
+        expect(warnings).toContain(key.toUpperCase())
+      })
+    }
+
+    test('同一 query 鍵出現多次退回 uri 並警告該鍵（AC-7）', async () => {
+      const uri = 'mongodb://u:p@h:27017/app?readPreferenceTags=dc:ny&READPREFERENCETAGS='
+      const { written, warnings } = await runUri(uri)
+
+      expect(written.connections.default).toEqual({
+        system: 'mongodb',
+        uri,
+        database: 'app',
+        permission: 'query-only',
+      })
+      expect(warnings).toContain('plaintext')
+      expect(warnings.toLowerCase()).toContain('readpreferencetags')
+    })
+
+    test('非 SCRAM 的 authMechanism 退回 uri 並警告該機制（AC-7）', async () => {
+      const uri = 'mongodb://u@h/db?authMechanism=MONGODB-X509'
+      const { written, warnings } = await runUri(uri)
+
+      expect(written.connections.default).toEqual({
+        system: 'mongodb',
+        uri,
+        database: 'db',
+        permission: 'query-only',
+      })
+      expect(warnings).toContain('plaintext')
+      expect(warnings).toContain('MONGODB-X509')
+    })
+
+    test('SCRAM 的 authMechanism（不分大小寫）照常拆解並留在 options', async () => {
+      const { written, warnings } = await runUri(
+        'mongodb://u:p@h:27017/app?authMechanism=scram-sha-256'
+      )
+
+      expect(written.connections.default.uri).toBeUndefined()
+      expect(written.connections.default.options).toEqual({ authMechanism: 'scram-sha-256' })
+      expect(warnings).toBe('')
+    })
+
+    test('zh-TW：重複鍵與非 SCRAM 機制的警告有中文訊息', async () => {
+      MessageLoader.getInstance().setLanguage('zh-TW')
+
+      const dup = await runUri('mongodb://h/db?w=1&w=2')
+      expect(dup.warnings).toContain('明文')
+      expect(dup.warnings).toContain('w')
+
+      const mech = await runUri('mongodb://u@h/db?authMechanism=MONGODB-X509')
+      expect(mech.warnings).toContain('明文')
+      expect(mech.warnings).toContain('MONGODB-X509')
+      expect(mech.warnings).toMatch(/[\u4e00-\u9fff]/)
+    })
+
+    test('tls 與 ssl 值不同時報錯', async () => {
+      const { exited, errors, written } = await runUri('mongodb://h:27017/app?tls=true&ssl=false')
+
+      expect(exited).toBe(true)
+      expect(errors).toContain('tls')
+      expect(written).toBeNull()
+    })
+
+    const FLAG_CONFLICTS: Array<[string, string[]]> = [
+      ['--host', ['--host', 'x']],
+      ['--port', ['--port', '1']],
+      ['--user', ['--user', 'x']],
+      ['--password', ['--password', 'x']],
+      ['--auth-source', ['--auth-source', 'x']],
+      ['--replica-set', ['--replica-set', 'x']],
+      ['--srv', ['--srv']],
+      ['--tls', ['--tls']],
+      ['--no-tls', ['--no-tls']],
+    ]
+    for (const [flag, args] of FLAG_CONFLICTS) {
+      test(`--uri 與 ${flag} 並用報錯並指出衝突的 flag（AC-10）`, async () => {
+        const { exited, errors, written } = await runUri('mongodb://h:27017/app', args)
+
+        expect(exited).toBe(true)
+        expect(errors).toContain(flag)
+        expect(written).toBeNull()
+      })
+    }
+
+    test('--uri 與 --use-env-refs 並用報錯，提到兩條替代路徑（AC-11）', async () => {
+      const { exited, errors, written } = await runUri('mongodb://u:p@h:27017/app', [
+        '--use-env-refs',
+      ])
+
+      expect(exited).toBe(true)
+      expect(errors).toContain('remove --use-env-refs')
+      expect(errors).toContain('--env-*')
+      expect(errors).not.toContain('.env.local')
+      expect(written).toBeNull()
+    })
+
+    test('字串解析失敗時，錯誤訊息不含原字串裡的密碼', async () => {
+      const { exited, errors, warnings, written } = await runUri('mongodb://u:s3cret@/db')
+
+      expect(exited).toBe(true)
+      expect(errors).not.toContain('s3cret')
+      expect(warnings).not.toContain('s3cret')
+      expect(written).toBeNull()
+    })
+
+    test.each([
+      ['密碼含未跳脫的 @', 'mongodb://u:s3cret@w@rd@h/db'],
+      ['埠號不是數字', 'mongodb://u:s3cret@h:abc/db'],
+      ['埠號超過 65535', 'mongodb://u:s3cret@h:70000/db'],
+      ['埠號為 0', 'mongodb://u:s3cret@h:0/db'],
+    ])('不合法字串報錯而非拆成錯的欄位：%s', async (_label, uri) => {
+      const { exited, errors, written } = await runUri(uri)
+
+      expect(exited).toBe(true)
+      expect(errors).not.toContain('s3cret')
+      expect(errors).not.toContain('__this_is_a_placeholder__')
+      expect(written).toBeNull()
+    })
+
+    test.each(['authSource', 'replicaSet', 'tls', 'ssl'])(
+      '保留鍵 %s 值為空時報錯並指出該鍵',
+      async (key) => {
+        const { exited, errors, written } = await runUri(`mongodb://u:p@h:27017/app?${key}=`)
+
+        expect(exited).toBe(true)
+        expect(errors).toContain(key)
+        expect(written).toBeNull()
+      }
+    )
+
+    test('zh-TW：衝突、env-refs 衝突與退回 uri 的警告都有中文訊息', async () => {
+      MessageLoader.getInstance().setLanguage('zh-TW')
+
+      const conflict = await runUri('mongodb://h:27017/app', ['--host', 'x'])
+      expect(conflict.errors).toContain('--host')
+      expect(conflict.errors).toContain('不能與')
+
+      const envRefs = await runUri('mongodb://h:27017/app', ['--use-env-refs'])
+      expect(envRefs.errors).toContain('拿掉 --use-env-refs')
+      expect(envRefs.errors).toContain('--env-*')
+
+      const fallback = await runUri('mongodb://a:1,b:2/app')
+      expect(fallback.warnings).toContain('明文')
+      expect(fallback.warnings).toContain('多組 host')
+
+      const invalid = await runUri('mongodb://u:s3cret@/db')
+      expect(invalid.errors).not.toContain('s3cret')
+      expect(invalid.errors).toMatch(/[\u4e00-\u9fff]/)
+    })
+
+    test('連線測試失敗時，拆解出的密碼與原字串都不會出現在終端', async () => {
+      const uri = 'mongodb://u:s3cr3tPw@h:27017/app'
+      const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockImplementation((() => ({
+        connect: async () => {
+          throw new Error(`boom ${uri} and s3cr3tPw`)
+        },
+        testConnection: async () => {},
+        disconnect: async () => {},
+      })) as never)
+
+      try {
+        const { errors } = await runUri(uri, [], false)
+
+        expect(errors).toContain('boom')
+        expect(errors).not.toContain('s3cr3tPw')
+      } finally {
+        adapterSpy.mockRestore()
+      }
     })
   })
 })

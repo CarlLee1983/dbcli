@@ -148,7 +148,7 @@ export const initCommand = new Command('init')
   .option('--api-key <key>', 'Elasticsearch API Key')
   .option(
     '--uri <uri>',
-    'MongoDB connection URI (mongodb://user:pass@host:27017/db?authSource=admin)'
+    'MongoDB connection string, decomposed into fields on write (mongodb://user:pass@host:27017/db?authSource=admin)'
   )
 
   .option(

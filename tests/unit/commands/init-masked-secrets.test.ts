@@ -406,7 +406,9 @@ describe('explicit inputs bypass the secret prompt', () => {
 
     expect(askedBySecret).toHaveLength(0)
     expect(askedByText.some((label) => label.includes('連線設定方式'))).toBe(false)
-    expect(written?.connections?.default?.uri === CANARY_URI).toBe(true)
+    // ADR-0043：--uri 拆解成欄位設定，密碼不再藏在 uri 字串裡
+    expect(written?.connections?.default?.password === CANARY).toBe(true)
+    expect(written?.connections?.default?.uri).toBeUndefined()
   })
 
   test('--no-interactive never reaches a secret prompt', async () => {

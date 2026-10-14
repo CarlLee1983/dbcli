@@ -372,7 +372,7 @@ dbcli init                                                # parses .env in cwd
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 --name mydb
 dbcli init --conn-name local --system mongodb --host localhost --port 27017 \
   --user admin --password '<secret>' --auth-source admin --name mydb
-# MongoDB — full URI (advanced escape hatch: multi-host, non-standard driver options)
+# MongoDB — full URI (decomposed into fields on write; multi-host / secret-option strings stay as `uri` with a warning)
 dbcli init --conn-name local --system mongodb \
   --uri "mongodb+srv://user:pw@cluster.example.mongodb.net/mydb?authSource=admin"
 

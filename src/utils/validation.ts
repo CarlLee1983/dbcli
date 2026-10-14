@@ -115,7 +115,7 @@ export function parseStatementTimeoutOption(value: string): number {
  * The driver matches option names case-insensitively, so `TLS` shadows `tls` too;
  * `ssl` is the legacy alias of `tls`.
  */
-const RESERVED_MONGODB_OPTION_KEYS: Readonly<Record<string, string>> = {
+export const RESERVED_MONGODB_OPTION_KEYS: Readonly<Record<string, string>> = {
   authsource: 'authSource',
   replicaset: 'replicaSet',
   tls: 'tls',

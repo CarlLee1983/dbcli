@@ -61,7 +61,7 @@ dbcli 執行於 Bun 1.4.0+。npm 與 npx 可作為發布通道，但安裝後的
 單獨執行 `dbcli --version` 或 `dbcli -V` 時會使用輕量 launcher，不載入資料庫 driver；其他指令仍會照常載入完整 command runtime。
 
 ### 初始化連線
-`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 進階備援請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
+`init` 指令會引導你完成連線設定，它能自動解析現有的 `.env` 檔案。若是 MongoDB，`init` 會逐欄詢問連線資訊（Host、是否為 SRV、Port、User、Password、`authSource`，最後是可選的 `replicaSet` / `tls`）——完整欄位列表與 `--uri` 的拆解規則請見下方[資料庫引擎支援矩陣](#資料庫引擎支援矩陣)一節的「MongoDB 連線設定」。
 
 每次新建或新增連線都必須有非空白的連線名稱。可傳入 `--conn-name <name>`，或在互動式終端機執行 `dbcli init`，由程式主動詢問。名稱提示不會建議 `default`；輸入空字串或只有空白時，會說明名稱必填並再次詢問。取消或結束名稱提示會在連線測試、設定或憑證寫入前停止。明確提供非空白的 `--conn-name` 就不會再問名稱，`--conn-name default` 仍然合法。明確傳入空白的 `--conn-name` 則在任何模式都會於連線測試或寫入前報錯。`--name` 仍代表資料庫名稱（Redis 則是邏輯資料庫索引），不能當作連線名稱。
 
@@ -1300,7 +1300,13 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 
 ### MongoDB 連線設定
 
-`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 `--uri` 仍會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+`dbcli init --system mongodb` 現在預設走逐欄精靈，與 SQL 引擎一致：依序詢問 Host、是否為 SRV 網域、Port（SRV 時略過）、User，有填 User 才接著問 Password 與 `authSource`，最後是可選的進階步驟（`replicaSet` / `tls`）。貼上完整連線字串改為明示的第二選項（「貼上完整連線字串（進階）」）。傳入 `--uri` 會跳過連線方式提問；非互動用法也必須提供 `--conn-name`。
+
+**`--uri` 寫入前會先拆解。** 以 `--uri` 傳入的連線字串（例如從 Atlas 複製的）不再整條存成不透明的 `uri`，而是拆成上述欄位設定：`authSource`、`replicaSet`、`tls`（含別名 `ssl`）進各自的正式欄位，`mongodb+srv` 對應 `srv: true` 且不寫 `port`，路徑上的資料庫名稱進 `database`（`--name` 可覆蓋），其餘 query 參數（`retryWrites`、`w`、`appName` 等）進 `options`。字串沒寫 `authSource` 就不寫該欄位，唯一例外：非 SRV、有帳號、路徑帶資料庫時會寫入 `authSource: <路徑資料庫>`，因為 driver 對這種字串以路徑資料庫認證，而沒寫 `authSource` 的欄位設定會預設成 `admin`。帳號與密碼會做百分比解碼。字串路徑沒有資料庫名稱時必須給 `--name`。
+
+欄位設定表達不了的字串會原樣存進 `uri`（寫出的連線只含 `system`、`uri`、`database`），並警告帳密將明文存放於設定檔：含多組 host 的字串；帶機密 option 的字串（`authMechanismProperties`、`tlsCertificateKeyFilePassword`、`proxyPassword`，不分大小寫），拆進 `options` 會以明文落盤；同一 query 鍵出現多次的字串（不分大小寫，例如兩個 `readPreferenceTags`），因為欄位或 `options` 每個鍵只能存一個值；以及 `authMechanism` 不是 `SCRAM-SHA-1`／`SCRAM-SHA-256` 的字串（如 X509、GSSAPI、PLAIN、AWS）。警告會指出重複的鍵或該機制。明寫 SCRAM 的 `authMechanism` 照常拆解，留在 `options`。
+
+`--uri` 不能與 `--host`、`--port`、`--user`、`--password`、`--auth-source`、`--replica-set`、`--srv`、`--tls`、`--no-tls` 並用（錯誤訊息會指出衝突的 flag），也不能與 `--use-env-refs` 並用：請拿掉 `--use-env-refs` 讓 dbcli 拆解字串寫入欄位設定，或改用 `--env-*` flag 逐欄給變數名稱。`--name` 可與 `--uri` 並用。
 
 逐欄連線欄位（`ConnectionConfig`，`src/types/index.ts`）：
 

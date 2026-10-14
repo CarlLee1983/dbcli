@@ -91,9 +91,9 @@ export async function handleMongoDBInit(ctx: {
     user: (options.user as string) || '',
     password: (options.password as string) || '',
     authSource: (options.authSource as string | undefined) || '',
-    replicaSet: '',
-    tls: undefined as boolean | undefined,
-    srv: false,
+    replicaSet: (options.replicaSet as string | undefined) || '',
+    tls: options.tls as boolean | undefined,
+    srv: Boolean(options.srv),
   }
 
   /** Ask for a port until it parses, so NaN never reaches the config file. */
@@ -110,7 +110,10 @@ export async function handleMongoDBInit(ctx: {
     if (!useFieldEnvRefs) {
       fields.host = await promptUser.text('Host（主機位址）', fields.host)
     }
-    fields.srv = await promptUser.confirm('這是 SRV 網域嗎（Atlas 等 mongodb+srv 連線）？')
+    // An explicit --srv is kept as given and not asked again, like --password
+    if (!fields.srv) {
+      fields.srv = await promptUser.confirm('這是 SRV 網域嗎（Atlas 等 mongodb+srv 連線）？')
+    }
     if (!fields.srv && !useFieldEnvRefs) {
       fields.port = await promptPort(fields.port)
     }
@@ -130,10 +133,25 @@ export async function handleMongoDBInit(ctx: {
         )
       }
     }
-    if (await promptUser.confirm('設定進階選項（replicaSet / tls）？')) {
-      fields.replicaSet = await promptUser.text('replicaSet（複本集名稱，可留空）', '')
-      fields.tls = await promptUser.confirm('啟用 tls？')
+    // Only ask for the advanced values that no flag already supplied
+    const needReplicaSet = !fields.replicaSet
+    const needTls = fields.tls === undefined
+    if (
+      (needReplicaSet || needTls) &&
+      (await promptUser.confirm('設定進階選項（replicaSet / tls）？'))
+    ) {
+      if (needReplicaSet) {
+        fields.replicaSet = await promptUser.text('replicaSet（複本集名稱，可留空）', '')
+      }
+      if (needTls) fields.tls = await promptUser.confirm('啟用 tls？')
     }
+  }
+
+  if (!useUriMode && fields.srv && (useFieldEnvRefs ? options.envPort : options.port)) {
+    // Dropping a given port silently would leave the user thinking it took effect.
+    console.warn(
+      `⚠️  SRV 連線會忽略 ${useFieldEnvRefs ? '--env-port' : '--port'}：SRV 記錄自帶埠號，設定檔不會寫入 port。`
+    )
   }
 
   // Database name (required even in URI mode for schema cache labelling)
@@ -165,7 +183,10 @@ export async function handleMongoDBInit(ctx: {
   let envRefConfig: Record<string, unknown> | null = null
   if (useFieldEnvRefs) {
     const hostRef = await envRefFor(options.envHost, 'Host 的環境變數名稱', 'MONGO_HOST')
-    const portRef = await envRefFor(options.envPort, 'Port 的環境變數名稱（可留空）', '')
+    // SRV records carry their own ports, so the answer would be discarded — don't ask
+    const portRef = fields.srv
+      ? null
+      : await envRefFor(options.envPort, 'Port 的環境變數名稱（可留空）', '')
     const userRef = await envRefFor(options.envUser, 'User 的環境變數名稱（可留空）', '')
     const passwordRef = await envRefFor(
       options.envPassword,
@@ -193,7 +214,8 @@ export async function handleMongoDBInit(ctx: {
     envRefConfig = {
       system: 'mongodb' as const,
       host: hostRef,
-      port: portRef ?? fields.port,
+      // SRV records carry their own ports, so no port is written for srv
+      ...(fields.srv ? {} : { port: portRef ?? fields.port }),
       user: userRef ?? '',
       password: passwordRef ?? '',
       database: databaseRef ?? database,
@@ -224,7 +246,7 @@ export async function handleMongoDBInit(ctx: {
       : {
           system: 'mongodb' as const,
           host: fields.host,
-          port: fields.port,
+          ...(fields.srv ? {} : { port: fields.port }),
           user: fields.user,
           password: fields.password,
           database,

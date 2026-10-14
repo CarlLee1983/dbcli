@@ -545,4 +545,169 @@ describe('init — MongoDB 逐欄連線設定', () => {
 
     expect(written.connections.default.authSource).toBe('appdb')
   })
+
+  describe('--replica-set / --srv / --tls', () => {
+    const base = [
+      '--conn-name',
+      'default',
+      '--system',
+      'mongodb',
+      '--host',
+      'cluster.example.com',
+      '--name',
+      'shop',
+      '--skip-test',
+      '--force',
+    ]
+    const withConfig = () => [...base, '--config', configPath]
+    const nonInteractive = () => [...withConfig(), '--no-interactive']
+
+    test('--replica-set rs0 --srv --tls 寫出 replicaSet、srv、tls，且不寫 port', async () => {
+      const { written } = await runInit(
+        [...nonInteractive(), '--replica-set', 'rs0', '--srv', '--tls'],
+        []
+      )
+
+      const conn = written.connections.default
+      expect(conn).toMatchObject({ replicaSet: 'rs0', srv: true, tls: true })
+      expect('port' in conn).toBe(false)
+    })
+
+    test('--no-tls 寫出 tls:false', async () => {
+      const { written } = await runInit([...nonInteractive(), '--no-tls'], [])
+
+      expect(written.connections.default.tls).toBe(false)
+    })
+
+    test('--tls 與 --no-tls 皆未給時不寫 tls，也不寫 replicaSet / srv', async () => {
+      const { written } = await runInit(nonInteractive(), [])
+
+      const conn = written.connections.default
+      expect('tls' in conn).toBe(false)
+      expect('replicaSet' in conn).toBe(false)
+      expect('srv' in conn).toBe(false)
+      expect(conn.port).toBe(27017)
+    })
+
+    test('互動模式給了 --srv 就不再問 SRV', async () => {
+      const { askedLabels, written } = await runInit(
+        [...withConfig(), '--srv'],
+        [
+          ['連線設定方式', '逐欄填寫（建議）'],
+          ['Host', 'cluster.example.com'],
+          ['User', ''],
+          ['Database name', 'shop'],
+        ]
+      )
+
+      expect(askedLabels.join('\n')).not.toContain('SRV')
+      expect(written.connections.default.srv).toBe(true)
+      expect('port' in written.connections.default).toBe(false)
+    })
+
+    test('互動模式給了 --replica-set 與 --no-tls 就不再問進階選項', async () => {
+      const { askedLabels, written } = await runInit(
+        [...withConfig(), '--replica-set', 'rs0', '--no-tls'],
+        [
+          ['連線設定方式', '逐欄填寫（建議）'],
+          ['Host', 'db.example.com'],
+          ['Database name', 'shop'],
+        ]
+      )
+
+      const asked = askedLabels.join('\n')
+      expect(asked).not.toContain('進階選項')
+      expect(asked).not.toContain('replicaSet')
+      expect(asked).not.toContain('tls')
+      expect(written.connections.default).toMatchObject({ replicaSet: 'rs0', tls: false })
+    })
+
+    test('互動模式只給 --replica-set 時仍詢問 tls', async () => {
+      const { askedLabels, written } = await runInit(
+        [...withConfig(), '--replica-set', 'rs0'],
+        [
+          ['連線設定方式', '逐欄填寫（建議）'],
+          ['Host', 'db.example.com'],
+          ['進階選項', true],
+          ['啟用 tls', true],
+          ['Database name', 'shop'],
+        ]
+      )
+
+      const asked = askedLabels.join('\n')
+      expect(asked).not.toContain('複本集名稱')
+      expect(asked).toContain('啟用 tls')
+      expect(written.connections.default).toMatchObject({ replicaSet: 'rs0', tls: true })
+    })
+
+    test('--use-env-refs 的設定同樣帶入三個 flag', async () => {
+      const { written } = await runInit(
+        [
+          ...nonInteractive(),
+          '--use-env-refs',
+          '--env-host',
+          'MONGO_HOST',
+          '--replica-set',
+          'rs0',
+          '--srv',
+          '--no-tls',
+        ],
+        []
+      )
+
+      const conn = written.connections.default
+      expect(conn).toMatchObject({
+        host: { $env: 'MONGO_HOST' },
+        replicaSet: 'rs0',
+        srv: true,
+        tls: false,
+      })
+      expect('port' in conn).toBe(false)
+    })
+
+    for (const [label, portArgs] of [
+      ['--port', ['--port', '28017']],
+      ['--env-port', ['--use-env-refs', '--env-host', 'MONGO_HOST', '--env-port', 'MONGO_PORT']],
+    ] as const) {
+      test(`--srv 搭配 ${label} 時警告 port 會被忽略，且不寫 port`, async () => {
+        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          const { written } = await runInit([...nonInteractive(), '--srv', ...portArgs], [])
+
+          expect('port' in written.connections.default).toBe(false)
+          expect(warnSpy.mock.calls.map((c) => c.join(' ')).join('\n')).toContain('SRV')
+        } finally {
+          warnSpy.mockRestore()
+        }
+      })
+    }
+
+    test('互動式 --use-env-refs 搭配 srv 時不問 Port 的環境變數名稱', async () => {
+      const { askedLabels, written } = await runInit(
+        [...withConfig(), '--use-env-refs', '--srv'],
+        [
+          ['連線設定方式', '逐欄填寫（建議）'],
+          ['Host 的環境變數名稱', 'MONGO_HOST'],
+          ['Database name', 'shop'],
+        ]
+      )
+
+      expect(askedLabels.join('\n')).not.toContain('Port')
+      expect('port' in written.connections.default).toBe(false)
+    })
+
+    test('互動式 --use-env-refs 回答是 SRV 時也不問 Port 的環境變數名稱', async () => {
+      const { askedLabels } = await runInit(
+        [...withConfig(), '--use-env-refs'],
+        [
+          ['連線設定方式', '逐欄填寫（建議）'],
+          ['SRV', true],
+          ['Host 的環境變數名稱', 'MONGO_HOST'],
+          ['Database name', 'shop'],
+        ]
+      )
+
+      expect(askedLabels.join('\n')).not.toContain('Port')
+    })
+  })
 })

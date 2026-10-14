@@ -1314,7 +1314,7 @@ dbcli init --system sqlite --file ./data/app.sqlite --conn-name local --permissi
 | `timeout` | 數字（毫秒，100～600000） | 連線 timeout；可用 root-level `--timeout <ms>` 針對單次執行覆寫。兩者都未設定時，沿用 adapter 內建的 5000ms 預設值。與本表其他欄位不同，它不接受 `{"$env": "..."}` 參照，只接受字面數字。 |
 | `statementTimeout` | 數字（毫秒，0～3600000） | 一句語句能跑多久，與連線 timeout 獨立；可用 root-level `--statement-timeout <ms>` 覆寫。未設定時退回 `timeout`，兩者都沒有則交給伺服器自己的設定。`0` 表示取消上限。與 `timeout` 一樣只接受字面數字。 |
 
-`--auth-source <db>` 已是非互動的 `init` flag。`replicaSet` 與 `tls` 目前沒有專屬 flag，可在互動的進階步驟填寫，或事後直接編輯 `.dbcli`（與 Elasticsearch 的 `caPath` / `rejectUnauthorized` 是同一套模式）。
+`--auth-source <db>`、`--replica-set <name>`、`--srv`、`--tls` / `--no-tls` 都是 `init` 的 flag，CI 不必改用連線字串就能設定複本集、SRV（Atlas）與 TLS。`--srv` 會寫入 `srv: true` 且不寫 `port`；`--tls` 與 `--no-tls` 皆未給時不寫 `tls`，沿用 driver 預設。互動精靈中，已用 flag 給的值不會再問（SRV 提問，以及進階步驟的 `replicaSet` / `tls`）。搭配 `--use-env-refs` 時這些 flag 同樣生效，因為它們不是機密。
 
 若設定同時存在 `uri` 與逐欄值（`host` / `user` / `options`），`uri` 仍會優先，逐欄值一樣被忽略——這點沒變，但 `dbcli doctor` 現在會針對這個情況發出警告，讓「改了欄位卻沒生效」可以被診斷出來，而不是原地困惑。`doctor` 也會在 `srv: true` 又同時指定非預設 `port` 時發出警告，因為 SRV 記錄自帶埠號。
 

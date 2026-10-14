@@ -494,9 +494,10 @@ refs have no value to connect with yet.
   natively or via the DoH fallback; useful when the runtime restricts DNS.
 - **MongoDB `authSource` / `replicaSet` / `tls` / `srv`** — `init` asks for
   these interactively (`authSource` only when a user is set; `replicaSet` /
-  `tls` behind an "advanced options?" prompt); `--auth-source <db>` is the
-  only one with a dedicated non-interactive flag, so set `replicaSet` / `tls`
-  interactively or edit `.dbcli` afterward. If a config has both `uri` and
+  `tls` behind an "advanced options?" prompt); non-interactive flags are
+  `--auth-source <db>`, `--replica-set <name>`, `--srv` (no `port` written) and
+  `--tls` / `--no-tls` (neither given writes no `tls`); a flag you pass skips
+  its prompt. If a config has both `uri` and
   per-field values, `uri` wins silently — `dbcli doctor` flags this and also
   warns when `srv: true` is combined with a non-default `port`.
 - **MySQL/Postgres password with `@` `:` `/`** — when using `DATABASE_URL`,

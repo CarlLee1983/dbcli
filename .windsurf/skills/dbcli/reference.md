@@ -161,7 +161,7 @@ New initialization always creates named v2 configuration, including plain `init`
 
 **Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
 
-**MongoDB-specific options:** `--uri <uri>` (full connection URI — advanced fallback), `--auth-source <db>` (auth database, default: `admin` when user/password set). Interactive `init` also asks for `replicaSet` and `tls` under an "advanced options?" prompt; there is no dedicated non-interactive flag for either yet — set them interactively or edit `.dbcli` afterward. `srv` (boolean, builds `mongodb+srv://` and resolves hosts via DNS SRV, ignoring `port`) is asked right after `host`, before `port`, since it decides whether `port` is even relevant.
+**MongoDB-specific options:** `--uri <uri>` (full connection URI — advanced fallback), `--auth-source <db>` (auth database, default: `admin` when user/password set). `--replica-set <name>` (writes `replicaSet`), `--srv` (writes `srv: true` and no `port`; builds `mongodb+srv://` and resolves hosts via DNS SRV), `--tls` / `--no-tls` (writes `tls: true` / `tls: false`; neither flag writes no `tls` key, so the driver default applies). Interactive `init` skips the prompt for any of these given as a flag; otherwise it asks `srv` right after `host` (before `port`) and `replicaSet` / `tls` under an "advanced options?" prompt. The flags also apply with `--use-env-refs`.
 
 **Elasticsearch-specific options:** `--cloud-id <id>` (Elastic Cloud), `--api-key <key>` (ApiKey auth). Other ES fields (`nodes[]`, `protocol`, `caPath`, `rejectUnauthorized`) can be edited directly in `.dbcli`.
 

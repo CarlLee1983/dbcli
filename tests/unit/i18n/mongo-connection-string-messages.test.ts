@@ -13,6 +13,7 @@ const KEYS = [
   'mongo_uri_with_env_refs',
   'mongo_uri_fallback_warning',
   'mongo_uri_reason_multi_host',
+  'mongo_uri_reason_unix_socket',
   'mongo_uri_reason_secret_option',
   'mongo_uri_reason_duplicate_key',
   'mongo_uri_reason_non_scram',

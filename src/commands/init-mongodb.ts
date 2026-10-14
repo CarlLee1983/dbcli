@@ -49,6 +49,8 @@ function describeFallbackReasons(reasons: FallbackReason[]): string {
   return reasons
     .map((reason) => {
       switch (reason.type) {
+        case 'unix-socket':
+          return t('init.mongo_uri_reason_unix_socket')
         case 'multi-host':
           return t('init.mongo_uri_reason_multi_host')
         case 'secret-option':
@@ -70,14 +72,21 @@ type BuiltMongoConfig =
   | { kind: 'fields'; config: Record<string, unknown> & { password: string } }
 
 /** 連線測試失敗時要從終端訊息遮蔽的密碼；env-ref 只有變數名稱，沒有密碼。 */
-function passwordOf(built: BuiltMongoConfig): string {
+function passwordsOf(built: BuiltMongoConfig): string[] {
   switch (built.kind) {
     case 'env-ref':
-    case 'uri-fallback':
-      return ''
+      return []
+    case 'uri-fallback': {
+      // Use the same parser as decomposition; raw URIs may contain multiple hosts.
+      // Keep this credential only for error redaction, never in the saved fields.
+      const { ConnectionString } =
+        require('mongodb-connection-string-url') as typeof import('mongodb-connection-string-url')
+      const encoded = new ConnectionString(built.config.uri).password
+      return [encoded, decodeURIComponent(encoded)]
+    }
     case 'decomposed':
     case 'fields':
-      return built.config.password
+      return [built.config.password]
   }
 }
 
@@ -443,7 +452,7 @@ export async function handleMongoDBInit(ctx: {
       const safe = (text: string) =>
         redactSecretsForDisplay(
           text,
-          [fields.password, passwordOf(built), mongoUri ?? ''].filter(Boolean)
+          [fields.password, ...passwordsOf(built), mongoUri ?? ''].filter(Boolean)
         )
       if (error instanceof ConnectionError) {
         console.error(t_vars('errors.connection_failed', { message: safe(error.message) }))

@@ -819,6 +819,20 @@ describe('init — MongoDB 逐欄連線設定', () => {
       )
     }
 
+    test('--uri preserves a Unix socket URI without host or port fields', async () => {
+      const uri =
+        'mongodb://u:socketSecret@%2Ftmp%2FMongoDB.sock/app?authSource=admin&appName=socket-test'
+      const { written, errors, warnings, logs } = await runUri(uri)
+      expect(errors).toBe('')
+      const conn = written.connections.default
+      expect(conn.uri).toBe(uri)
+      expect(conn.database).toBe('app')
+      expect(conn.host).toBeUndefined()
+      expect(conn.port).toBeUndefined()
+      expect(warnings).toContain('Unix')
+      expect(warnings + logs).not.toContain('socketSecret')
+    })
+
     test('authSource / replicaSet / ssl 分別進正式欄位，不留在 options（AC-3）', async () => {
       const { written, errors } = await runUri(
         'mongodb://u:p@h:27017/app?authSource=appdb&replicaSet=rs0&ssl=true'
@@ -1037,6 +1051,32 @@ describe('init — MongoDB 逐欄連線設定', () => {
       expect(invalid.errors).toMatch(/[\u4e00-\u9fff]/)
     })
 
+    test.each(['socket%40Secret', 'socket%2fSecret', '%73ocketSecret'])(
+      'socket --uri failure redacts credential %s',
+      async (encoded) => {
+        const decoded = decodeURIComponent(encoded)
+        const uri = `mongodb://u:${encoded}@%2Ftmp%2Fmongodb.sock/app`
+        const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockImplementation(
+          (() => ({
+            connect: async () => {
+              throw new Error(`boom ${uri} and ${decoded} and ${encoded}`)
+            },
+            testConnection: async () => {},
+            disconnect: async () => {},
+          })) as never
+        )
+        try {
+          const result = await runUri(uri, [], false)
+          expect(result.errors).toContain('boom')
+          expect(result.errors + result.logs + result.warnings).not.toContain(decoded)
+          expect(result.errors + result.logs + result.warnings).not.toContain(encoded)
+          expect(result.written).toBeNull()
+        } finally {
+          adapterSpy.mockRestore()
+        }
+      }
+    )
+
     test('連線測試失敗時，拆解出的密碼與原字串都不會出現在終端', async () => {
       const uri = 'mongodb://u:s3cr3tPw@h:27017/app'
       const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockImplementation((() => ({
@@ -1098,6 +1138,20 @@ describe('init — MongoDB 逐欄連線設定', () => {
       ])
 
       expect(selectChoices[0]).toEqual(['逐欄填寫（建議）', pasteLabel()])
+    })
+
+    test('interactive paste preserves a Unix socket URI without host or port fields', async () => {
+      const uri =
+        'mongodb://u:socketSecret@%2Ftmp%2FMongoDB.sock/app?authSource=admin&appName=socket-test'
+      const { written, errors, warnings, logs } = await paste(uri)
+      expect(errors).toBe('')
+      const conn = written.connections.default
+      expect(conn.uri).toBe(uri)
+      expect(conn.database).toBe('app')
+      expect(conn.host).toBeUndefined()
+      expect(conn.port).toBeUndefined()
+      expect(warnings).toContain('Unix')
+      expect(warnings + logs).not.toContain('socketSecret')
     })
 
     test('貼上 Atlas 字串寫出 srv 欄位設定與 options（AC-1）', async () => {
@@ -1251,6 +1305,38 @@ describe('init — MongoDB 逐欄連線設定', () => {
       expect(logs).toContain('password: <redacted>')
       expect(logs).not.toContain('password: u')
     })
+
+    test.each(['socket%40Secret', 'socket%2fSecret', '%73ocketSecret'])(
+      'socket paste failure redacts credential %s',
+      async (encoded) => {
+        const decoded = decodeURIComponent(encoded)
+        const uri = `mongodb://u:${encoded}@%2Ftmp%2Fmongodb.sock/app`
+        const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockImplementation(
+          (() => ({
+            connect: async () => {
+              throw new Error(`boom ${uri} and ${decoded} and ${encoded}`)
+            },
+            testConnection: async () => {},
+            disconnect: async () => {},
+          })) as never
+        )
+        try {
+          const result = await runInit(
+            ['--conn-name', 'default', '--system', 'mongodb', '--config', configPath, '--force'],
+            [
+              ['連線設定方式', pasteLabel()],
+              ['連線字串', uri],
+            ]
+          )
+          expect(result.errors).toContain('boom')
+          expect(result.errors + result.logs + result.warnings).not.toContain(decoded)
+          expect(result.errors + result.logs + result.warnings).not.toContain(encoded)
+          expect(result.written).toBeNull()
+        } finally {
+          adapterSpy.mockRestore()
+        }
+      }
+    )
 
     test('連線測試失敗時，貼上字串與拆解出的密碼都不會出現在終端', async () => {
       const adapterSpy = spyOn(AdapterFactory, 'createMongoDBAdapter').mockImplementation((() => ({

@@ -18,6 +18,7 @@
     "mongo_uri_conflicts_fields": "--uri 不能與 {flags} 並用：連線字串已包含這些設定。請擇一使用（--name 可並用，用來覆蓋資料庫名稱）。",
     "mongo_uri_with_env_refs": "--uri 不能與 --use-env-refs 並用：連線字串會被拆解成欄位設定寫入，帳密不會被抽成環境變數參照。請改走下列任一做法：拿掉 --use-env-refs，讓 dbcli 拆解字串寫入欄位設定；或改用 --env-* flag（--env-host、--env-user、--env-password 等）逐欄給變數名稱。",
     "mongo_uri_fallback_warning": "⚠️  此連線字串{reasons}，無法拆成欄位設定，已原樣存入 uri；帳密將明文存放於設定檔。",
+    "mongo_uri_reason_unix_socket": "使用 Unix domain socket（本機通訊端）",
     "mongo_uri_reason_multi_host": "含多組 host（欄位設定只能表達一組）",
     "mongo_uri_reason_secret_option": "含機密 option（{keys}），拆進 options 會明文落盤",
     "mongo_uri_reason_duplicate_key": "含重複的 query 鍵（{keys}）（欄位設定每個鍵只能存一個值）",

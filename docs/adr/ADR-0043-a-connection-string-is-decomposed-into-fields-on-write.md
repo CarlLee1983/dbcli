@@ -36,7 +36,8 @@ ADR-0002 讓欄位設定成為主要形式，但把連線字串定位成「原�
 - `options` 與正式欄位重複（如兩邊都有 `replicaSet`）時拒絕，不默默挑一邊；option
   鍵不另設允許清單，交由連線測試讓 driver 報錯。
 - 為使拆解前後語意一致，`srv: true` 的欄位設定不再強制 `authSource=admin`，改與連線
-  字串相同：TXT record 優先，沒有才補 admin。
+  字串相同：TXT record 優先，沒有才補 admin。非 SRV 的字串沒寫 authSource 而路徑帶資料庫時，
+  driver 以路徑資料庫認證，拆解因此把它明寫成 `authSource`，避免欄位設定的 admin 預設改變認證對象。
 - `--uri` 與 `--use-env-refs` 並用改為報錯：env-ref 存變數名稱，連線字串是值。
 - 拆解使用 driver 自身的 `mongodb-connection-string-url`，列為直接依賴，確保拆解
   結果與 driver 的理解一致。
@@ -46,4 +47,5 @@ ADR-0002 讓欄位設定成為主要形式，但把連線字串定位成「原�
 host、不含機密 option 的連線字串原樣寫進 `uri`，或 `MongoDBConnectionConfigSchema`
 in `src/utils/validation.ts` 不再有 `options` 欄位，或 `buildUri()` in
 `src/adapters/mongodb-adapter.ts` 在 `srv: true` 時讓欄位設定與等價連線字串得出
-不同的 `authSource`。
+不同的 `authSource`，或拆解非 SRV、有帳號、路徑帶資料庫且無 authSource 的字串時
+沒有寫入 `authSource`。

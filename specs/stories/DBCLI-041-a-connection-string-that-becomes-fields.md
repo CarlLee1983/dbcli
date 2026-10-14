@@ -56,7 +56,9 @@ ADR-0002 讓欄位設定成為主要形式，但兩個最常見的情境仍走�
 - 新增一個拆解模組：輸入連線字串，輸出「欄位設定」或「必須退回 `uri` 及原因」（多 host／帶機密 option）。
   以 `mongodb-connection-string-url` 解析，該套件改列為直接依賴，版本對齊 mongodb 7.2 使用的版本。
 - 拆解規則：`authSource`、`replicaSet`、`tls`／`ssl` 進正式欄位；`mongodb+srv` 對應 `srv: true` 且不寫 port；
-  路徑上的資料庫名稱進 `database`；其餘 query 參數原樣進 `options`；連線字串沒寫 authSource 時不寫該欄位。
+  路徑上的資料庫名稱進 `database`；其餘 query 參數原樣進 `options`；連線字串沒寫 authSource 時不寫該欄位，
+  唯一例外是非 SRV、有帳號且路徑帶資料庫時寫入 `authSource: <路徑資料庫>`——driver 對這種字串以路徑資料庫認證，
+  而欄位設定沒寫 authSource 時 adapter 會補 `admin`。`--name` 只覆蓋 `database`，不改這個值。
 - 帶機密的 option 鍵：`authMechanismProperties`、`tlsCertificateKeyFilePassword`、`proxyPassword`。
 - `MongoDBConnectionConfigSchema` 新增 `options`：字串鍵對字串值，不接受 env-ref。`options` 與正式欄位同名時於驗證階段拒絕。
 - adapter 組 URI 時附上 `options`；`srv: true` 時不再強制 `authSource=admin`，交給既有的 TXT 合併與 admin 後備。
@@ -105,7 +107,8 @@ ADR-0002 讓欄位設定成為主要形式，但兩個最常見的情境仍走�
 12. 互動選單第一項仍為逐欄填寫，第二項標籤為「貼上連線字串（Atlas / Compass 複製的）」。
 13. adapter 以帶 `options` 的欄位設定連線時，URI 參數包含每一個 `options` 鍵值。
 14. `srv: true`、有 user、無 `authSource` 的欄位設定，在 TXT record 給 `authSource=other` 時以 `other` 連線；無 TXT 時以 `admin`。
-15. 等價性：AC-1、AC-3 的字串原樣作為 `uri` 與拆解後的欄位設定，adapter 解析出的主機、路徑與參數集合相同。
+15. 等價性：AC-1、AC-3 的字串，以及 `mongodb://u:p@db.internal:27017/app`（非 SRV、無 authSource），原樣作為 `uri`
+    與拆解後的欄位設定，adapter 解析出的主機、路徑與參數集合相同；後者拆解後寫入 `authSource: 'app'`。
 16. 只含 `uri` 的既有設定檔照常通過驗證並以原字串連線（既有測試不變）。
 17. `mongodb-connection-string-url` 出現在 `package.json` 的 `dependencies`。
 18. `docs/user/en/` 與 `docs/user/zh-TW/` 的 `index.md`、`index.html` 皆描述連線字串拆解、退回 `uri` 的條件與三個新 flag。

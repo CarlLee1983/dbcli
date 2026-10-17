@@ -14,8 +14,8 @@ built-in pack runs a `blacklist table|column add|remove` subcommand. So every
 one of those packs is refused under agent mode although none mutates
 configuration.
 
-This Story implements ADR-0029
-(`docs/adr/ADR-0029-reading-the-blacklist-is-its-own-capability.md`):
+This Story implements ADR-0044
+(`docs/adr/ADR-0044-reading-the-blacklist-is-its-own-capability.md`):
 
 - A new capability `blacklist.read`, command path `blacklist list`, with its
   own engine-matrix key `blacklistRead` marked `readonly` and
@@ -30,7 +30,7 @@ This Story implements ADR-0029
 - The legacy requirement name `blacklist-list`, which the parser rejects with
   its replacement (`src/core/agent-tasks/parser.ts:192-195`,
   `assets/tasks/README.md:35-36`), names `blacklist.read` as the replacement.
-- ADR-0029 and the `CONTEXT.md` Capability entry, already written in the
+- ADR-0044 and the `CONTEXT.md` Capability entry, already written in the
   working tree, land with this Story.
 
 Tests that pin `blacklist.manage` as a pack requirement change with the packs;

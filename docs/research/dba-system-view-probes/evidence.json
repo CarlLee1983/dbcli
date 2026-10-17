@@ -1,0 +1,3215 @@
+{
+  "metadata": {
+    "commit": "2f8dfc605a3e7a73a639943026ab1642337c5f0a",
+    "agentMode": true,
+    "permission": "query-only",
+    "account": "repository compose fixture dbcli",
+    "time": "2026-10-17T15:46:14.761Z",
+    "bunVersion": "1.4.2",
+    "scope": "local compose fixtures only; no RDS, no replica topology, no grant modifications",
+    "sanitization": [
+      "MariaDB SHOW GRANTS embedded fixture password hash redacted by evidence writer; dbcli did not redact it"
+    ]
+  },
+  "sources": [
+    {
+      "file": "backup-pitr-signals.md",
+      "commit": "e0fdaf58770690ca593c6d431ce3121fe9559836",
+      "url": "https://github.com/CarlLee1983/dbcli/blob/e0fdaf58770690ca593c6d431ce3121fe9559836/docs/research/backup-pitr-signals.md",
+      "sha256": "661cf990c10a3bb72c61a23e933187ade9be2c7b5d5926635354414aaa4f2888"
+    },
+    {
+      "file": "replication-ha-signals.md",
+      "commit": "103c29f82807efb35d0bcd8a4c7b4ba63ef0f113",
+      "url": "https://github.com/CarlLee1983/dbcli/blob/103c29f82807efb35d0bcd8a4c7b4ba63ef0f113/docs/research/replication-ha-signals.md",
+      "sha256": "f341796180cb220d4c02a2eb7f98c936c05cf7b2c01d46d9d7a099f41b08418f"
+    },
+    {
+      "file": "native-privileges-tls-audit.md",
+      "commit": "62775eb196d2a7e32f0e5cf12b256b3a7379587d",
+      "url": "https://github.com/CarlLee1983/dbcli/blob/62775eb196d2a7e32f0e5cf12b256b3a7379587d/docs/research/native-privileges-tls-audit.md",
+      "sha256": "0bd4261f1b9b4a533f1802764e0df0a3063fd8183164ce440a680f40059cd79c"
+    }
+  ],
+  "profiles": {
+    "pg-dbcli_test": {
+      "engine": "pg",
+      "database": "dbcli_test",
+      "blacklistControl": null
+    },
+    "mysql-dbcli_test": {
+      "engine": "mysql",
+      "database": "dbcli_test",
+      "blacklistControl": null
+    },
+    "maria-dbcli_test": {
+      "engine": "maria",
+      "database": "dbcli_test",
+      "blacklistControl": null
+    },
+    "mysql-information_schema": {
+      "engine": "mysql",
+      "database": "information_schema",
+      "blacklistControl": null
+    },
+    "maria-information_schema": {
+      "engine": "maria",
+      "database": "information_schema",
+      "blacklistControl": null
+    },
+    "mysql-performance_schema": {
+      "engine": "mysql",
+      "database": "performance_schema",
+      "blacklistControl": null
+    },
+    "mysql-mysql": {
+      "engine": "mysql",
+      "database": "mysql",
+      "blacklistControl": null
+    },
+    "maria-mysql": {
+      "engine": "maria",
+      "database": "mysql",
+      "blacklistControl": null
+    },
+    "mysql-information_schema-blacklist-table": {
+      "engine": "mysql",
+      "database": "information_schema",
+      "blacklistControl": "table"
+    },
+    "mysql-information_schema-blacklist-column": {
+      "engine": "mysql",
+      "database": "information_schema",
+      "blacklistControl": "column"
+    },
+    "maria-information_schema-blacklist-table": {
+      "engine": "maria",
+      "database": "information_schema",
+      "blacklistControl": "table"
+    },
+    "maria-information_schema-blacklist-column": {
+      "engine": "maria",
+      "database": "information_schema",
+      "blacklistControl": "column"
+    }
+  },
+  "preflight": ["O001", "O002", "O003", "O004", "O005", "O006", "O007", "O008", "O009", "O010"],
+  "additional": [
+    "O011",
+    "O012",
+    "O013",
+    "O014",
+    "O015",
+    "O016",
+    "O017",
+    "O018",
+    "O019",
+    "O020",
+    "O021",
+    "O022",
+    "O023",
+    "O024",
+    "O025",
+    "O026",
+    "O027",
+    "O028",
+    "O029",
+    "O030",
+    "O031",
+    "O032",
+    "O033",
+    "O034",
+    "O035",
+    "O036",
+    "O037",
+    "O038",
+    "O039",
+    "O040",
+    "O006",
+    "O009",
+    "O041",
+    "O042",
+    "O043",
+    "O044",
+    "O045",
+    "O046",
+    "O047",
+    "O048",
+    "O049",
+    "O050",
+    "O051",
+    "O052",
+    "O053",
+    "O054",
+    "O055",
+    "O056",
+    "O057",
+    "O058",
+    "O059",
+    "O060",
+    "O061",
+    "O062",
+    "O063",
+    "O064",
+    "O065",
+    "O066",
+    "O067",
+    "O068",
+    "O069",
+    "O070",
+    "O071",
+    "O003",
+    "O072",
+    "O073",
+    "O074",
+    "O075",
+    "O076",
+    "O077",
+    "O078",
+    "O079",
+    "O080",
+    "O081",
+    "O082",
+    "O083",
+    "O084",
+    "O085",
+    "O086",
+    "O087",
+    "O088",
+    "O089",
+    "O090",
+    "O091",
+    "O092",
+    "O093",
+    "O094",
+    "O095",
+    "O096",
+    "O097",
+    "O098",
+    "O099",
+    "O100",
+    "O101",
+    "O102"
+  ],
+  "cases": [
+    {
+      "id": "Q001",
+      "engine": "pg",
+      "sql": "SHOW BINARY LOGS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 13
+        }
+      ],
+      "relations": [],
+      "precondition": "excluded-prose-or-summary-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q002",
+      "engine": "pg",
+      "sql": "SELECT * FROM pg_stat_archiver",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 26
+        }
+      ],
+      "relations": ["pg_stat_archiver"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O017"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q003",
+      "engine": "pg",
+      "sql": "SHOW wal_level",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 27
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O018"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q004",
+      "engine": "pg",
+      "sql": "SHOW archive_mode",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 27
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O019"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q005",
+      "engine": "pg",
+      "sql": "SHOW archive_command",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 27
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O020"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q006",
+      "engine": "pg",
+      "sql": "SHOW archive_library",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 27
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O021"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q007",
+      "engine": "pg",
+      "sql": "SHOW archive_timeout",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 27
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O022"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q008",
+      "engine": "pg",
+      "sql": "SELECT pg_current_wal_lsn(), pg_walfile_name(pg_current_wal_lsn())",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 28
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O023"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q009",
+      "engine": "pg",
+      "sql": "SELECT count(*) FROM pg_ls_archive_statusdir() WHERE name LIKE '%.ready'",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 29
+        }
+      ],
+      "relations": ["pg_ls_archive_statusdir"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O024"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q010",
+      "engine": "pg",
+      "sql": "SELECT count(*), sum(size) FROM pg_ls_waldir()",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 30
+        }
+      ],
+      "relations": ["pg_ls_waldir"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O025"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q011",
+      "engine": "pg",
+      "sql": "SELECT slot_name, active, wal_status, restart_lsn FROM pg_replication_slots",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 31
+        }
+      ],
+      "relations": ["pg_replication_slots"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O026"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q012",
+      "engine": "pg",
+      "sql": "SELECT pg_is_in_recovery(), pg_last_xact_replay_timestamp()",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 32
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O027"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q013",
+      "engine": "mysql",
+      "sql": "SELECT @@log_bin, @@binlog_format, @@sync_binlog",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 61
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O028"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q014",
+      "engine": "maria",
+      "sql": "SELECT @@log_bin, @@binlog_format, @@sync_binlog",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 61
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O029"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q015",
+      "engine": "mysql",
+      "sql": "SHOW BINARY LOGS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 62
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 76
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 78
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O030", "O031"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q016",
+      "engine": "maria",
+      "sql": "SHOW BINARY LOGS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 62
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 76
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 78
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 185
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O032", "O033"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q017",
+      "engine": "mysql",
+      "sql": "SHOW BINARY LOG STATUS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 63
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 105
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O034", "O035"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q018",
+      "engine": "maria",
+      "sql": "SHOW MASTER STATUS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 63
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O036", "O037"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q019",
+      "engine": "mysql",
+      "sql": "SELECT @@binlog_expire_logs_seconds",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 64
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O038"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q020",
+      "engine": "mysql",
+      "sql": "SELECT @@gtid_mode, @@gtid_executed",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 65
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O039"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q021",
+      "engine": "maria",
+      "sql": "SELECT @@gtid_binlog_pos, @@gtid_current_pos",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 65
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O040"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q022",
+      "engine": "mysql",
+      "sql": "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 66
+        }
+      ],
+      "relations": ["information_schema.TABLES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O006", "O103"],
+      "scopedSchema": ["O104"]
+    },
+    {
+      "id": "Q023",
+      "engine": "maria",
+      "sql": "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 66
+        }
+      ],
+      "relations": ["information_schema.TABLES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O009", "O105"],
+      "scopedSchema": ["O106"]
+    },
+    {
+      "id": "Q024",
+      "engine": "mysql",
+      "sql": "CALL mysql.rds_show_configuration",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 76
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 156
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O041", "O042"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q025",
+      "engine": "maria",
+      "sql": "CALL mysql.rds_show_configuration",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 76
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O043", "O044"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q026",
+      "engine": "mysql",
+      "sql": "SELECT",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        },
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 201
+        },
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 203
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q027",
+      "engine": "maria",
+      "sql": "SELECT",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q028",
+      "engine": "mysql",
+      "sql": "SHOW",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        },
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 203
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q029",
+      "engine": "maria",
+      "sql": "SHOW",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 77
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q030",
+      "engine": "mysql",
+      "sql": "SHOW REPLICA STATUS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 78
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 105
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 116
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O045", "O046"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q031",
+      "engine": "maria",
+      "sql": "SHOW REPLICA STATUS",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 78
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 164
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 186
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 189
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O047", "O048"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q032",
+      "engine": "pg",
+      "sql": "SELECT max(updated_at)",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 187
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q033",
+      "engine": "mysql",
+      "sql": "SELECT max(updated_at)",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 187
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q034",
+      "engine": "maria",
+      "sql": "SELECT max(updated_at)",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 187
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q035",
+      "engine": "mysql",
+      "sql": "CHECKSUM TABLE t",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 189
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q036",
+      "engine": "maria",
+      "sql": "CHECKSUM TABLE t",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 189
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q037",
+      "engine": "pg",
+      "sql": "SELECT md5(string_agg(t::text, ',' ORDER BY id)) FROM t WHERE id BETWEEN ...",
+      "sources": [
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 189
+        }
+      ],
+      "relations": ["t"],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q038",
+      "engine": "pg",
+      "sql": "SELECT pg_is_in_recovery()",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 34
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O049"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q039",
+      "engine": "pg",
+      "sql": "SELECT pid, usename, application_name, client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn, write_lag, flush_lag, replay_lag, sync_state, reply_time FROM pg_stat_replication",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 34
+        }
+      ],
+      "relations": ["pg_stat_replication"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O050"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q040",
+      "engine": "pg",
+      "sql": "SELECT status, receive_start_lsn, written_lsn, flushed_lsn, latest_end_lsn, latest_end_time, slot_name, sender_host, sender_port FROM pg_stat_wal_receiver",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 34
+        }
+      ],
+      "relations": ["pg_stat_wal_receiver"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O051"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q041",
+      "engine": "pg",
+      "sql": "SELECT application_name, pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS replay_lag_bytes, replay_lag FROM pg_stat_replication",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 56
+        }
+      ],
+      "relations": ["pg_stat_replication"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O050"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q042",
+      "engine": "pg",
+      "sql": "SELECT extract(epoch FROM now() - pg_last_xact_replay_timestamp()) AS reader_lag_seconds, pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), pg_get_wal_replay_pause_state()",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 56
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O052", "O053"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q043",
+      "engine": "pg",
+      "sql": "SELECT slot_name, slot_type, database, active, active_pid, wal_status, safe_wal_size, restart_lsn, confirmed_flush_lsn, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retained_bytes, inactive_since, conflicting, invalidation_reason, failover, synced FROM pg_replication_slots",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 74
+        }
+      ],
+      "relations": ["pg_replication_slots"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O026"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q044",
+      "engine": "mysql",
+      "sql": "SHOW REPLICAS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 105
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 117
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O054", "O055"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q045",
+      "engine": "mysql",
+      "sql": "SELECT @@global.read_only, @@global.super_read_only, @@global.server_uuid, @@global.gtid_mode",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 105
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O056"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q046",
+      "engine": "mysql",
+      "sql": "SELECT c.CHANNEL_NAME, c.SERVICE_STATE AS io_state, c.LAST_ERROR_NUMBER AS io_errno, c.LAST_QUEUED_TRANSACTION_ORIGINAL_COMMIT_TIMESTAMP FROM performance_schema.replication_connection_status c",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 125
+        }
+      ],
+      "relations": ["performance_schema.replication_connection_status"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O057"],
+      "scopedSchema": ["O107"]
+    },
+    {
+      "id": "Q047",
+      "engine": "mysql",
+      "sql": "SELECT w.CHANNEL_NAME, w.WORKER_ID, w.SERVICE_STATE, w.LAST_ERROR_NUMBER, w.LAST_ERROR_MESSAGE, w.LAST_APPLIED_TRANSACTION_ORIGINAL_COMMIT_TIMESTAMP, w.LAST_APPLIED_TRANSACTION_END_APPLY_TIMESTAMP FROM performance_schema.replication_applier_status_by_worker w",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 125
+        }
+      ],
+      "relations": ["performance_schema.replication_applier_status_by_worker"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O058"],
+      "scopedSchema": ["O108"]
+    },
+    {
+      "id": "Q048",
+      "engine": "mysql",
+      "sql": "SELECT @@global.gtid_executed, @@global.gtid_purged",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 142
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O059"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q049",
+      "engine": "mysql",
+      "sql": "SELECT GTID_SUBSET('<source gtid_executed>', @@global.gtid_executed) AS has_all_source_trx",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 142
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q050",
+      "engine": "mysql",
+      "sql": "SELECT GTID_SUBTRACT(@@global.gtid_executed, '<source gtid_executed>') AS errant_gtids",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 142
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q051",
+      "engine": "maria",
+      "sql": "SHOW ALL REPLICAS STATUS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 164
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O060", "O061"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q052",
+      "engine": "maria",
+      "sql": "SHOW BINLOG STATUS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 164
+        },
+        {
+          "file": "replication-ha-signals.md",
+          "line": 185
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O062", "O063"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q053",
+      "engine": "maria",
+      "sql": "SELECT @@global.gtid_current_pos, @@global.gtid_slave_pos, @@global.gtid_binlog_pos, @@global.gtid_strict_mode, @@global.read_only",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 164
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O064"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q054",
+      "engine": "pg",
+      "sql": "SELECT PG_STAT_REPLICATION",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 93
+        }
+      ],
+      "relations": [],
+      "precondition": "excluded-prose-or-summary-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q055",
+      "engine": "mysql",
+      "sql": "SHOW MASTER STATUS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 118
+        },
+        {
+          "file": "backup-pitr-signals.md",
+          "line": 63
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "sourceCondition": "Legacy MySQL syntax; expected unsupported on 8.4",
+      "observations": ["O065", "O066"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q056",
+      "engine": "mysql",
+      "sql": "SHOW GLOBAL STATUS LIKE '%flow_control%'",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 158
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O067"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q057",
+      "engine": "maria",
+      "sql": "SHOW RELAYLOG EVENTS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 186
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O068", "O069"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q058",
+      "engine": "maria",
+      "sql": "SHOW REPLICA HOSTS",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 187
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-failed",
+      "observations": ["O070", "O071"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q059",
+      "engine": "pg",
+      "sql": "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil FROM pg_roles ORDER BY rolname",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 24
+        }
+      ],
+      "relations": ["pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q060",
+      "engine": "pg",
+      "sql": "SELECT r.rolname AS role, m.rolname AS member, g.rolname AS grantor, am.admin_option, am.inherit_option, am.set_option FROM pg_auth_members am JOIN pg_roles r ON r.oid = am.roleid JOIN pg_roles m ON m.oid = am.member LEFT JOIN pg_roles g ON g.oid = am.grantor ORDER BY r.rolname, m.rolname",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 39
+        }
+      ],
+      "relations": ["pg_auth_members", "pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O072", "O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q061",
+      "engine": "pg",
+      "sql": "SELECT rolname FROM pg_roles WHERE rolsuper",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 55
+        }
+      ],
+      "relations": ["pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q062",
+      "engine": "pg",
+      "sql": "SELECT m.rolname FROM pg_roles m WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rds_superuser') AND m.rolname <> 'rds_superuser' AND pg_has_role(m.oid, (SELECT oid FROM pg_roles WHERE rolname = 'rds_superuser'), 'MEMBER')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 55
+        }
+      ],
+      "relations": ["pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q063",
+      "engine": "pg",
+      "sql": "SELECT rolname, rolcreaterole, rolbypassrls, rolreplication FROM pg_roles WHERE rolcanlogin AND (rolcreaterole OR rolbypassrls OR rolreplication)",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 55
+        }
+      ],
+      "relations": ["pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q064",
+      "engine": "pg",
+      "sql": "SELECT r.rolname AS predefined_role, m.rolname AS member FROM pg_roles r JOIN pg_roles m ON pg_has_role(m.oid, r.oid, 'MEMBER') AND m.oid <> r.oid WHERE r.rolname IN ('pg_read_server_files','pg_write_server_files', 'pg_execute_server_program','pg_read_all_data', 'pg_write_all_data','rds_replication','rds_password')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 55
+        }
+      ],
+      "relations": ["pg_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O003"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q065",
+      "engine": "pg",
+      "sql": "SELECT n.nspname, c.relname, c.relkind, pg_get_userbyid(c.relowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, pg_get_userbyid(a.grantor) AS grantor, a.privilege_type, a.is_grantable FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relkind IN ('r','p','v','m','f','S') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%'",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 89
+        }
+      ],
+      "relations": ["pg_class", "pg_namespace"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O073", "O074"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q066",
+      "engine": "pg",
+      "sql": "SELECT n.nspname, pg_get_userbyid(n.nspowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_namespace n CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, acldefault('n', n.nspowner))) a WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp%'",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 89
+        }
+      ],
+      "relations": ["pg_namespace"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O074"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q067",
+      "engine": "pg",
+      "sql": "SELECT d.datname, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type FROM pg_database d CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 89
+        }
+      ],
+      "relations": ["pg_database"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O075"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q068",
+      "engine": "pg",
+      "sql": "SELECT pg_get_userbyid(d.defaclrole) AS for_role, COALESCE(n.nspname, '(all schemas)') AS schema, d.defaclobjtype, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace CROSS JOIN LATERAL aclexplode(d.defaclacl) a",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 126
+        }
+      ],
+      "relations": ["pg_default_acl", "pg_namespace"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O076", "O074"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q069",
+      "engine": "pg",
+      "sql": "SELECT ssl, version, cipher, bits FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 159
+        }
+      ],
+      "relations": ["pg_stat_ssl"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O077"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q070",
+      "engine": "pg",
+      "sql": "SELECT a.datname, a.usename, a.client_addr, a.application_name, a.backend_type, s.ssl, s.version, s.cipher FROM pg_stat_ssl s JOIN pg_stat_activity a ON a.pid = s.pid WHERE a.backend_type = 'client backend' ORDER BY s.ssl, a.usename",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 159
+        }
+      ],
+      "relations": ["pg_stat_ssl", "pg_stat_activity"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O077", "O078"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q071",
+      "engine": "pg",
+      "sql": "SELECT name, setting FROM pg_settings WHERE name IN ('ssl','ssl_min_protocol_version','ssl_max_protocol_version', 'ssl_ciphers','rds.force_ssl')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 159
+        }
+      ],
+      "relations": ["pg_settings"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O079"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q072",
+      "engine": "mysql",
+      "sql": "SELECT user, host, plugin, account_locked, password_expired, password_last_changed, password_lifetime, ssl_type FROM mysql.user ORDER BY user, host",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 186
+        }
+      ],
+      "relations": ["mysql.user"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O080"],
+      "scopedSchema": ["O109"]
+    },
+    {
+      "id": "Q073",
+      "engine": "mysql",
+      "sql": "SELECT FROM_USER, FROM_HOST, TO_USER, TO_HOST, WITH_ADMIN_OPTION FROM mysql.role_edges",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 186
+        }
+      ],
+      "relations": ["mysql.role_edges"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O081"],
+      "scopedSchema": ["O110"]
+    },
+    {
+      "id": "Q074",
+      "engine": "mysql",
+      "sql": "SELECT * FROM mysql.default_roles",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 186
+        }
+      ],
+      "relations": ["mysql.default_roles"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O082"],
+      "scopedSchema": ["O111"]
+    },
+    {
+      "id": "Q075",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.USER_PRIVILEGES",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 207
+        }
+      ],
+      "relations": ["information_schema.USER_PRIVILEGES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O083", "O112"],
+      "scopedSchema": ["O113"]
+    },
+    {
+      "id": "Q076",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.SCHEMA_PRIVILEGES",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 207
+        }
+      ],
+      "relations": ["information_schema.SCHEMA_PRIVILEGES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O084", "O114"],
+      "scopedSchema": ["O115"]
+    },
+    {
+      "id": "Q077",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.TABLE_PRIVILEGES",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 207
+        }
+      ],
+      "relations": ["information_schema.TABLE_PRIVILEGES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O085", "O116"],
+      "scopedSchema": ["O117"]
+    },
+    {
+      "id": "Q078",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.COLUMN_PRIVILEGES",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 207
+        }
+      ],
+      "relations": ["information_schema.COLUMN_PRIVILEGES"],
+      "precondition": null,
+      "result": "query-succeeded-after-scoped-schema",
+      "schemaConfirmed": true,
+      "observations": ["O086", "O118"],
+      "scopedSchema": ["O119"]
+    },
+    {
+      "id": "Q079",
+      "engine": "mysql",
+      "sql": "SELECT USER, HOST, PRIV, WITH_GRANT_OPTION FROM mysql.global_grants",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 207
+        }
+      ],
+      "relations": ["mysql.global_grants"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O087"],
+      "scopedSchema": ["O120"]
+    },
+    {
+      "id": "Q080",
+      "engine": "mysql",
+      "sql": "SHOW SESSION STATUS WHERE Variable_name IN ('Ssl_version','Ssl_cipher')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 236
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O088"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q081",
+      "engine": "mysql",
+      "sql": "SELECT id, user, host, connection_type FROM performance_schema.threads pst INNER JOIN information_schema.processlist isp ON pst.processlist_id = isp.id",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 236
+        }
+      ],
+      "relations": ["performance_schema.threads", "information_schema.processlist"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O089", "O090"],
+      "scopedSchema": ["O121", "O122"]
+    },
+    {
+      "id": "Q082",
+      "engine": "mysql",
+      "sql": "SHOW GLOBAL VARIABLES WHERE Variable_name IN ('require_secure_transport','tls_version')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 236
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O091"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q083",
+      "engine": "mysql",
+      "sql": "SELECT user, host, ssl_type FROM mysql.user",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 236
+        }
+      ],
+      "relations": ["mysql.user"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O080"],
+      "scopedSchema": ["O109"]
+    },
+    {
+      "id": "Q084",
+      "engine": "maria",
+      "sql": "SELECT user, host, is_role, plugin, ssl_type, default_role FROM mysql.user",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 262
+        }
+      ],
+      "relations": ["mysql.user"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O092"],
+      "scopedSchema": ["O123"]
+    },
+    {
+      "id": "Q085",
+      "engine": "maria",
+      "sql": "SELECT user, host, JSON_VALUE(Priv, '$.plugin') AS plugin, JSON_VALUE(Priv, '$.account_locked') AS account_locked, JSON_VALUE(Priv, '$.password_last_changed') AS password_last_changed, JSON_VALUE(Priv, '$.password_lifetime') AS password_lifetime FROM mysql.global_priv",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 262
+        }
+      ],
+      "relations": ["mysql.global_priv"],
+      "precondition": "sensitive-source-protected",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q086",
+      "engine": "maria",
+      "sql": "SELECT Host, User, Role, Admin_option FROM mysql.roles_mapping",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 262
+        }
+      ],
+      "relations": ["mysql.roles_mapping"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O093"],
+      "scopedSchema": ["O124"]
+    },
+    {
+      "id": "Q087",
+      "engine": "maria",
+      "sql": "SHOW SESSION STATUS WHERE Variable_name IN ('Ssl_version','Ssl_cipher')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 296
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O094"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q088",
+      "engine": "maria",
+      "sql": "SHOW GLOBAL VARIABLES WHERE Variable_name IN ('require_secure_transport','tls_version')",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 296
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O095"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q089",
+      "engine": "maria",
+      "sql": "SELECT user, host, ssl_type FROM mysql.user",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 296
+        }
+      ],
+      "relations": ["mysql.user"],
+      "precondition": null,
+      "result": "schema-preflight-blocked",
+      "observations": ["O092"],
+      "scopedSchema": ["O123"]
+    },
+    {
+      "id": "Q090",
+      "engine": "pg",
+      "sql": "SHOW",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 17
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q091",
+      "engine": "pg",
+      "sql": "SHOW password_encryption",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 143
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O096"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q092",
+      "engine": "pg",
+      "sql": "SHOW rds.accepted_password_auth_method",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 144
+        }
+      ],
+      "relations": [],
+      "precondition": "requires-rds-or-extension",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q093",
+      "engine": "pg",
+      "sql": "SHOW rds.restrict_password_commands",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 145
+        }
+      ],
+      "relations": [],
+      "precondition": "requires-rds-or-extension",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q094",
+      "engine": "pg",
+      "sql": "SELECT rolname, CASE WHEN rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256' WHEN rolpassword LIKE 'md5%' THEN 'md5' WHEN rolpassword IS NULL THEN 'none' END FROM pg_authid",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 146
+        }
+      ],
+      "relations": ["pg_authid"],
+      "precondition": "sensitive-source-protected",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q095",
+      "engine": "pg",
+      "sql": "SELECT * FROM rds_tools.role_password_encryption_type()",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 151
+        }
+      ],
+      "relations": ["rds_tools.role_password_encryption_type"],
+      "precondition": "requires-rds-or-extension",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q096",
+      "engine": "mysql",
+      "sql": "SHOW GRANTS FOR 'u'@'h'",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 202
+        }
+      ],
+      "relations": [],
+      "precondition": "placeholder-or-incomplete-example",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q097",
+      "engine": "mysql",
+      "sql": "SHOW CREATE USER 'u'@'h'",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 202
+        }
+      ],
+      "relations": [],
+      "precondition": "sensitive-source-protected",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q098",
+      "engine": "mysql",
+      "sql": "SHOW GRANTS",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 203
+        },
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 215
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O097"],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q099",
+      "engine": "mysql",
+      "sql": "SHOW GRANTS FOR rds_superuser_role@'%'",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 224
+        }
+      ],
+      "relations": [],
+      "precondition": "requires-rds-or-extension",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q100",
+      "engine": "maria",
+      "sql": "SHOW GRANTS FOR",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 284
+        }
+      ],
+      "relations": [],
+      "precondition": "incomplete-source-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q101",
+      "engine": "maria",
+      "sql": "SHOW CREATE ROUTINE",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 286
+        }
+      ],
+      "relations": [],
+      "precondition": "excluded-prose-or-summary-fragment",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q102",
+      "engine": "pg",
+      "sql": "SHOW rds.force_ssl",
+      "sources": [
+        {
+          "file": "native-privileges-tls-audit.md",
+          "line": 316
+        }
+      ],
+      "relations": [],
+      "precondition": "requires-rds-or-extension",
+      "result": "not-run",
+      "observations": [],
+      "scopedSchema": []
+    },
+    {
+      "id": "Q103",
+      "engine": "mysql",
+      "sql": "SHOW PROCESSLIST",
+      "sources": [
+        {
+          "file": "replication-ha-signals.md",
+          "line": 267
+        }
+      ],
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O125"],
+      "scopedSchema": []
+    },
+    {
+      "id": "C001",
+      "engine": "pg",
+      "sql": "SHOW is_superuser",
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O126"],
+      "scopedSchema": []
+    },
+    {
+      "id": "C002",
+      "engine": "maria",
+      "sql": "SHOW GRANTS",
+      "relations": [],
+      "precondition": null,
+      "result": "query-succeeded",
+      "observations": ["O127"],
+      "scopedSchema": []
+    }
+  ],
+  "blacklistControls": [
+    {
+      "engine": "mysql",
+      "mode": "table",
+      "observations": ["O128", "O129", "O130"]
+    },
+    {
+      "engine": "mysql",
+      "mode": "column",
+      "observations": ["O131", "O132", "O133"]
+    },
+    {
+      "engine": "maria",
+      "mode": "table",
+      "observations": ["O134", "O135", "O136"]
+    },
+    {
+      "engine": "maria",
+      "mode": "column",
+      "observations": ["O137", "O138", "O139"]
+    }
+  ],
+  "observations": [
+    {
+      "id": "O001",
+      "profile": "pg-dbcli_test",
+      "args": ["capabilities", "check", "--require", "schema.read,query.read", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"required\": [\n    \"schema.read\",\n    \"query.read\"\n  ],\n  \"context\": {\n    \"engine\": \"postgresql\",\n    \"permission\": \"query-only\",\n    \"connectionName\": null,\n    \"agentMode\": true\n  },\n  \"results\": [\n    {\n      \"id\": \"schema.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    },\n    {\n      \"id\": \"query.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    }\n  ],\n  \"warnings\": [\n    \"Agent mode is active (DBCLI_AGENT_MODE=1): configuration, permission and credential changes are refused regardless of permission level.\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O002",
+      "profile": "pg-dbcli_test",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O003",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_roles", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_roles' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O004",
+      "profile": "mysql-dbcli_test",
+      "args": ["capabilities", "check", "--require", "schema.read,query.read", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"required\": [\n    \"schema.read\",\n    \"query.read\"\n  ],\n  \"context\": {\n    \"engine\": \"mysql\",\n    \"permission\": \"query-only\",\n    \"connectionName\": null,\n    \"agentMode\": true\n  },\n  \"results\": [\n    {\n      \"id\": \"schema.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    },\n    {\n      \"id\": \"query.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    }\n  ],\n  \"warnings\": [\n    \"Agent mode is active (DBCLI_AGENT_MODE=1): configuration, permission and credential changes are refused regardless of permission level.\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O005",
+      "profile": "mysql-dbcli_test",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O006",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.TABLES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.TABLES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O007",
+      "profile": "maria-dbcli_test",
+      "args": ["capabilities", "check", "--require", "schema.read,query.read", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"required\": [\n    \"schema.read\",\n    \"query.read\"\n  ],\n  \"context\": {\n    \"engine\": \"mariadb\",\n    \"permission\": \"query-only\",\n    \"connectionName\": null,\n    \"agentMode\": true\n  },\n  \"results\": [\n    {\n      \"id\": \"schema.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    },\n    {\n      \"id\": \"query.read\",\n      \"status\": \"available\",\n      \"reason\": null\n    }\n  ],\n  \"warnings\": [\n    \"Agent mode is active (DBCLI_AGENT_MODE=1): configuration, permission and credential changes are refused regardless of permission level.\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O008",
+      "profile": "maria-dbcli_test",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O009",
+      "profile": "maria-dbcli_test",
+      "args": ["schema", "information_schema.TABLES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.TABLES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O010",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_catalog.pg_roles", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_catalog.pg_roles' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O011",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SELECT current_user, version()", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"current_user\": \"dbcli\",\n      \"version\": \"PostgreSQL 16.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"current_user\",\n    \"version\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O012",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_authid", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_authid' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O013",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SELECT CURRENT_USER(), VERSION()", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"CURRENT_USER()\": \"dbcli@%\",\n      \"VERSION()\": \"8.4.8\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"CURRENT_USER()\",\n    \"VERSION()\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O014",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "mysql.global_priv", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.global_priv' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O015",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SELECT CURRENT_USER(), VERSION()", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"CURRENT_USER()\": \"dbcli@%\",\n      \"VERSION()\": \"11.8.8-MariaDB-ubu2404\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"CURRENT_USER()\",\n    \"VERSION()\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O016",
+      "profile": "maria-dbcli_test",
+      "args": ["schema", "mysql.global_priv", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.global_priv' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O017",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_stat_archiver", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_stat_archiver' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O018",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW wal_level", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"wal_level\": \"replica\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"wal_level\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 1,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O019",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW archive_mode", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"archive_mode\": \"off\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"archive_mode\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O020",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW archive_command", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"archive_command\": \"(disabled)\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"archive_command\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O021",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW archive_library", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"archive_library\": \"\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"archive_library\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O022",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW archive_timeout", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"archive_timeout\": \"0\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"archive_timeout\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O023",
+      "profile": "pg-dbcli_test",
+      "args": [
+        "query",
+        "SELECT pg_current_wal_lsn(), pg_walfile_name(pg_current_wal_lsn())",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"pg_current_wal_lsn\": \"0/1E5D2D8\",\n      \"pg_walfile_name\": \"000000010000000000000001\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"pg_current_wal_lsn\",\n    \"pg_walfile_name\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 5,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O024",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_ls_archive_statusdir", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_ls_archive_statusdir' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O025",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_ls_waldir", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_ls_waldir' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O026",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_replication_slots", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_replication_slots' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O027",
+      "profile": "pg-dbcli_test",
+      "args": [
+        "query",
+        "SELECT pg_is_in_recovery(), pg_last_xact_replay_timestamp()",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"pg_is_in_recovery\": false,\n      \"pg_last_xact_replay_timestamp\": null\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"pg_is_in_recovery\",\n    \"pg_last_xact_replay_timestamp\"\n  ],\n  \"columnTypes\": [\n    \"boolean\",\n    \"null\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O028",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SELECT @@log_bin, @@binlog_format, @@sync_binlog", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@log_bin\": 1,\n      \"@@binlog_format\": \"ROW\",\n      \"@@sync_binlog\": 1\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@log_bin\",\n    \"@@binlog_format\",\n    \"@@sync_binlog\"\n  ],\n  \"columnTypes\": [\n    \"integer\",\n    \"varchar\",\n    \"integer\"\n  ],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O029",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SELECT @@log_bin, @@binlog_format, @@sync_binlog", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@log_bin\": 0,\n      \"@@binlog_format\": \"MIXED\",\n      \"@@sync_binlog\": 0\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@log_bin\",\n    \"@@binlog_format\",\n    \"@@sync_binlog\"\n  ],\n  \"columnTypes\": [\n    \"integer\",\n    \"varchar\",\n    \"integer\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O030",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW BINARY LOGS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O031",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW BINARY LOGS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O032",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW BINARY LOGS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O033",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW BINARY LOGS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O034",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW BINARY LOG STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O035",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW BINARY LOG STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O036",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW MASTER STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O037",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW MASTER STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O038",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SELECT @@binlog_expire_logs_seconds", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@binlog_expire_logs_seconds\": 2592000\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@binlog_expire_logs_seconds\"\n  ],\n  \"columnTypes\": [\n    \"integer\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O039",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SELECT @@gtid_mode, @@gtid_executed", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@gtid_mode\": \"OFF\",\n      \"@@gtid_executed\": \"\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@gtid_mode\",\n    \"@@gtid_executed\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O040",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SELECT @@gtid_binlog_pos, @@gtid_current_pos", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@gtid_binlog_pos\": \"\",\n      \"@@gtid_current_pos\": \"\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@gtid_binlog_pos\",\n    \"@@gtid_current_pos\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O041",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "CALL mysql.rds_show_configuration", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Unrecognised SQL statement (current level: query-only). Security policy requires admin for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.\n"
+    },
+    {
+      "id": "O042",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "CALL mysql.rds_show_configuration", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Unrecognised SQL statement (current level: query-only). Security policy requires admin for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.\n"
+    },
+    {
+      "id": "O043",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "CALL mysql.rds_show_configuration", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Unrecognised SQL statement (current level: query-only). Security policy requires admin for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.\n"
+    },
+    {
+      "id": "O044",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "CALL mysql.rds_show_configuration", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Unrecognised SQL statement (current level: query-only). Security policy requires admin for unknown statements. If this is a legitimate read-only statement, please open an issue at https://github.com/CarlLee1983/dbcli/issues.\n"
+    },
+    {
+      "id": "O045",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW REPLICA STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O046",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW REPLICA STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O047",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW REPLICA STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O048",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW REPLICA STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O049",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SELECT pg_is_in_recovery()", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"pg_is_in_recovery\": false\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"pg_is_in_recovery\"\n  ],\n  \"columnTypes\": [\n    \"boolean\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O050",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_stat_replication", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_stat_replication' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O051",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_stat_wal_receiver", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_stat_wal_receiver' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O052",
+      "profile": "pg-dbcli_test",
+      "args": [
+        "query",
+        "SELECT extract(epoch FROM now() - pg_last_xact_replay_timestamp()) AS reader_lag_seconds, pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), pg_get_wal_replay_pause_state()",
+        "--format",
+        "json"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (55000): recovery is not in progress\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up 55000 in the postgresql error reference for the exact cause\n"
+    },
+    {
+      "id": "O053",
+      "profile": "pg-dbcli_test",
+      "args": [
+        "query",
+        "SELECT extract(epoch FROM now() - pg_last_xact_replay_timestamp()) AS reader_lag_seconds, pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), pg_get_wal_replay_pause_state()",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (55000): recovery is not in progress\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up 55000 in the postgresql error reference for the exact cause\n"
+    },
+    {
+      "id": "O054",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW REPLICAS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the REPLICATION SLAVE privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O055",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW REPLICAS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the REPLICATION SLAVE privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mysql error reference for the exact cause\n"
+    },
+    {
+      "id": "O056",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT @@global.read_only, @@global.super_read_only, @@global.server_uuid, @@global.gtid_mode",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@global.read_only\": 0,\n      \"@@global.super_read_only\": 0,\n      \"@@global.server_uuid\": \"e87f2bef-c9ed-11f1-93da-366dcd825dab\",\n      \"@@global.gtid_mode\": \"OFF\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@global.read_only\",\n    \"@@global.super_read_only\",\n    \"@@global.server_uuid\",\n    \"@@global.gtid_mode\"\n  ],\n  \"columnTypes\": [\n    \"integer\",\n    \"integer\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O057",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "performance_schema.replication_connection_status", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'performance_schema.replication_connection_status' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O058",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "schema",
+        "performance_schema.replication_applier_status_by_worker",
+        "--format",
+        "json"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'performance_schema.replication_applier_status_by_worker' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O059",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SELECT @@global.gtid_executed, @@global.gtid_purged", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@global.gtid_executed\": \"\",\n      \"@@global.gtid_purged\": \"\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@global.gtid_executed\",\n    \"@@global.gtid_purged\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O060",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW ALL REPLICAS STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O061",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW ALL REPLICAS STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O062",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW BINLOG STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O063",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW BINLOG STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the BINLOG MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O064",
+      "profile": "maria-dbcli_test",
+      "args": [
+        "query",
+        "SELECT @@global.gtid_current_pos, @@global.gtid_slave_pos, @@global.gtid_binlog_pos, @@global.gtid_strict_mode, @@global.read_only",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"@@global.gtid_current_pos\": \"\",\n      \"@@global.gtid_slave_pos\": \"\",\n      \"@@global.gtid_binlog_pos\": \"\",\n      \"@@global.gtid_strict_mode\": 0,\n      \"@@global.read_only\": 0\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"@@global.gtid_current_pos\",\n    \"@@global.gtid_slave_pos\",\n    \"@@global.gtid_binlog_pos\",\n    \"@@global.gtid_strict_mode\",\n    \"@@global.read_only\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"integer\",\n    \"integer\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "id": "O065",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW MASTER STATUS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "SQL syntax error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MASTER STATUS' at line 1\nCode: SQL_SYNTAX_ERROR\nHint: Check your SQL syntax near the position reported above\nHint: In query-only mode, dbcli auto-appends LIMIT 1000; use --no-limit to disable\nHint: For SHOW/DESCRIBE/EXPLAIN statements, LIMIT is not allowed — these are not auto-limited\n"
+    },
+    {
+      "id": "O066",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW MASTER STATUS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "SQL syntax error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MASTER STATUS' at line 1\nCode: SQL_SYNTAX_ERROR\nHint: Check your SQL syntax near the position reported above\nHint: In query-only mode, dbcli auto-appends LIMIT 1000; use --no-limit to disable\nHint: For SHOW/DESCRIBE/EXPLAIN statements, LIMIT is not allowed — these are not auto-limited\n"
+    },
+    {
+      "id": "O067",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW GLOBAL STATUS LIKE '%flow_control%'", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 40,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O068",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW RELAYLOG EVENTS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O069",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW RELAYLOG EVENTS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the SLAVE MONITOR privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O070",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW REPLICA HOSTS", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the REPLICATION MASTER ADMIN privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O071",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW REPLICA HOSTS", "--format", "json", "--no-limit"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Database error (ER_SPECIFIC_ACCESS_DENIED_ERROR): Access denied; you need (at least one of) the REPLICATION MASTER ADMIN privilege(s) for this operation\nCode: UNKNOWN\nHint: Run `dbcli schema <table>` to confirm the objects referenced by this statement\nHint: Look up ER_SPECIFIC_ACCESS_DENIED_ERROR in the mariadb error reference for the exact cause\n"
+    },
+    {
+      "id": "O072",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_auth_members", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_auth_members' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O073",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_class", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_class' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O074",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_namespace", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_namespace' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O075",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_database", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_database' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O076",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_default_acl", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_default_acl' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O077",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_stat_ssl", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_stat_ssl' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O078",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_stat_activity", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_stat_activity' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O079",
+      "profile": "pg-dbcli_test",
+      "args": ["schema", "pg_settings", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'public.pg_settings' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O080",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "mysql.user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.user' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O081",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "mysql.role_edges", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.role_edges' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O082",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "mysql.default_roles", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.default_roles' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O083",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.USER_PRIVILEGES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.USER_PRIVILEGES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O084",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.SCHEMA_PRIVILEGES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.SCHEMA_PRIVILEGES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O085",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.TABLE_PRIVILEGES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.TABLE_PRIVILEGES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O086",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.COLUMN_PRIVILEGES", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.COLUMN_PRIVILEGES' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O087",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "mysql.global_grants", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.global_grants' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O088",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SHOW SESSION STATUS WHERE Variable_name IN ('Ssl_version','Ssl_cipher')",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Variable_name\": \"Ssl_cipher\",\n      \"Value\": \"\"\n    },\n    {\n      \"Variable_name\": \"Ssl_version\",\n      \"Value\": \"\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Variable_name\",\n    \"Value\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 6,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O089",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "performance_schema.threads", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'performance_schema.threads' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O090",
+      "profile": "mysql-dbcli_test",
+      "args": ["schema", "information_schema.processlist", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'information_schema.processlist' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O091",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SHOW GLOBAL VARIABLES WHERE Variable_name IN ('require_secure_transport','tls_version')",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Variable_name\": \"require_secure_transport\",\n      \"Value\": \"OFF\"\n    },\n    {\n      \"Variable_name\": \"tls_version\",\n      \"Value\": \"TLSv1.2,TLSv1.3\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Variable_name\",\n    \"Value\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 16,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O092",
+      "profile": "maria-dbcli_test",
+      "args": ["schema", "mysql.user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.user' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O093",
+      "profile": "maria-dbcli_test",
+      "args": ["schema", "mysql.roles_mapping", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Table 'mysql.roles_mapping' not found in database 'dbcli_test'\nCode: TABLE_NOT_FOUND\nHint: Run `dbcli list` to see available tables\nHint: Run `dbcli schema <table>` to confirm the exact name (ORM export names may differ from DB table names)\n"
+    },
+    {
+      "id": "O094",
+      "profile": "maria-dbcli_test",
+      "args": [
+        "query",
+        "SHOW SESSION STATUS WHERE Variable_name IN ('Ssl_version','Ssl_cipher')",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Variable_name\": \"Ssl_cipher\",\n      \"Value\": \"\"\n    },\n    {\n      \"Variable_name\": \"Ssl_version\",\n      \"Value\": \"\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Variable_name\",\n    \"Value\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O095",
+      "profile": "maria-dbcli_test",
+      "args": [
+        "query",
+        "SHOW GLOBAL VARIABLES WHERE Variable_name IN ('require_secure_transport','tls_version')",
+        "--format",
+        "json"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Variable_name\": \"require_secure_transport\",\n      \"Value\": \"OFF\"\n    },\n    {\n      \"Variable_name\": \"tls_version\",\n      \"Value\": \"TLSv1.2,TLSv1.3\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Variable_name\",\n    \"Value\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O096",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW password_encryption", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"password_encryption\": \"scram-sha-256\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"password_encryption\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O097",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW GRANTS", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Grants for dbcli@%\": \"GRANT USAGE ON *.* TO `dbcli`@`%`\"\n    },\n    {\n      \"Grants for dbcli@%\": \"GRANT ALL PRIVILEGES ON `dbcli\\\\_test`.* TO `dbcli`@`%`\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Grants for dbcli@%\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O098",
+      "profile": "mysql-information_schema",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O099",
+      "profile": "maria-information_schema",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O100",
+      "profile": "mysql-performance_schema",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O101",
+      "profile": "mysql-mysql",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O102",
+      "profile": "maria-mysql",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O103",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O104",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"enum('BASE TABLE','VIEW','SYSTEM VIEW')\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"BASE TABLE\",\n        \"VIEW\",\n        \"SYSTEM VIEW\"\n      ]\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"int\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged')\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"Fixed\",\n        \"Dynamic\",\n        \"Compressed\",\n        \"Redundant\",\n        \"Compact\",\n        \"Paged\"\n      ]\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"timestamp\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(256)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"text\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 86,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O105",
+      "profile": "maria-dbcli_test",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 5,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O106",
+      "profile": "maria-information_schema",
+      "args": ["schema", "TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"varchar(10)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TEMPORARY\",\n      \"type\": \"varchar(1)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 88,\n    \"engine\": \"MEMORY\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O107",
+      "profile": "mysql-performance_schema",
+      "args": ["schema", "replication_connection_status", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O108",
+      "profile": "mysql-performance_schema",
+      "args": ["schema", "replication_applier_status_by_worker", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O109",
+      "profile": "mysql-mysql",
+      "args": ["schema", "user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O110",
+      "profile": "mysql-mysql",
+      "args": ["schema", "role_edges", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O111",
+      "profile": "mysql-mysql",
+      "args": ["schema", "default_roles", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O112",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.USER_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"PRIVILEGE_TYPE\": \"USAGE\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"GRANTEE\",\n    \"TABLE_CATALOG\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O113",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "USER_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"USER_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 1,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O114",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.SCHEMA_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"SELECT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"INSERT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"UPDATE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"DELETE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"DROP\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"REFERENCES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"INDEX\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"ALTER\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE TEMPORARY TABLES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"LOCK TABLES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"EXECUTE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE VIEW\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"SHOW VIEW\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE ROUTINE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"ALTER ROUTINE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"EVENT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"TRIGGER\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 18,\n  \"columnNames\": [\n    \"GRANTEE\",\n    \"TABLE_CATALOG\",\n    \"TABLE_SCHEMA\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 18\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O115",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "SCHEMA_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"SCHEMA_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 18,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O116",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.TABLE_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O117",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "TABLE_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLE_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 0,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O118",
+      "profile": "mysql-dbcli_test",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.COLUMN_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O119",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "COLUMN_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"COLUMN_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"COLUMN_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 0,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O120",
+      "profile": "mysql-mysql",
+      "args": ["schema", "global_grants", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O121",
+      "profile": "mysql-performance_schema",
+      "args": ["schema", "threads", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mysql -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O122",
+      "profile": "mysql-information_schema",
+      "args": ["schema", "processlist", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"processlist\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 1,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O123",
+      "profile": "maria-mysql",
+      "args": ["schema", "user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mariadb -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O124",
+      "profile": "maria-mysql",
+      "args": ["schema", "roles_mapping", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Authentication failed — check your username or password\nCode: AUTH_FAILED\nHint: Verify credentials: mariadb -u dbcli -h 127.0.0.1\nHint: Check pg_hba.conf (PostgreSQL) or user privileges (MySQL)\nHint: Re-run dbcli init to update credentials\n"
+    },
+    {
+      "id": "O125",
+      "profile": "mysql-dbcli_test",
+      "args": ["query", "SHOW PROCESSLIST", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Id\": 12344,\n      \"User\": \"dbcli\",\n      \"Host\": \"192.168.147.1:47535\",\n      \"db\": \"dbcli_test\",\n      \"Command\": \"Execute\",\n      \"Time\": 0,\n      \"State\": \"init\",\n      \"Info\": \"SHOW PROCESSLIST\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"Id\",\n    \"User\",\n    \"Host\",\n    \"db\",\n    \"Command\",\n    \"Time\",\n    \"State\",\n    \"Info\"\n  ],\n  \"columnTypes\": [\n    \"integer\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"integer\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O126",
+      "profile": "pg-dbcli_test",
+      "args": ["query", "SHOW is_superuser", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"is_superuser\": \"on\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"is_superuser\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 2,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O127",
+      "profile": "maria-dbcli_test",
+      "args": ["query", "SHOW GRANTS", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Grants for dbcli@%\": \"GRANT USAGE ON *.* TO `dbcli`@`%` IDENTIFIED BY PASSWORD '<REDACTED_FIXTURE_PASSWORD_HASH>'\"\n    },\n    {\n      \"Grants for dbcli@%\": \"GRANT ALL PRIVILEGES ON `dbcli\\\\_test`.* TO `dbcli`@`%`\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Grants for dbcli@%\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O128",
+      "profile": "mysql-information_schema-blacklist-table",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\",\n    \"TABLES\",\n    \"information_schema.TABLES\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O129",
+      "profile": "mysql-information_schema-blacklist-table",
+      "args": ["schema", "TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"enum('BASE TABLE','VIEW','SYSTEM VIEW')\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"BASE TABLE\",\n        \"VIEW\",\n        \"SYSTEM VIEW\"\n      ]\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"int\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged')\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"Fixed\",\n        \"Dynamic\",\n        \"Compressed\",\n        \"Redundant\",\n        \"Compact\",\n        \"Paged\"\n      ]\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"timestamp\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(256)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"text\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 86,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O130",
+      "profile": "mysql-information_schema-blacklist-table",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Error: Table 'TABLES, information_schema.TABLES' is blacklisted for SELECT operations\n"
+    },
+    {
+      "id": "O131",
+      "profile": "mysql-information_schema-blacklist-column",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ],\n    \"information_schema.USER_PRIVILEGES\": [\n      \"GRANTEE\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O132",
+      "profile": "mysql-information_schema-blacklist-column",
+      "args": ["schema", "USER_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"USER_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 1,\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O133",
+      "profile": "mysql-information_schema-blacklist-column",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.USER_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"TABLE_CATALOG\": \"def\",\n      \"PRIVILEGE_TYPE\": \"USAGE\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"TABLE_CATALOG\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"securityNotification\": \"Security: 1 column(s) were omitted based on your blacklist\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O134",
+      "profile": "maria-information_schema-blacklist-table",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\",\n    \"TABLES\",\n    \"information_schema.TABLES\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O135",
+      "profile": "maria-information_schema-blacklist-table",
+      "args": ["schema", "TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"varchar(10)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TEMPORARY\",\n      \"type\": \"varchar(1)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 88,\n    \"engine\": \"MEMORY\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O136",
+      "profile": "maria-information_schema-blacklist-table",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Error: Table 'TABLES, information_schema.TABLES' is blacklisted for SELECT operations\n"
+    },
+    {
+      "id": "O137",
+      "profile": "maria-information_schema-blacklist-column",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ],\n    \"information_schema.USER_PRIVILEGES\": [\n      \"GRANTEE\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O138",
+      "profile": "maria-information_schema-blacklist-column",
+      "args": ["schema", "USER_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"USER_PRIVILEGES\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(385)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"rowCount\": 1,\n    \"engine\": \"MEMORY\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "O139",
+      "profile": "maria-information_schema-blacklist-column",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.USER_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"TABLE_CATALOG\": \"def\",\n      \"PRIVILEGE_TYPE\": \"USAGE\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"TABLE_CATALOG\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 3,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"securityNotification\": \"Security: 1 column(s) were omitted based on your blacklist\"\n  }\n}\n",
+      "stderr": ""
+    }
+  ]
+}

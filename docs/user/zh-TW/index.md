@@ -333,7 +333,26 @@ v1 設定則會改寫 `.env.local` 裡的 `DBCLI_PASSWORD`，與 v1 的讀取邏
 `tables`、`columns` 與 `warnings`；不合法的 MongoDB blacklist path 會放進結構化的
 `warnings` 陣列，不會把人類可讀診斷混入 stdout。
 
-在 PostgreSQL 中，`schema` 全程使用精確的 `public` catalog identity：完整的 catalog/schema/table join 可避免重複使用的 constraint 名稱污染另一張表，複合 foreign key 欄位會維持宣告順序，複合 primary key 的順序來自精確 table OID 與 index ordinality，estimate 也限定於精確的 `public` relation。Row count 會同時 qualify 並 quote `"public"` 與精確 table name，內嵌 quote 會被 escape，因此混合大小寫或含標點的 identifier 仍可安全區分；被參照 schema/table 的 catalog 原始拼字也會保留。
+#### 檢視單一 SQL 物件的完整名稱
+
+PostgreSQL 使用 `schema.table`，MySQL 與 MariaDB 使用 `database.table`，可檢視一個有權存取的表或 view（包含系統視圖）。欄位、enum、鍵、索引與外鍵均綁定同一 namespace 與局部名稱。不會變更連線、PostgreSQL `search_path`、預設 database 或 schema 快取；`list`、掃描與不帶物件的 `schema` 範圍不變。
+
+```bash
+dbcli schema pg_catalog.pg_roles --format json
+dbcli schema information_schema.TABLES --format json
+dbcli schema '"Audit"."Order.Items"' --format json
+dbcli schema '`reporting`.`order.items`' --format json
+```
+
+以上 shell 範例外層的單引號會保留引擎原生識別字引號：PostgreSQL 用雙引號，MySQL／MariaDB 用反引號。每個 component 分別引用，以保留大小寫或名稱內的點號；內嵌的原生引號以連續兩個引號跳脫，例如 PostgreSQL 的 `"Audit"."Order""Items"`。PostgreSQL 完整名稱中未引用的 component 會折成小寫；MySQL／MariaDB 依伺服器的識別字大小寫規則處理。空 component、超過兩層、無效或未閉合的引號均拒絕，不會猜測另一種解讀。
+
+未限定名稱保留既有精確名稱語意：PostgreSQL 使用 `public`，MySQL／MariaDB 使用連線的預設 database。完整名稱不存在時不會退回預設 namespace 的同名物件。相容性提醒：局部名稱本身含點號時，現在必須明確指定，例如 `dbcli schema 'public."audit.orders"' --format json`。此名稱解析僅適用於單一物件的 `schema`，不改變其他命令。
+
+完整名稱的 JSON 輸出保留局部 `name`，另提供獨立的 `schema` 字串（MySQL／MariaDB 為 database 名稱）；文字輸出也會區分兩個 component，包含引用的點號與大小寫敏感名稱。`tableType` 為 `table` 或 `view`；PostgreSQL materialized view 歸為 `view`。完整名稱查詢不對關係資料執行 `COUNT(*)`。可用的 metadata 估計值只是估計，不是精確筆數；未知時 JSON 為 `estimatedRowCount: null` 與 `sizeCategory: null`，不虛構 `metadata.rowCount: 0`。文字不會以零筆或 small 分類替代未知值。既有未限定名稱的計數行為不變。
+
+SQL 單一物件查詢的未限定與完整名稱都套用 blacklist。bare 或 qualified 規則任一命中即生效，沿用既有 glob 與大小寫匹配。受保護的表會拒絕查詢；受保護欄位會隱藏，含該欄位的主鍵或索引也會整項省略。外鍵來源或目標的表／欄位受保護時，表層級與欄位層級的外鍵 metadata 都會整條省略，複合約束不會被裁切成誤導的部分約束。此單一物件 schema 命令也會在無法安全表達完整欄位相依性時，整項省略 expression 或 partial index。省略 metadata 時，JSON 會輸出 `metadataOmitted: true`，文字輸出會顯示省略通知，可與原本不存在的 metadata 區分；回傳的 metadata 不一定完整。全欄位被隱藏不代表物件不存在。必要 metadata 讀取失敗（包含原生權限不足）會使命令失敗，不會以成功的空集合代替；資料庫無法區分不存在與不可見時，錯誤會保留此不確定性。
+
+完整名稱不可與 `--refresh` 或 `--reset` 並用（也不能同時帶兩者），命令會在掃描前拒絕。快取維護請另行使用不帶完整名稱的 `schema --refresh` 或 `schema --reset`，範圍沿用既有行為。完整名稱檢視不會提升原生權限，也不會繞過 query-only、agent mode 或 blacklist 保護。
 
 #### 給 Skill 的能力探索
 

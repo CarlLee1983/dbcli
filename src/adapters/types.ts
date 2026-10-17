@@ -165,6 +165,8 @@ export interface ColumnSchema {
  * Complete schema information for a table
  */
 export interface TableSchema {
+  /** Some metadata was omitted to protect blacklisted identities. No protected names. */
+  metadataOmitted?: boolean
   /** Table name */
   name: string
   /** Exact database schema/catalog namespace, when reliably available */
@@ -190,6 +192,8 @@ export interface TableSchema {
     name: string
     columns: string[]
     unique: boolean
+    /** False when expressions/predicates prevent complete column-only representation. */
+    columnsComplete?: boolean
   }>
   /** Column count (used by listTables when full column details are not loaded) */
   columnCount?: number
@@ -279,6 +283,10 @@ export type RedisWarning =
  * 悄悄漏掉。
  */
 export interface TableSchemaOptions {
+  /** Single-object schema command: validate presence/type and mark incomplete index metadata. */
+  metadataProtection?: boolean
+  /** Explicit SQL namespace; local tableName remains literal. Never performs an exact count. */
+  namespace?: string
   /** MongoDB: 取樣文件數 */
   sampleSize?: number
   /** MongoDB: 取樣方式 */

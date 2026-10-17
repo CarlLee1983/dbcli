@@ -262,6 +262,25 @@ _Avoid_: Operation envelope, evidence receipt
 某次評估在當時範圍與條件下留下的判定，不保證現在仍適用。
 證據後續失效或新的評估不會覆寫它。
 
+批准與交接的決策見 [ADR-0047](docs/adr/ADR-0047-dba-human-approval-is-scoped-to-an-execution-plan.md)。
+
+**工作流程批准（Workflow approval）**：
+有權者對具體計畫版本、環境、資源與操作的同意，限定本次執行、時間窗及允許的重試範圍。
+它不等於工具確認、操作成功或 DBA 主張成立。
+_Avoid_: Write gate 放行、執行完成
+
+**批准點（Approval point）**：
+runbook 事先指定、必須取得有效工作流程批准才能繼續的關卡。
+agent 可以因未涵蓋的風險追加暫停，不能自行取消既定批准點。
+
+**批准紀錄（Approval record）**：
+連結確定的批准內容、批准者、決定、時間、條件與來源的紀錄。
+拒絕、撤回與後續決定追加保存，不覆寫原決定；紀錄中的姓名本身不證明批准資格。
+
+**執行交接（Execution handoff）**：
+將待執行步驟交由指定執行者承接，要求確認批准有效、計畫與目標一致及前置條件成立。
+批准後仍可能等待執行，操作與驗證證據須在執行後另行交回。
+
 ## Connection configuration language
 
 **Connection string**:

@@ -1868,8 +1868,11 @@ at execution time, and no human has agreed to anything. `admin` in a config file
 is a permission level, not a DBA sign-off.
 
 `schema.read` is available under `DBCLI_AGENT_MODE=1`, and `dbcli schema` runs
-there: storing the schema cache is not a configuration change. Agent mode still
-refuses every change to connection identity, permission and credentials.
+there: storing the schema cache is not a configuration change. `blacklist.read`
+(`blacklist list`) is available there too, so read-only Task Packs that inspect
+the blacklist can plan; `blacklist.manage`, which adds and removes rules, is
+refused. Agent mode still refuses every change to connection identity,
+permission and credentials.
 
 **Permission:** query-only+ (no connection is made)
 

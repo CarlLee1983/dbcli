@@ -369,13 +369,14 @@ export const SQLITE_CLI_SCENARIOS: readonly CliScenario[] = [
   },
   {
     id: 'blacklist hides a column from query results',
-    proves: ['blacklist'],
+    proves: ['blacklist', 'blacklistRead'],
     guarded: true,
     async run({ cli, init }) {
       await init()
       const add = await cli(['blacklist', 'column', 'add', 'users.secret'])
       expect(add.code).toBe(0)
       const listed = await cli(['blacklist', 'list'])
+      expect(listed.code).toBe(0)
       expect(listed.stdout).toMatch(/users=\[secret\]/)
 
       const query = await cli(['query', 'SELECT id, secret FROM users', '--format', 'json'])

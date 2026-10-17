@@ -15,7 +15,7 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist.manage
+    - blacklist.read
     - schema.read
 steps:
   - type: command

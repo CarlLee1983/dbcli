@@ -78,7 +78,7 @@ describe('builtin pack: orm-drift-review', () => {
       }>
     }
     expect(plan.mode).toBe('plan-only')
-    expect(plan.requires).toEqual(['blacklist.manage', 'schema.read'])
+    expect(plan.requires).toEqual(['blacklist.read', 'schema.read'])
     expect(plan.steps.map((step) => step.resolvedCommand)).toEqual([
       'blacklist list',
       'schema --format json',

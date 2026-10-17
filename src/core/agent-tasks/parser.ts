@@ -190,7 +190,7 @@ function parseSafety(value: unknown, input: ParseInput): AgentTask['safety'] {
 
 /** Legacy command names are rejected with their one-to-one capability migration. */
 const LEGACY_REQUIREMENTS: Record<string, string> = {
-  'blacklist-list': 'blacklist.manage',
+  'blacklist-list': 'blacklist.read',
   'schema-check': 'schema.read',
 }
 

@@ -139,7 +139,9 @@ _Avoid_: Evidence envelope, agent receipt
 One atomic dbcli ability with a stable dotted id — `schema.read`,
 `data.delete`. It names what the *tool* can do. A job or a method
 (`dba.tune-production`, `crud.scaffold`) is not a capability; it belongs to the
-Role Skill or Method Skill that composes dbcli.
+Role Skill or Method Skill that composes dbcli. Capabilities split by their
+effect on configuration, not by command: reading the blacklist and changing it
+are two capabilities even though both live under `blacklist`.
 
 **Capability catalog**:
 The complete, versioned, statically known set of capabilities. It is derived

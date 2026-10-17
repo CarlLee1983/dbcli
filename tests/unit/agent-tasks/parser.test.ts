@@ -148,7 +148,7 @@ describe('parseAgentTask — failures', () => {
       '  - type: command',
       '    command: blacklist list',
     ].join('\n')
-    expect(() => must(base)).toThrow(/replace it with 'blacklist.manage'/)
+    expect(() => must(base)).toThrow(/replace it with 'blacklist.read'/)
     expect(() => must(base.replace('blacklist-list', 'not.a.capability'))).toThrow(
       /unknown capability/
     )

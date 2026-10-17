@@ -15,7 +15,7 @@ params:
 safety:
   mode: plan-only
   requires:
-    - blacklist.manage
+    - blacklist.read
 steps:
   - type: command
     command: blacklist list

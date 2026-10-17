@@ -12,8 +12,7 @@ params:
     enum: [health, capacity, perf]
 safety:
   mode: plan-only
-  requires:
-    - blacklist.manage
+  requires: []
 steps:
   - type: command
     command: status

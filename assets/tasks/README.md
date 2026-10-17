@@ -33,4 +33,4 @@ The markdown body below the frontmatter is `Agent Notes` and is shown in
 
 Use `postgresql` for PostgreSQL. The legacy `postgres` engine spelling is read
 as `postgresql`; legacy requirement names `blacklist-list` and `schema-check`
-are rejected with their replacements, `blacklist.manage` and `schema.read`.
+are rejected with their replacements, `blacklist.read` and `schema.read`.

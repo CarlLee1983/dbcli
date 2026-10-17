@@ -22,6 +22,7 @@ const SUPPORTED_IN_THIS_STORY = new Set([
   'q',
   'queryOutput',
   'blacklist',
+  'blacklistRead',
   'status',
   // DBCLI-035
   'insert',

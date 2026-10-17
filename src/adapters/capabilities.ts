@@ -27,6 +27,7 @@ export type CommandCapabilityKey =
   | 'update'
   | 'delete'
   | 'export'
+  | 'blacklistRead'
   | 'blacklist'
   | 'check'
   | 'diff'
@@ -90,6 +91,7 @@ export const COMMAND_CAPABILITY_KEYS = Object.freeze([
   'update',
   'delete',
   'export',
+  'blacklistRead',
   'blacklist',
   'check',
   'diff',
@@ -199,6 +201,7 @@ const SQL_BASE = {
   update: cap('supported', 'db-write', 'Dedicated UPDATE command is supported.'),
   delete: cap('supported', 'db-write', 'Dedicated DELETE command is supported.'),
   export: cap('supported', 'readonly', 'SQL export is supported.'),
+  blacklistRead: cap('supported', 'readonly', 'Reads the configured blacklist rules.'),
   blacklist: cap('supported', 'local-write', 'Blacklist management and enforcement are supported.'),
   check: cap('supported', 'readonly', 'Data health checks are SQL-only.'),
   diff: cap('supported', 'readonly', 'Relational schema snapshots are supported.'),
@@ -488,6 +491,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'Document delete is supported with Mongo-specific behavior.'
       ),
       export: cap('limited', 'readonly', 'MongoDB export is supported with document-query syntax.'),
+      blacklistRead: cap('limited', 'readonly', 'Reads the engine-specific blacklist rules.'),
       blacklist: cap(
         'limited',
         'local-write',
@@ -532,6 +536,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'Basic delete via DEL/HDEL/LREM/SREM/ZREM (needs data-admin); supports --dry-run.'
       ),
       export: cap('unsupported', 'none', 'Redis export is not supported.'),
+      blacklistRead: cap('limited', 'readonly', 'Reads the engine-specific blacklist rules.'),
       blacklist: cap(
         'limited',
         'local-write',
@@ -572,6 +577,7 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'readonly',
         'Exports DSL hits or a full index via scroll, capped at 1000 rows (use --no-limit).'
       ),
+      blacklistRead: cap('limited', 'readonly', 'Reads the engine-specific blacklist rules.'),
       blacklist: cap(
         'limited',
         'local-write',

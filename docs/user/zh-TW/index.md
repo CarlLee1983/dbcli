@@ -1205,6 +1205,8 @@ QueryLens 只會分析它能讀取的 proxy 事件；請勿把結果視為已完
 
 > **內建任務包 `analyze-table-perf`。** 唯讀（`plan-only`）的 task pack，吃必填的 `table` 參數，依序執行 `blacklist list` → `schema <table> --format json` → `guide index-usage --format json`。`dbcli inspect` 會針對近期活動中最熱門的資料表自動建議它。另也內建多個唯讀套件 — `audit-permissions`、`safe-backfill`、`schema-drift-review`、`orm-drift-review`、`design-review` 與 `connection-health`。`design-review` 會驗證／輸出 artifact、更新 cache，並產出只供審查的 proposal；絕不套用它們。每個 pack 的 requirement 都是 capability ID；輸出計畫前會依本機 engine、permission 與 agent-mode context 檢查，未知或不可用的 requirement 一律 fail closed。用 `dbcli skill tasks list` 瀏覽所有 task pack。
 
+在 `DBCLI_AGENT_MODE=1` 下，只要符合 engine 與 permission 要求，內建 pack 就能產生計畫。讀取黑名單的 pack 使用唯讀能力 `blacklist.read`（`blacklist list`）；`connection-health` 不需要黑名單能力。`blacklist.manage` 仍屬於設定修改能力，在 agent mode 下不可用；`connection.init`、`connection.select` 與 `connection.rotate-credential` 也維持不可用。產生計畫不會執行任何步驟，也不代表取得執行授權。
+
 > **`safe-backfill-verify` 任務計畫與 `verification` 區塊。** 執行 `dbcli skill tasks plan safe-backfill-verify --format json` 回傳的計畫 JSON 中包含一個 `verification` 區塊，其 `status` 為 `"planned"`。此區塊描述任務執行時將進行的回讀斷言 — 這是**計畫中**的佐證定義，**而非執行結果**。`status: "planned"` **不代表**驗證已執行或通過，僅表示任務計畫知道要在執行時執行哪項驗證。
 
 ---

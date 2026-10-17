@@ -151,6 +151,28 @@ describe('capability catalog', () => {
     expect(CAPABILITIES.some((capability) => capability.limitedEngines.length > 0)).toBe(true)
   })
 
+  test('blacklist reading is readonly and preserves per-engine support', () => {
+    expect(findCapability('blacklist.read')).toMatchObject({
+      command: 'blacklist list',
+      sideEffect: 'readonly',
+      mutatesConfiguration: false,
+      supportsJson: true,
+      minimumPermission: 'query-only',
+      requiresConnection: false,
+      limitedEngines: ['mongodb', 'redis', 'elasticsearch'],
+    })
+    expect(findCapability('blacklist.manage')).toMatchObject({
+      command: 'blacklist',
+      sideEffect: 'local-write',
+      mutatesConfiguration: true,
+    })
+    for (const system of DATABASE_SYSTEMS) {
+      const matrix = ENGINE_CAPABILITIES[system]
+      expect(matrix.blacklistRead.status).toBe(matrix.blacklist.status)
+      expect(matrix.blacklistRead.tier).toBe('readonly')
+    }
+  })
+
   test('mutatesConfiguration marks the capabilities agent mode refuses', () => {
     const marked = CAPABILITIES.filter((capability) => capability.mutatesConfiguration).map(
       (capability) => capability.id

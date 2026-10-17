@@ -241,6 +241,15 @@ const DECLARATIONS: readonly CapabilityDeclaration[] = [
     requiresConnection: true,
   },
   {
+    id: 'blacklist.read',
+    key: 'blacklistRead',
+    command: 'blacklist list',
+    description: 'Read the configured table, column and key rules that hide sensitive data.',
+    permission: 'query-only',
+    requiresConnection: false,
+    mutatesConfiguration: false,
+  },
+  {
     id: 'blacklist.manage',
     key: 'blacklist',
     command: 'blacklist',
@@ -615,6 +624,7 @@ export const COMMAND_SURFACE: CommandSurfaceFacts = Object.freeze({
       'delete',
       'export',
       'check',
+      'blacklist list',
       'inspect',
       'report',
       'guide',

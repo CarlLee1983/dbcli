@@ -216,6 +216,20 @@ boundaries lie.
 Role, Method and project knowledge never enter dbcli core. dbcli answers only
 for the first two layers.
 
+**Engine layer**:
+What a Role Skill learns about a database by asking the database itself in SQL
+— replication lag, replication slots, WAL or binlog position, roles and grants,
+connection TLS. It is the same wherever the database runs, and it is read
+through dbcli.
+
+**Platform layer**:
+What only the platform hosting a database knows — the backup catalog, the
+point-in-time recovery window, automatic failover settings, storage growth.
+It differs per platform (a managed cloud service, or self-hosted tooling) and
+is read outside dbcli. A platform a Role Skill does not cover reports its
+platform-layer state as indeterminate.
+_Avoid_: infrastructure layer, cloud layer
+
 ## Connection configuration language
 
 **Connection string**:

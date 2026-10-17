@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **單一物件 schema 支援完整名稱**：PostgreSQL 可用 `schema.table`，MySQL／MariaDB
+  可用 `database.table` 檢視表與系統視圖；支援原生識別字引用、內嵌點號與跳脫引號。
+  完整名稱不可搭配 `--refresh`／`--reset`，不改連線設定或 schema 快取，也不擴大掃描範圍。
+
+### Changed
+
+- **Schema 輸出與 metadata 保護**：完整名稱 JSON 保留局部 `name` 並另帶 `schema`，
+  文字輸出可區分兩個 component；`tableType` 正確呈現 table／view（materialized view 為 view）。
+  完整名稱不執行關係資料 `COUNT(*)`，未知筆數與大小分類為 null，不再以假零值或 small 表示。
+  舊、新 SQL 單一物件名稱都套用 blacklist；隱藏受保護欄位及涉及它的整項主鍵、索引與外鍵，
+  無法安全表達完整欄位相依性的 expression／partial index 也會整項省略；省略時 JSON 輸出
+  `metadataOmitted: true`，文字輸出顯示省略通知，回傳 metadata 不保證完整。
+  必要 metadata 讀取失敗會回報失敗，不以空集合冒充成功。
+- **含點號名稱的相容性差異**：未限定名稱仍依 PostgreSQL `public`／MySQL、MariaDB
+  預設 database 與既有精確名稱語意處理；局部名稱本身含點號時，須改用完整名稱中的 quoted
+  component，例如 `dbcli schema 'public."audit.orders"' --format json`。完整名稱不存在時
+  不會退回預設 namespace 的同名物件；其他命令的名稱解析不變。
+
 ## [11.0.0] - 2026-10-14
 
 版本為 **11.0.0**。`dbcli init --uri` 寫出的設定形狀改變，且 `--uri` 與欄位 flag 並用會報錯，

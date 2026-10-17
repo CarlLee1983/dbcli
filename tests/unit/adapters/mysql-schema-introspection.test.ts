@@ -22,6 +22,7 @@ test('getTableSchema uses a foreign-key query accepted by ONLY_FULL_GROUP_BY', a
       const normalized = sql.replace(/\s+/g, ' ').trim()
       if (
         normalized.includes('information_schema.REFERENTIAL_CONSTRAINTS') &&
+        normalized.includes('GROUP_CONCAT') &&
         !/GROUP BY rc\.CONSTRAINT_NAME, rc\.REFERENCED_TABLE_NAME/i.test(normalized)
       ) {
         const error = new Error(

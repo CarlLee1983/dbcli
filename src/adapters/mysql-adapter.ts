@@ -20,6 +20,7 @@ import {
   requireConnected,
   withMappedConnectionError,
 } from './sql-adapter-utils'
+import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
@@ -302,6 +303,10 @@ export class MySQLAdapter implements DatabaseAdapter {
     requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {
+      const namespaceSQL = options?.namespace !== undefined ? '?' : 'DATABASE()'
+      const namespace = options?.namespace ?? this.options.database
+      const columnParams = options?.namespace !== undefined ? [namespace, tableName] : [tableName]
+      const fkParams = options?.namespace !== undefined ? [tableName, namespace] : [tableName]
       // Query information_schema.COLUMNS for column details (UPPERCASE)
       const columnQuery = `
         SELECT
@@ -313,7 +318,7 @@ export class MySQLAdapter implements DatabaseAdapter {
           EXTRA LIKE '%auto_increment%' as auto_increment,
           COLUMN_COMMENT as comment
         FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
+        WHERE TABLE_SCHEMA = ${namespaceSQL}
           AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
       `
@@ -326,83 +331,113 @@ export class MySQLAdapter implements DatabaseAdapter {
         is_primary_key: boolean
         auto_increment: boolean
         comment: string
-      }>(columnQuery, [tableName])
+      }>(columnQuery, columnParams)
       const columns = columnResult.rows
 
-      // Extract foreign key constraints
+      // Keep one row per column: comma delimiters and GROUP_CONCAT limits cannot
+      // represent arbitrary identifier names or long composite constraints.
       const fkQuery = `
-        SELECT
-          rc.CONSTRAINT_NAME as name,
-          GROUP_CONCAT(kcu.COLUMN_NAME) as columns,
+        SELECT rc.CONSTRAINT_NAME as name, kcu.COLUMN_NAME as column_name,
           rc.REFERENCED_TABLE_NAME as ref_table,
-          GROUP_CONCAT(kcu.REFERENCED_COLUMN_NAME) as ref_columns
+          kcu.REFERENCED_TABLE_SCHEMA as ref_schema,
+          kcu.REFERENCED_COLUMN_NAME as ref_column
         FROM information_schema.REFERENTIAL_CONSTRAINTS rc
         JOIN information_schema.KEY_COLUMN_USAGE kcu
           ON rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND rc.TABLE_NAME = kcu.TABLE_NAME
-        WHERE kcu.TABLE_NAME = ? AND rc.CONSTRAINT_SCHEMA = DATABASE()
-        GROUP BY rc.CONSTRAINT_NAME, rc.REFERENCED_TABLE_NAME
+          AND rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+          AND rc.CONSTRAINT_SCHEMA = kcu.TABLE_SCHEMA
+        WHERE kcu.TABLE_NAME = ? AND rc.CONSTRAINT_SCHEMA = ${namespaceSQL}
+        ORDER BY rc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION
       `
-
       const fkResult = await this.execute<{
         name: string
-        columns: string
+        column_name: string
         ref_table: string
-        ref_columns: string
-      }>(fkQuery, [tableName])
-      const fkResults = fkResult.rows
-
-      // Create map of single-column foreign keys for quick lookup
+        ref_schema: string
+        ref_column: string
+      }>(fkQuery, fkParams)
+      const fkGroups = new Map<string, NonNullable<TableSchema['foreignKeys']>[number]>()
+      for (const row of fkResult.rows) {
+        const fk = fkGroups.get(row.name) ?? {
+          name: row.name,
+          columns: [],
+          refSchema: row.ref_schema,
+          refTable: row.ref_table,
+          refColumns: [],
+        }
+        fk.columns.push(row.column_name)
+        fk.refColumns.push(row.ref_column)
+        fkGroups.set(row.name, fk)
+      }
+      const foreignKeys = [...fkGroups.values()]
       const fkMap = new Map<string, { table: string; column: string }>()
-      for (const fk of fkResults) {
-        const cols = fk.columns.split(',').map((c) => c.trim())
-        const refCols = fk.ref_columns.split(',').map((c) => c.trim())
-        if (cols.length === 1 && refCols.length === 1) {
-          fkMap.set(cols[0]!, { table: fk.ref_table, column: refCols[0]! })
+      for (const fk of foreignKeys) {
+        if (fk.columns.length === 1 && fk.refColumns.length === 1) {
+          fkMap.set(fk.columns[0]!, { table: fk.refTable, column: fk.refColumns[0]! })
         }
       }
-
-      // Extract primary key columns from already-fetched column data
-      // (COLUMN_KEY is only available in COLUMNS table, not KEY_COLUMN_USAGE)
-      const primaryKeyColumns = columns.filter((col) => col.is_primary_key).map((col) => col.name)
-
-      // Extract index information (excluding PRIMARY)
       const indexQuery = `
-        SELECT
-          INDEX_NAME as name,
-          GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns,
-          NOT NON_UNIQUE as is_unique
+        SELECT INDEX_NAME as name, COLUMN_NAME as column_name, NOT NON_UNIQUE as is_unique
         FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = ?
-          AND INDEX_NAME != 'PRIMARY'
-        GROUP BY INDEX_NAME, NON_UNIQUE
+        WHERE TABLE_SCHEMA = ${namespaceSQL} AND TABLE_NAME = ?
+        ORDER BY INDEX_NAME, SEQ_IN_INDEX
       `
-
       const indexResult = await this.execute<{
         name: string
-        columns: string
+        column_name: string
         is_unique: boolean
-      }>(indexQuery, [tableName])
-      const indexResults = indexResult.rows
+      }>(indexQuery, columnParams)
+      const indexGroups = new Map<string, NonNullable<TableSchema['indexes']>[number]>()
+      for (const row of indexResult.rows) {
+        const index = indexGroups.get(row.name) ?? {
+          name: row.name,
+          columns: [],
+          unique: Boolean(row.is_unique),
+        }
+        if (row.column_name === null) {
+          if (options?.metadataProtection) index.columnsComplete = false
+        } else index.columns.push(row.column_name)
+        indexGroups.set(row.name, index)
+      }
+      const primaryKeyColumns = indexGroups.get('PRIMARY')?.columns ?? []
+      indexGroups.delete('PRIMARY')
+      const indexes = [...indexGroups.values()]
 
       // Engine 與估計列數同源，一次查回來就好——先前是兩趟一模一樣的
       // information_schema.TABLES 查詢（#49）
       const tableMetaQuery = `
-        SELECT ENGINE as engine, TABLE_ROWS as estimated_rows
+        SELECT ENGINE as engine, TABLE_ROWS as estimated_rows, TABLE_TYPE as table_type, TABLE_SCHEMA as schema_name, TABLE_NAME as table_name
         FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+        WHERE TABLE_SCHEMA = ${namespaceSQL} AND TABLE_NAME = ?
       `
       const tableMetaResult = await this.execute<{
         engine: string
+        table_type: string
+        schema_name: string
+        table_name: string
         estimated_rows: number | null
-      }>(tableMetaQuery, [tableName])
+      }>(tableMetaQuery, columnParams)
       const tableMeta = tableMetaResult.rows[0]
-      const estimatedRowCount = Math.max(0, tableMeta?.estimated_rows || 0)
+      if (options?.namespace !== undefined && !tableMeta) {
+        throw new ConnectionError(
+          'TABLE_NOT_FOUND',
+          `Object ${JSON.stringify(namespace)}.${JSON.stringify(tableName)} does not exist or is not visible with the current privileges.`,
+          []
+        )
+      }
+      const estimatedRowCount =
+        options?.namespace !== undefined
+          ? tableMeta?.table_type !== 'VIEW' &&
+            tableMeta?.estimated_rows != null &&
+            Number(tableMeta.estimated_rows) >= 0
+            ? Number(tableMeta.estimated_rows)
+            : undefined
+          : Math.max(0, tableMeta?.estimated_rows || 0)
 
       // 精確列數要掃全表。掃描模式關掉它——一百張表的資料庫做不起一百次
       // 全表 COUNT，而掃描要的本來就是概況。
       const exactRowCount =
-        options?.exactRowCount === false
+        options?.namespace !== undefined || options?.exactRowCount === false
           ? undefined
           : (
               await this.execute<{ count: number }>(
@@ -411,7 +446,9 @@ export class MySQLAdapter implements DatabaseAdapter {
             ).rows[0]?.count
 
       const schema: TableSchema = {
-        name: tableName,
+        name: tableMeta?.table_name ?? tableName,
+        schema: tableMeta?.schema_name ?? namespace,
+        tableType: tableMeta?.table_type?.includes('VIEW') ? 'view' : 'table',
         columns: columns.map((col) => ({
           name: col.name,
           type: col.type,
@@ -423,20 +460,12 @@ export class MySQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: parseEnumValues(col.type),
         })),
-        rowCount: exactRowCount ?? estimatedRowCount,
+        rowCount:
+          options?.namespace !== undefined ? undefined : (exactRowCount ?? estimatedRowCount),
         engine: tableMeta?.engine || 'MySQL',
         primaryKey: primaryKeyColumns,
-        foreignKeys: fkResults.map((fk) => ({
-          name: fk.name,
-          columns: fk.columns.split(',').map((c) => c.trim()),
-          refTable: fk.ref_table,
-          refColumns: fk.ref_columns.split(',').map((c) => c.trim()),
-        })),
-        indexes: indexResults.map((idx) => ({
-          name: idx.name,
-          columns: idx.columns.split(',').map((c) => c.trim()),
-          unique: idx.is_unique,
-        })),
+        foreignKeys,
+        indexes,
         estimatedRowCount,
       }
 

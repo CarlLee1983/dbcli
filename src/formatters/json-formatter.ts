@@ -31,13 +31,19 @@ export class TableSchemaJSONFormatter implements OutputFormatter<TableSchema> {
     const rowCount = table.estimatedRowCount ?? table.rowCount
     const output = {
       name: table.name,
+      schema: table.schema,
+      ...(table.metadataOmitted && { metadataOmitted: true }),
       estimatedRowCount: rowCount ?? null,
       sizeCategory: rowCount !== undefined && rowCount !== null ? getSizeCategory(rowCount) : null,
       tableType: table.tableType ?? 'table',
       columns: table.columns,
       primaryKey: table.primaryKey || [],
       foreignKeys: table.foreignKeys || [],
-      indexes: table.indexes || [],
+      indexes: (table.indexes || []).map(({ name, columns, unique }) => ({
+        name,
+        columns,
+        unique,
+      })),
       metadata: {
         rowCount: table.rowCount,
         engine: table.engine,

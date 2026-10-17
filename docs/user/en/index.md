@@ -379,7 +379,26 @@ Blocked under `DBCLI_AGENT_MODE=1` like every other credential mutation.
 `tables`, `columns`, and `warnings`; malformed MongoDB blacklist paths are reported in
 the structured `warnings` array rather than mixed into stdout as human diagnostics.
 
-For PostgreSQL, `schema` uses exact `public` catalog identity throughout: full catalog/schema/table joins prevent reused constraint names from contaminating another table, composite foreign-key columns remain in declaration order, composite primary-key order comes from the exact table OID and index ordinality, and estimates are scoped to the exact `public` relation. Row counts qualify and quote both `"public"` and the exact table name, escaping embedded quotes so mixed-case and punctuation-bearing identifiers remain distinct and safe. Referenced schema/table spelling is preserved from the catalog.
+#### Inspect one qualified SQL object
+
+For PostgreSQL, use `schema.table`; for MySQL and MariaDB, use `database.table`. This inspects one accessible table or view, including system views, using the same namespace and local name for columns, enums, keys, indexes, and foreign keys. It does not change the connection, PostgreSQL `search_path`, default database, or schema cache. The scope of `list`, scanning, and `schema` without an object stays the same.
+
+```bash
+dbcli schema pg_catalog.pg_roles --format json
+dbcli schema information_schema.TABLES --format json
+dbcli schema '"Audit"."Order.Items"' --format json
+dbcli schema '`reporting`.`order.items`' --format json
+```
+
+The outer single quotes in these shell examples preserve the native identifier quotes: double quotes for PostgreSQL and backticks for MySQL/MariaDB. Quote each component separately to preserve case or a dot inside a name; double an embedded native quote to escape it (for example, PostgreSQL `"Audit"."Order""Items"`). PostgreSQL unquoted qualified components fold to lowercase; MySQL/MariaDB follow the server’s identifier case rules. Empty components, more than two components, and invalid or unclosed quotes are rejected without trying another interpretation.
+
+Unqualified names keep their existing exact-name behavior: PostgreSQL uses `public`, and MySQL/MariaDB use the connection’s default database. A missing qualified object never falls back to a same-named default object. Compatibility note: a literal local name containing a dot must now be explicit, for example `dbcli schema 'public."audit.orders"' --format json`. This name parsing applies to single-object `schema`, not to other commands.
+
+Qualified JSON output keeps the local `name` and supplies a separate `schema` string (the database name on MySQL/MariaDB); text output distinguishes both components, including quoted dots and case-sensitive names. `tableType` identifies `table` or `view`; PostgreSQL materialized views use `view`. Qualified inspection never runs `COUNT(*)` on relation data. Available metadata estimates are estimates, not exact counts; when unknown, JSON has `estimatedRowCount: null` and `sizeCategory: null`, without a fabricated `metadata.rowCount: 0`. Text output does not substitute zero rows or a small size classification. Existing unqualified counting behavior is unchanged.
+
+Blacklist protection applies to both unqualified and qualified SQL single-object inspection. Either a bare or qualified rule can match, with existing glob and case matching retained. Protected tables are refused; protected columns are hidden along with any entire primary key or index that contains them. A foreign key is omitted entirely from both table and column metadata if its source or target table/column is protected; composite constraints are never trimmed into misleading partial constraints. For this single-object schema command, expression or partial indexes are also omitted entirely when their complete column dependencies cannot be represented safely. JSON reports `metadataOmitted: true` and text output shows an omission notice when metadata is withheld, so omission is distinguishable from metadata that does not exist; the returned metadata is not necessarily complete. Hiding all columns does not mean the object is missing. Required metadata failures, including insufficient native permissions, fail the command rather than produce successful empty collections. If the database cannot distinguish a missing object from an invisible one, the error preserves that uncertainty.
+
+A qualified name cannot be combined with `--refresh` or `--reset` (including both together); the command rejects these combinations before scanning. Use a separate unqualified `schema --refresh` or `schema --reset` operation for cache maintenance within its existing scope. Qualified inspection does not elevate database privileges or bypass query-only, agent-mode, or blacklist protections.
 
 #### Capability discovery for Skills
 

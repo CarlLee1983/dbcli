@@ -1,0 +1,904 @@
+{
+  "recordedAt": "2026-10-17T16:31:01.082Z",
+  "baseline": "evidence.json",
+  "scope": "G1 only; local compose dbcli account; no RDS or replica topology",
+  "queriesExecuted": true,
+  "cases": [
+    {
+      "id": "Q002",
+      "engine": "pg",
+      "sql": "SELECT * FROM pg_stat_archiver",
+      "prerequisites": ["pg_catalog.pg_stat_archiver"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q009",
+      "engine": "pg",
+      "result": "out-of-scope-function-source",
+      "sql": "SELECT count(*) FROM pg_ls_archive_statusdir() WHERE name LIKE '%.ready'"
+    },
+    {
+      "id": "Q010",
+      "engine": "pg",
+      "result": "out-of-scope-function-source",
+      "sql": "SELECT count(*), sum(size) FROM pg_ls_waldir()"
+    },
+    {
+      "id": "Q011",
+      "engine": "pg",
+      "sql": "SELECT slot_name, active, wal_status, restart_lsn FROM pg_replication_slots",
+      "prerequisites": ["pg_catalog.pg_replication_slots"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q039",
+      "engine": "pg",
+      "sql": "SELECT pid, usename, application_name, client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn, write_lag, flush_lag, replay_lag, sync_state, reply_time FROM pg_stat_replication",
+      "prerequisites": ["pg_catalog.pg_stat_replication"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q040",
+      "engine": "pg",
+      "sql": "SELECT status, receive_start_lsn, written_lsn, flushed_lsn, latest_end_lsn, latest_end_time, slot_name, sender_host, sender_port FROM pg_stat_wal_receiver",
+      "prerequisites": ["pg_catalog.pg_stat_wal_receiver"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q041",
+      "engine": "pg",
+      "sql": "SELECT application_name, pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS replay_lag_bytes, replay_lag FROM pg_stat_replication",
+      "prerequisites": ["pg_catalog.pg_stat_replication"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q043",
+      "engine": "pg",
+      "sql": "SELECT slot_name, slot_type, database, active, active_pid, wal_status, safe_wal_size, restart_lsn, confirmed_flush_lsn, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retained_bytes, inactive_since, conflicting, invalidation_reason, failover, synced FROM pg_replication_slots",
+      "prerequisites": ["pg_catalog.pg_replication_slots"],
+      "missingColumns": ["inactive_since", "invalidation_reason", "failover", "synced"],
+      "result": "version-column-mismatch"
+    },
+    {
+      "id": "Q059",
+      "engine": "pg",
+      "sql": "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil FROM pg_roles ORDER BY rolname",
+      "prerequisites": ["pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q060",
+      "engine": "pg",
+      "sql": "SELECT r.rolname AS role, m.rolname AS member, g.rolname AS grantor, am.admin_option, am.inherit_option, am.set_option FROM pg_auth_members am JOIN pg_roles r ON r.oid = am.roleid JOIN pg_roles m ON m.oid = am.member LEFT JOIN pg_roles g ON g.oid = am.grantor ORDER BY r.rolname, m.rolname",
+      "prerequisites": ["pg_catalog.pg_auth_members", "pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q061",
+      "engine": "pg",
+      "sql": "SELECT rolname FROM pg_roles WHERE rolsuper",
+      "prerequisites": ["pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q062",
+      "engine": "pg",
+      "sql": "SELECT m.rolname FROM pg_roles m WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rds_superuser') AND m.rolname <> 'rds_superuser' AND pg_has_role(m.oid, (SELECT oid FROM pg_roles WHERE rolname = 'rds_superuser'), 'MEMBER')",
+      "prerequisites": ["pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q063",
+      "engine": "pg",
+      "sql": "SELECT rolname, rolcreaterole, rolbypassrls, rolreplication FROM pg_roles WHERE rolcanlogin AND (rolcreaterole OR rolbypassrls OR rolreplication)",
+      "prerequisites": ["pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q064",
+      "engine": "pg",
+      "sql": "SELECT r.rolname AS predefined_role, m.rolname AS member FROM pg_roles r JOIN pg_roles m ON pg_has_role(m.oid, r.oid, 'MEMBER') AND m.oid <> r.oid WHERE r.rolname IN ('pg_read_server_files','pg_write_server_files', 'pg_execute_server_program','pg_read_all_data', 'pg_write_all_data','rds_replication','rds_password')",
+      "prerequisites": ["pg_catalog.pg_roles"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q065",
+      "engine": "pg",
+      "sql": "SELECT n.nspname, c.relname, c.relkind, pg_get_userbyid(c.relowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, pg_get_userbyid(a.grantor) AS grantor, a.privilege_type, a.is_grantable FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relkind IN ('r','p','v','m','f','S') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%'",
+      "prerequisites": ["pg_catalog.pg_class", "pg_catalog.pg_namespace"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q066",
+      "engine": "pg",
+      "sql": "SELECT n.nspname, pg_get_userbyid(n.nspowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_namespace n CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, acldefault('n', n.nspowner))) a WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp%'",
+      "prerequisites": ["pg_catalog.pg_namespace"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q067",
+      "engine": "pg",
+      "sql": "SELECT d.datname, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type FROM pg_database d CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a",
+      "prerequisites": ["pg_catalog.pg_database"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q068",
+      "engine": "pg",
+      "sql": "SELECT pg_get_userbyid(d.defaclrole) AS for_role, COALESCE(n.nspname, '(all schemas)') AS schema, d.defaclobjtype, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace CROSS JOIN LATERAL aclexplode(d.defaclacl) a",
+      "prerequisites": ["pg_catalog.pg_default_acl", "pg_catalog.pg_namespace"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q069",
+      "engine": "pg",
+      "sql": "SELECT ssl, version, cipher, bits FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
+      "prerequisites": ["pg_catalog.pg_stat_ssl"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q070",
+      "engine": "pg",
+      "sql": "SELECT a.datname, a.usename, a.client_addr, a.application_name, a.backend_type, s.ssl, s.version, s.cipher FROM pg_stat_ssl s JOIN pg_stat_activity a ON a.pid = s.pid WHERE a.backend_type = 'client backend' ORDER BY s.ssl, a.usename",
+      "prerequisites": ["pg_catalog.pg_stat_ssl", "pg_catalog.pg_stat_activity"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q071",
+      "engine": "pg",
+      "sql": "SELECT name, setting FROM pg_settings WHERE name IN ('ssl','ssl_min_protocol_version','ssl_max_protocol_version', 'ssl_ciphers','rds.force_ssl')",
+      "prerequisites": ["pg_catalog.pg_settings"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q022",
+      "engine": "mysql",
+      "sql": "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+      "prerequisites": ["information_schema.TABLES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q046",
+      "engine": "mysql",
+      "sql": "SELECT c.CHANNEL_NAME, c.SERVICE_STATE AS io_state, c.LAST_ERROR_NUMBER AS io_errno, c.LAST_QUEUED_TRANSACTION_ORIGINAL_COMMIT_TIMESTAMP FROM performance_schema.replication_connection_status c",
+      "prerequisites": ["performance_schema.replication_connection_status"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q047",
+      "engine": "mysql",
+      "sql": "SELECT w.CHANNEL_NAME, w.WORKER_ID, w.SERVICE_STATE, w.LAST_ERROR_NUMBER, w.LAST_ERROR_MESSAGE, w.LAST_APPLIED_TRANSACTION_ORIGINAL_COMMIT_TIMESTAMP, w.LAST_APPLIED_TRANSACTION_END_APPLY_TIMESTAMP FROM performance_schema.replication_applier_status_by_worker w",
+      "prerequisites": ["performance_schema.replication_applier_status_by_worker"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q072",
+      "engine": "mysql",
+      "sql": "SELECT user, host, plugin, account_locked, password_expired, password_last_changed, password_lifetime, ssl_type FROM mysql.user ORDER BY user, host",
+      "prerequisites": ["mysql.user"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q073",
+      "engine": "mysql",
+      "sql": "SELECT FROM_USER, FROM_HOST, TO_USER, TO_HOST, WITH_ADMIN_OPTION FROM mysql.role_edges",
+      "prerequisites": ["mysql.role_edges"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q074",
+      "engine": "mysql",
+      "sql": "SELECT * FROM mysql.default_roles",
+      "prerequisites": ["mysql.default_roles"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q075",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.USER_PRIVILEGES",
+      "prerequisites": ["information_schema.USER_PRIVILEGES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q076",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.SCHEMA_PRIVILEGES",
+      "prerequisites": ["information_schema.SCHEMA_PRIVILEGES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q077",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.TABLE_PRIVILEGES",
+      "prerequisites": ["information_schema.TABLE_PRIVILEGES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q078",
+      "engine": "mysql",
+      "sql": "SELECT * FROM information_schema.COLUMN_PRIVILEGES",
+      "prerequisites": ["information_schema.COLUMN_PRIVILEGES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q079",
+      "engine": "mysql",
+      "sql": "SELECT USER, HOST, PRIV, WITH_GRANT_OPTION FROM mysql.global_grants",
+      "prerequisites": ["mysql.global_grants"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q081",
+      "engine": "mysql",
+      "sql": "SELECT id, user, host, connection_type FROM performance_schema.threads pst INNER JOIN information_schema.processlist isp ON pst.processlist_id = isp.id",
+      "prerequisites": ["performance_schema.threads", "information_schema.processlist"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q083",
+      "engine": "mysql",
+      "sql": "SELECT user, host, ssl_type FROM mysql.user",
+      "prerequisites": ["mysql.user"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q023",
+      "engine": "maria",
+      "sql": "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+      "prerequisites": ["information_schema.TABLES"],
+      "missingColumns": [],
+      "result": "query-succeeded",
+      "queryCode": 0
+    },
+    {
+      "id": "Q084",
+      "engine": "maria",
+      "sql": "SELECT user, host, is_role, plugin, ssl_type, default_role FROM mysql.user",
+      "prerequisites": ["mysql.user"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q086",
+      "engine": "maria",
+      "sql": "SELECT Host, User, Role, Admin_option FROM mysql.roles_mapping",
+      "prerequisites": ["mysql.roles_mapping"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    },
+    {
+      "id": "Q089",
+      "engine": "maria",
+      "sql": "SELECT user, host, ssl_type FROM mysql.user",
+      "prerequisites": ["mysql.user"],
+      "missingColumns": [],
+      "result": "absent-or-native-invisible"
+    }
+  ],
+  "observations": [
+    {
+      "engine": "pg",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["query", "SELECT version()", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"version\": \"PostgreSQL 16.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"version\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 5,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_stat_archiver", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_stat_archiver\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"archived_count\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_archived_wal\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_archived_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"failed_count\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_failed_wal\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_failed_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"stats_reset\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["query", "SELECT * FROM pg_stat_archiver", "--format", "json", "--no-limit"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"archived_count\": \"0\",\n      \"last_archived_wal\": null,\n      \"last_archived_time\": null,\n      \"failed_count\": \"0\",\n      \"last_failed_wal\": null,\n      \"last_failed_time\": null,\n      \"stats_reset\": \"2026-10-17T05:37:31.796Z\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"archived_count\",\n    \"last_archived_wal\",\n    \"last_archived_time\",\n    \"failed_count\",\n    \"last_failed_wal\",\n    \"last_failed_time\",\n    \"stats_reset\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"null\",\n    \"null\",\n    \"varchar\",\n    \"null\",\n    \"null\",\n    \"timestamp\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_replication_slots", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_replication_slots\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"slot_name\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"plugin\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"slot_type\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datoid\",\n      \"type\": \"oid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"database\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"temporary\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"active\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"active_pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"xmin\",\n      \"type\": \"xid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"catalog_xmin\",\n      \"type\": \"xid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"restart_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"confirmed_flush_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"wal_status\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"safe_wal_size\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"two_phase\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"conflicting\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT slot_name, active, wal_status, restart_lsn FROM pg_replication_slots",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 10,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_stat_replication", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_stat_replication\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"usesysid\",\n      \"type\": \"oid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"usename\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"application_name\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_addr\",\n      \"type\": \"inet\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_hostname\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_port\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_start\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_xmin\",\n      \"type\": \"xid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"state\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sent_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"write_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"flush_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"replay_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"write_lag\",\n      \"type\": \"interval\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"flush_lag\",\n      \"type\": \"interval\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"replay_lag\",\n      \"type\": \"interval\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sync_priority\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sync_state\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reply_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT pid, usename, application_name, client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn, write_lag, flush_lag, replay_lag, sync_state, reply_time FROM pg_stat_replication",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 9,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_stat_wal_receiver", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_stat_wal_receiver\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"status\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"receive_start_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"receive_start_tli\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"written_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"flushed_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"received_tli\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_msg_send_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"last_msg_receipt_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"latest_end_lsn\",\n      \"type\": \"pg_lsn\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"latest_end_time\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"slot_name\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sender_host\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sender_port\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"conninfo\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT status, receive_start_lsn, written_lsn, flushed_lsn, latest_end_lsn, latest_end_time, slot_name, sender_host, sender_port FROM pg_stat_wal_receiver",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 6,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT application_name, pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS replay_lag_bytes, replay_lag FROM pg_stat_replication",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_roles", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_roles\",\n  \"schema\": \"pg_catalog\",\n  \"metadataOmitted\": true,\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"rolname\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolsuper\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolinherit\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolcreaterole\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolcreatedb\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolcanlogin\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolreplication\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolconnlimit\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolvaliduntil\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolbypassrls\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"rolconfig\",\n      \"type\": \"text[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil FROM pg_roles ORDER BY rolname",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"rolname\": \"dbcli\",\n      \"rolsuper\": true,\n      \"rolinherit\": true,\n      \"rolcreaterole\": true,\n      \"rolcreatedb\": true,\n      \"rolcanlogin\": true,\n      \"rolreplication\": true,\n      \"rolbypassrls\": true,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_checkpoint\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_create_subscription\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_database_owner\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_execute_server_program\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_monitor\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_read_all_data\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_read_all_settings\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_read_all_stats\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_read_server_files\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_signal_backend\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_stat_scan_tables\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_use_reserved_connections\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_write_all_data\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    },\n    {\n      \"rolname\": \"pg_write_server_files\",\n      \"rolsuper\": false,\n      \"rolinherit\": true,\n      \"rolcreaterole\": false,\n      \"rolcreatedb\": false,\n      \"rolcanlogin\": false,\n      \"rolreplication\": false,\n      \"rolbypassrls\": false,\n      \"rolconnlimit\": -1,\n      \"rolvaliduntil\": null\n    }\n  ],\n  \"rowCount\": 15,\n  \"columnNames\": [\n    \"rolname\",\n    \"rolsuper\",\n    \"rolinherit\",\n    \"rolcreaterole\",\n    \"rolcreatedb\",\n    \"rolcanlogin\",\n    \"rolreplication\",\n    \"rolbypassrls\",\n    \"rolconnlimit\",\n    \"rolvaliduntil\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\",\n    \"integer\",\n    \"null\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 15\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_auth_members", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_auth_members\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": 3,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": true,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"roleid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"member\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"grantor\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"admin_option\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"inherit_option\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"set_option\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [\n    \"oid\"\n  ],\n  \"foreignKeys\": [],\n  \"indexes\": [\n    {\n      \"name\": \"pg_auth_members_grantor_index\",\n      \"columns\": [\n        \"grantor\"\n      ],\n      \"unique\": false\n    },\n    {\n      \"name\": \"pg_auth_members_member_role_index\",\n      \"columns\": [\n        \"member\",\n        \"roleid\",\n        \"grantor\"\n      ],\n      \"unique\": true\n    },\n    {\n      \"name\": \"pg_auth_members_role_member_index\",\n      \"columns\": [\n        \"roleid\",\n        \"member\",\n        \"grantor\"\n      ],\n      \"unique\": true\n    }\n  ],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT r.rolname AS role, m.rolname AS member, g.rolname AS grantor, am.admin_option, am.inherit_option, am.set_option FROM pg_auth_members am JOIN pg_roles r ON r.oid = am.roleid JOIN pg_roles m ON m.oid = am.member LEFT JOIN pg_roles g ON g.oid = am.grantor ORDER BY r.rolname, m.rolname",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"role\": \"pg_read_all_settings\",\n      \"member\": \"pg_monitor\",\n      \"grantor\": \"dbcli\",\n      \"admin_option\": false,\n      \"inherit_option\": true,\n      \"set_option\": true\n    },\n    {\n      \"role\": \"pg_read_all_stats\",\n      \"member\": \"pg_monitor\",\n      \"grantor\": \"dbcli\",\n      \"admin_option\": false,\n      \"inherit_option\": true,\n      \"set_option\": true\n    },\n    {\n      \"role\": \"pg_stat_scan_tables\",\n      \"member\": \"pg_monitor\",\n      \"grantor\": \"dbcli\",\n      \"admin_option\": false,\n      \"inherit_option\": true,\n      \"set_option\": true\n    }\n  ],\n  \"rowCount\": 3,\n  \"columnNames\": [\n    \"role\",\n    \"member\",\n    \"grantor\",\n    \"admin_option\",\n    \"inherit_option\",\n    \"set_option\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\"\n  ],\n  \"executionTimeMs\": 10,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 3\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT rolname FROM pg_roles WHERE rolsuper",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"rolname\": \"dbcli\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"rolname\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 9,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT m.rolname FROM pg_roles m WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rds_superuser') AND m.rolname <> 'rds_superuser' AND pg_has_role(m.oid, (SELECT oid FROM pg_roles WHERE rolname = 'rds_superuser'), 'MEMBER')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 6,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT rolname, rolcreaterole, rolbypassrls, rolreplication FROM pg_roles WHERE rolcanlogin AND (rolcreaterole OR rolbypassrls OR rolreplication)",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"rolname\": \"dbcli\",\n      \"rolcreaterole\": true,\n      \"rolbypassrls\": true,\n      \"rolreplication\": true\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"rolname\",\n    \"rolcreaterole\",\n    \"rolbypassrls\",\n    \"rolreplication\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"boolean\",\n    \"boolean\",\n    \"boolean\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT r.rolname AS predefined_role, m.rolname AS member FROM pg_roles r JOIN pg_roles m ON pg_has_role(m.oid, r.oid, 'MEMBER') AND m.oid <> r.oid WHERE r.rolname IN ('pg_read_server_files','pg_write_server_files', 'pg_execute_server_program','pg_read_all_data', 'pg_write_all_data','rds_replication','rds_password')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"predefined_role\": \"pg_read_all_data\",\n      \"member\": \"dbcli\"\n    },\n    {\n      \"predefined_role\": \"pg_write_all_data\",\n      \"member\": \"dbcli\"\n    },\n    {\n      \"predefined_role\": \"pg_read_server_files\",\n      \"member\": \"dbcli\"\n    },\n    {\n      \"predefined_role\": \"pg_write_server_files\",\n      \"member\": \"dbcli\"\n    },\n    {\n      \"predefined_role\": \"pg_execute_server_program\",\n      \"member\": \"dbcli\"\n    }\n  ],\n  \"rowCount\": 5,\n  \"columnNames\": [\n    \"predefined_role\",\n    \"member\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 8,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 5\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_class", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_class\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": 419,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": true,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relname\",\n      \"type\": \"name\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relnamespace\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reltype\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reloftype\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relowner\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relam\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relfilenode\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reltablespace\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relpages\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reltuples\",\n      \"type\": \"real\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relallvisible\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reltoastrelid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relhasindex\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relisshared\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relpersistence\",\n      \"type\": \"\\\"char\\\"\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relkind\",\n      \"type\": \"\\\"char\\\"\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relnatts\",\n      \"type\": \"smallint\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relchecks\",\n      \"type\": \"smallint\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relhasrules\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relhastriggers\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relhassubclass\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relrowsecurity\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relforcerowsecurity\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relispopulated\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relreplident\",\n      \"type\": \"\\\"char\\\"\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relispartition\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relrewrite\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relfrozenxid\",\n      \"type\": \"xid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relminmxid\",\n      \"type\": \"xid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relacl\",\n      \"type\": \"aclitem[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reloptions\",\n      \"type\": \"text[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"relpartbound\",\n      \"type\": \"pg_node_tree\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [\n    \"oid\"\n  ],\n  \"foreignKeys\": [],\n  \"indexes\": [\n    {\n      \"name\": \"pg_class_relname_nsp_index\",\n      \"columns\": [\n        \"relname\",\n        \"relnamespace\"\n      ],\n      \"unique\": true\n    },\n    {\n      \"name\": \"pg_class_tblspc_relfilenode_index\",\n      \"columns\": [\n        \"reltablespace\",\n        \"relfilenode\"\n      ],\n      \"unique\": false\n    }\n  ],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_namespace", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_namespace\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": 4,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": true,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"nspname\",\n      \"type\": \"name\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"nspowner\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"nspacl\",\n      \"type\": \"aclitem[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [\n    \"oid\"\n  ],\n  \"foreignKeys\": [],\n  \"indexes\": [\n    {\n      \"name\": \"pg_namespace_nspname_index\",\n      \"columns\": [\n        \"nspname\"\n      ],\n      \"unique\": true\n    }\n  ],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT n.nspname, c.relname, c.relkind, pg_get_userbyid(c.relowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, pg_get_userbyid(a.grantor) AS grantor, a.privilege_type, a.is_grantable FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relkind IN ('r','p','v','m','f','S') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%'",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 12,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT n.nspname, pg_get_userbyid(n.nspowner) AS owner, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_namespace n CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, acldefault('n', n.nspowner))) a WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp%'",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"nspname\": \"public\",\n      \"owner\": \"pg_database_owner\",\n      \"grantee\": \"pg_database_owner\",\n      \"privilege_type\": \"USAGE\",\n      \"is_grantable\": false\n    },\n    {\n      \"nspname\": \"public\",\n      \"owner\": \"pg_database_owner\",\n      \"grantee\": \"pg_database_owner\",\n      \"privilege_type\": \"CREATE\",\n      \"is_grantable\": false\n    },\n    {\n      \"nspname\": \"public\",\n      \"owner\": \"pg_database_owner\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"USAGE\",\n      \"is_grantable\": false\n    }\n  ],\n  \"rowCount\": 3,\n  \"columnNames\": [\n    \"nspname\",\n    \"owner\",\n    \"grantee\",\n    \"privilege_type\",\n    \"is_grantable\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"boolean\"\n  ],\n  \"executionTimeMs\": 15,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 3\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_database", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_database\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": 2,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": true,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datname\",\n      \"type\": \"name\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datdba\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"encoding\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datlocprovider\",\n      \"type\": \"\\\"char\\\"\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datistemplate\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datallowconn\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datconnlimit\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datfrozenxid\",\n      \"type\": \"xid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datminmxid\",\n      \"type\": \"xid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"dattablespace\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datcollate\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datctype\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"daticulocale\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"daticurules\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datcollversion\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datacl\",\n      \"type\": \"aclitem[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [\n    \"oid\"\n  ],\n  \"foreignKeys\": [],\n  \"indexes\": [\n    {\n      \"name\": \"pg_database_datname_index\",\n      \"columns\": [\n        \"datname\"\n      ],\n      \"unique\": true\n    }\n  ],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT d.datname, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type FROM pg_database d CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"datname\": \"postgres\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"postgres\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"postgres\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CREATE\"\n    },\n    {\n      \"datname\": \"postgres\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"postgres\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"dbcli_test\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"dbcli_test\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"dbcli_test\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CREATE\"\n    },\n    {\n      \"datname\": \"dbcli_test\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"dbcli_test\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"template1\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"template1\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CREATE\"\n    },\n    {\n      \"datname\": \"template1\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"template1\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"template0\",\n      \"grantee\": \"PUBLIC\",\n      \"privilege_type\": \"CONNECT\"\n    },\n    {\n      \"datname\": \"template0\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CREATE\"\n    },\n    {\n      \"datname\": \"template0\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"TEMPORARY\"\n    },\n    {\n      \"datname\": \"template0\",\n      \"grantee\": \"dbcli\",\n      \"privilege_type\": \"CONNECT\"\n    }\n  ],\n  \"rowCount\": 18,\n  \"columnNames\": [\n    \"datname\",\n    \"grantee\",\n    \"privilege_type\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 10,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 18\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_default_acl", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_default_acl\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"table\",\n  \"columns\": [\n    {\n      \"name\": \"oid\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": true,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"defaclrole\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"defaclnamespace\",\n      \"type\": \"oid\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"defaclobjtype\",\n      \"type\": \"\\\"char\\\"\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"defaclacl\",\n      \"type\": \"aclitem[]\",\n      \"nullable\": false,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [\n    \"oid\"\n  ],\n  \"foreignKeys\": [],\n  \"indexes\": [\n    {\n      \"name\": \"pg_default_acl_role_nsp_obj_index\",\n      \"columns\": [\n        \"defaclrole\",\n        \"defaclnamespace\",\n        \"defaclobjtype\"\n      ],\n      \"unique\": true\n    }\n  ],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT pg_get_userbyid(d.defaclrole) AS for_role, COALESCE(n.nspname, '(all schemas)') AS schema, d.defaclobjtype, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee, a.privilege_type, a.is_grantable FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace CROSS JOIN LATERAL aclexplode(d.defaclacl) a",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 12,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_stat_ssl", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_stat_ssl\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ssl\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"version\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"cipher\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"bits\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_dn\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_serial\",\n      \"type\": \"numeric\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"issuer_dn\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT ssl, version, cipher, bits FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"ssl\": false,\n      \"version\": null,\n      \"cipher\": null,\n      \"bits\": null\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"ssl\",\n    \"version\",\n    \"cipher\",\n    \"bits\"\n  ],\n  \"columnTypes\": [\n    \"boolean\",\n    \"null\",\n    \"null\",\n    \"null\"\n  ],\n  \"executionTimeMs\": 4,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_stat_activity", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_stat_activity\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"datid\",\n      \"type\": \"oid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"datname\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"leader_pid\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"usesysid\",\n      \"type\": \"oid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"usename\",\n      \"type\": \"name\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"application_name\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_addr\",\n      \"type\": \"inet\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_hostname\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"client_port\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_start\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"xact_start\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"query_start\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"state_change\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"wait_event_type\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"wait_event\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"state\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_xid\",\n      \"type\": \"xid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_xmin\",\n      \"type\": \"xid\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"query_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"query\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"backend_type\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT a.datname, a.usename, a.client_addr, a.application_name, a.backend_type, s.ssl, s.version, s.cipher FROM pg_stat_ssl s JOIN pg_stat_activity a ON a.pid = s.pid WHERE a.backend_type = 'client backend' ORDER BY s.ssl, a.usename",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"datname\": \"dbcli_test\",\n      \"usename\": \"dbcli\",\n      \"client_addr\": \"192.168.147.1\",\n      \"application_name\": \"\",\n      \"backend_type\": \"client backend\",\n      \"ssl\": false,\n      \"version\": null,\n      \"cipher\": null\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"datname\",\n    \"usename\",\n    \"client_addr\",\n    \"application_name\",\n    \"backend_type\",\n    \"ssl\",\n    \"version\",\n    \"cipher\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"boolean\",\n    \"null\",\n    \"null\"\n  ],\n  \"executionTimeMs\": 8,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": ["schema", "pg_catalog.pg_settings", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"pg_settings\",\n  \"schema\": \"pg_catalog\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"setting\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"unit\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"category\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"short_desc\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"extra_desc\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"context\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"vartype\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"source\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"min_val\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"max_val\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"enumvals\",\n      \"type\": \"text[]\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"boot_val\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"reset_val\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sourcefile\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"sourceline\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    },\n    {\n      \"name\": \"pending_restart\",\n      \"type\": \"boolean\",\n      \"nullable\": true,\n      \"primaryKey\": false,\n      \"autoIncrement\": null,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"PostgreSQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "pg",
+      "args": [
+        "query",
+        "SELECT name, setting FROM pg_settings WHERE name IN ('ssl','ssl_min_protocol_version','ssl_max_protocol_version', 'ssl_ciphers','rds.force_ssl')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"name\": \"ssl\",\n      \"setting\": \"off\"\n    },\n    {\n      \"name\": \"ssl_ciphers\",\n      \"setting\": \"HIGH:MEDIUM:+3DES:!aNULL\"\n    },\n    {\n      \"name\": \"ssl_max_protocol_version\",\n      \"setting\": \"\"\n    },\n    {\n      \"name\": \"ssl_min_protocol_version\",\n      \"setting\": \"TLSv1.2\"\n    }\n  ],\n  \"rowCount\": 4,\n  \"columnNames\": [\n    \"name\",\n    \"setting\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 4\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["query", "SELECT version()", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"version()\": \"8.4.8\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"version()\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 6,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["query", "SHOW GRANTS", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Grants for dbcli@%\": \"GRANT USAGE ON *.* TO `dbcli`@`%`\"\n    },\n    {\n      \"Grants for dbcli@%\": \"GRANT ALL PRIVILEGES ON `dbcli\\\\_test`.* TO `dbcli`@`%`\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Grants for dbcli@%\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"enum('BASE TABLE','VIEW','SYSTEM VIEW')\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"BASE TABLE\",\n        \"VIEW\",\n        \"SYSTEM VIEW\"\n      ]\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"int\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged')\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null,\n      \"enumValues\": [\n        \"Fixed\",\n        \"Dynamic\",\n        \"Compressed\",\n        \"Redundant\",\n        \"Compact\",\n        \"Paged\"\n      ]\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"timestamp\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(256)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"text\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 8,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "performance_schema.replication_connection_status", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "schema",
+        "performance_schema.replication_applier_status_by_worker",
+        "--format",
+        "json"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "mysql.user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "mysql.role_edges", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "mysql.default_roles", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.USER_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"USER_PRIVILEGES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.USER_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"PRIVILEGE_TYPE\": \"USAGE\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"GRANTEE\",\n    \"TABLE_CATALOG\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 7,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.SCHEMA_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"SCHEMA_PRIVILEGES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.SCHEMA_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"SELECT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"INSERT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"UPDATE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"DELETE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"DROP\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"REFERENCES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"INDEX\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"ALTER\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE TEMPORARY TABLES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"LOCK TABLES\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"EXECUTE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE VIEW\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"SHOW VIEW\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"CREATE ROUTINE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"ALTER ROUTINE\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"EVENT\",\n      \"IS_GRANTABLE\": \"NO\"\n    },\n    {\n      \"GRANTEE\": \"'dbcli'@'%'\",\n      \"TABLE_CATALOG\": \"def\",\n      \"TABLE_SCHEMA\": \"dbcli\\\\_test\",\n      \"PRIVILEGE_TYPE\": \"TRIGGER\",\n      \"IS_GRANTABLE\": \"NO\"\n    }\n  ],\n  \"rowCount\": 18,\n  \"columnNames\": [\n    \"GRANTEE\",\n    \"TABLE_CATALOG\",\n    \"TABLE_SCHEMA\",\n    \"PRIVILEGE_TYPE\",\n    \"IS_GRANTABLE\"\n  ],\n  \"columnTypes\": [\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\",\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 8,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 18\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.TABLE_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLE_PRIVILEGES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.TABLE_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 10,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.COLUMN_PRIVILEGES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"COLUMN_PRIVILEGES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": 0,\n  \"sizeCategory\": \"small\",\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"GRANTEE\",\n      \"type\": \"varchar(292)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"COLUMN_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"PRIVILEGE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"IS_GRANTABLE\",\n      \"type\": \"varchar(3)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MySQL\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": [
+        "query",
+        "SELECT * FROM information_schema.COLUMN_PRIVILEGES",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 5,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "mysql.global_grants", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "performance_schema.threads", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "mysql",
+      "args": ["schema", "information_schema.processlist", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "maria",
+      "args": ["blacklist", "list", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"tables\": [\n    \"pg_authid\",\n    \"pg_catalog.pg_authid\",\n    \"mysql.global_priv\"\n  ],\n  \"columns\": {\n    \"*\": [\n      \"password\",\n      \"rolpassword\",\n      \"authentication_string\",\n      \"Priv\"\n    ]\n  },\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "maria",
+      "args": ["query", "SELECT version()", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"version()\": \"11.8.8-MariaDB-ubu2404\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"version()\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 8,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Query-only mode: auto-limiting to 1000 rows\n"
+    },
+    {
+      "engine": "maria",
+      "args": ["query", "SHOW GRANTS", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [\n    {\n      \"Grants for dbcli@%\": \"GRANT USAGE ON *.* TO `dbcli`@`%` IDENTIFIED BY PASSWORD '<REDACTED_FIXTURE_PASSWORD_HASH>'\"\n    },\n    {\n      \"Grants for dbcli@%\": \"GRANT ALL PRIVILEGES ON `dbcli\\\\_test`.* TO `dbcli`@`%`\"\n    }\n  ],\n  \"rowCount\": 2,\n  \"columnNames\": [\n    \"Grants for dbcli@%\"\n  ],\n  \"columnTypes\": [\n    \"varchar\"\n  ],\n  \"executionTimeMs\": 6,\n  \"metadata\": {\n    \"statement\": \"SHOW\",\n    \"affectedRows\": 2\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "maria",
+      "args": ["schema", "information_schema.TABLES", "--format", "json"],
+      "code": 0,
+      "stdout": "{\n  \"name\": \"TABLES\",\n  \"schema\": \"information_schema\",\n  \"estimatedRowCount\": null,\n  \"sizeCategory\": null,\n  \"tableType\": \"view\",\n  \"columns\": [\n    {\n      \"name\": \"TABLE_CATALOG\",\n      \"type\": \"varchar(512)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_SCHEMA\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_NAME\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_TYPE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ENGINE\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"VERSION\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"ROW_FORMAT\",\n      \"type\": \"varchar(10)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_ROWS\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AVG_ROW_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_DATA_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"DATA_FREE\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"AUTO_INCREMENT\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"UPDATE_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECK_TIME\",\n      \"type\": \"datetime\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COLLATION\",\n      \"type\": \"varchar(64)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CHECKSUM\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"CREATE_OPTIONS\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TABLE_COMMENT\",\n      \"type\": \"varchar(2048)\",\n      \"nullable\": 0,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"MAX_INDEX_LENGTH\",\n      \"type\": \"bigint(21) unsigned\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    },\n    {\n      \"name\": \"TEMPORARY\",\n      \"type\": \"varchar(1)\",\n      \"nullable\": 1,\n      \"primaryKey\": 0,\n      \"autoIncrement\": 0,\n      \"comment\": null\n    }\n  ],\n  \"primaryKey\": [],\n  \"foreignKeys\": [],\n  \"indexes\": [],\n  \"metadata\": {\n    \"engine\": \"MEMORY\"\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "maria",
+      "args": [
+        "query",
+        "SELECT table_schema, table_name, engine FROM information_schema.TABLES WHERE engine NOT IN ('InnoDB') AND table_schema NOT IN ('mysql','information_schema','performance_schema','sys')",
+        "--format",
+        "json",
+        "--no-limit"
+      ],
+      "code": 0,
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 11,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0\n  }\n}\n",
+      "stderr": ""
+    },
+    {
+      "engine": "maria",
+      "args": ["schema", "mysql.user", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    },
+    {
+      "engine": "maria",
+      "args": ["schema", "mysql.roles_mapping", "--format", "json"],
+      "code": 1,
+      "stdout": "",
+      "stderr": "Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.\nCode: TABLE_NOT_FOUND\n"
+    }
+  ]
+}

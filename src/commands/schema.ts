@@ -5,6 +5,10 @@
  */
 
 import crypto from 'node:crypto'
+import { parseSchemaObjectName } from './schema-object-name'
+import { checkSchemaTable, protectSQLSchema } from './schema-protection'
+import { BlacklistManager } from '@/core/blacklist-manager'
+import { quoteIdentifier } from '@/adapters/identifier-quote'
 import { Command } from 'commander'
 import {
   attachCommandEvidenceReceipt,
@@ -182,6 +186,28 @@ async function schemaAction(
       throw new Error('Database not configured. Run: dbcli init')
     }
 
+    const sqlSystem =
+      config.connection.system === 'postgresql' ||
+      config.connection.system === 'mysql' ||
+      config.connection.system === 'mariadb'
+        ? config.connection.system
+        : undefined
+    const objectName = table && sqlSystem ? parseSchemaObjectName(table, sqlSystem) : undefined
+    if (objectName?.namespace !== undefined && (options.refresh || options.reset)) {
+      throw new Error('Qualified schema inspection cannot be combined with --refresh or --reset.')
+    }
+    const sqlBlacklist = sqlSystem ? new BlacklistManager(config) : undefined
+    if (objectName && sqlBlacklist && !options.refresh && !options.reset) {
+      checkSchemaTable(
+        sqlBlacklist,
+        objectName.name,
+        objectName.namespace ??
+          (sqlSystem === 'postgresql'
+            ? 'public'
+            : (config.connection as ConnectionOptions).database)
+      )
+    }
+
     let inferenceOptions: { sampleSize?: number; sampleMethod?: 'random' | 'natural' } | undefined
     if (options.sampleSize !== undefined) {
       const parsed = Number(options.sampleSize)
@@ -340,7 +366,19 @@ async function schemaAction(
         )
       } else if (table) {
         // Single table schema inspection
-        await handleSingleTableSchema(adapter, table, options.format, inferenceOptions, mongoMeta)
+        await handleSingleTableSchema(
+          adapter,
+          objectName?.name ?? table,
+          options.format,
+          {
+            ...inferenceOptions,
+            ...(sqlBlacklist && { metadataProtection: true }),
+            ...(objectName?.namespace !== undefined && { namespace: objectName.namespace }),
+          },
+          mongoMeta,
+          sqlBlacklist,
+          sqlSystem
+        )
       } else {
         // Full database schema scan and config update
         await handleFullDatabaseScan(
@@ -400,25 +438,44 @@ async function handleSingleTableSchema(
   adapter: DatabaseAdapter,
   tableName: string,
   format: string,
-  inferenceOptions?: { sampleSize?: number; sampleMethod?: 'random' | 'natural' },
-  mongoMeta?: MongoDecorateMeta
+  inferenceOptions?: TableSchemaOptions,
+  mongoMeta?: MongoDecorateMeta,
+  sqlBlacklist?: BlacklistManager,
+  sqlSystem?: 'postgresql' | 'mysql' | 'mariadb'
 ): Promise<void> {
   let schema: TableSchema
   try {
     schema = await adapter.getTableSchema(tableName, inferenceOptions)
   } catch (error) {
-    if (error instanceof ConnectionError) {
+    if (
+      sqlBlacklist &&
+      (sqlBlacklist.getState().tables.size > 0 ||
+        sqlBlacklist.getAllBlacklistedColumns().length > 0)
+    ) {
+      // Driver errors and fuzzy candidates may contain protected metadata.
+      throw new ConnectionError(
+        error instanceof ConnectionError ? error.code : 'UNKNOWN',
+        'Schema metadata could not be read: the object may be absent, inaccessible, or a metadata query failed.',
+        []
+      )
+    }
+    if (error instanceof ConnectionError && inferenceOptions?.namespace === undefined) {
       throw await attachTableSuggestions(error, adapter, tableName)
     }
     throw error
   }
   if (mongoMeta) schema = decorateMongoSchema(schema, mongoMeta)
+  if (sqlBlacklist) schema = protectSQLSchema(schema, sqlBlacklist)
 
   if (format === 'json') {
     const formatter = new TableSchemaJSONFormatter()
     console.log(formatter.format(schema))
   } else {
-    console.log(`\nTable: ${schema.name}\n`)
+    console.log(
+      `\nTable: ${schema.schema && sqlSystem ? `${quoteIdentifier(schema.schema, sqlSystem)}.${quoteIdentifier(schema.name, sqlSystem)}` : schema.name}\n`
+    )
+    if (schema.metadataOmitted)
+      console.log('Some schema metadata was omitted by blacklist protection.')
 
     if (schema.primaryKey && schema.primaryKey.length > 0) {
       console.log(`Primary Key: ${schema.primaryKey.join(', ')}`)

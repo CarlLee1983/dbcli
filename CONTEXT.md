@@ -281,6 +281,23 @@ agent 可以因未涵蓋的風險追加暫停，不能自行取消既定批准�
 將待執行步驟交由指定執行者承接，要求確認批准有效、計畫與目標一致及前置條件成立。
 批准後仍可能等待執行，操作與驗證證據須在執行後另行交回。
 
+## SQL 單一物件檢視用語
+
+本節為 [ADR-0048](docs/adr/ADR-0048-qualified-schema-inspection-is-a-single-object-operation.md)
+的設計用語；不表示完整名稱的 schema 查詢已實作。
+
+**完整物件名稱（Qualified relation name）**：
+由 namespace 與局部名稱組成、明確指定一個表或視圖的名稱。
+引用識別字內的點號屬於名稱，不是 namespace 分隔符。
+
+**未限定名稱（Unqualified relation name）**：
+沒有指定 namespace 的局部名稱，依該命令既有的預設範圍解讀。
+它不是跨 namespace 搜尋或自動猜測的要求。
+
+**保護性省略（Protective omission）**：
+因 blacklist 而不公開欄位或相關約束的情形，不代表資料庫沒有那些欄位或約束。
+它與無權確認 metadata 或 metadata 讀取失敗不同。
+
 ## Connection configuration language
 
 **Connection string**:

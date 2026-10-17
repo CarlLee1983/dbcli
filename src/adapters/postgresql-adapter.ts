@@ -17,6 +17,7 @@ import {
   requireConnected,
   withMappedConnectionError,
 } from './sql-adapter-utils'
+import { ConnectionError } from './types'
 import { mapError } from './error-mapper'
 // 型別匯入在執行期會被抹除；driver 本體改在 connect() 時才載入，這樣查
 // Redis 或 Mongo 的命令不必為了 import 一個用不到的 SQL driver 付啟動成本
@@ -264,8 +265,52 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     requireConnected(this.pool)
 
     return withMappedConnectionError('postgresql', this.options, async () => {
-      // Query information_schema for column details including autoIncrement and comment
-      const columnQuery = `
+      const namespace = options?.namespace ?? 'public'
+      const namespaceSQL = options?.namespace !== undefined ? '$2' : "'public'"
+      const params = options?.namespace !== undefined ? [tableName, namespace] : [tableName]
+      let relationKind: string | undefined
+      if (options?.namespace !== undefined || options?.metadataProtection) {
+        const presence = await this.execute<{ relation_kind: string }>(
+          `
+          SELECT c.relkind as relation_kind
+          FROM pg_catalog.pg_class c
+          JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+          WHERE c.relname = $1 AND n.nspname = ${namespaceSQL}
+            AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+            AND has_schema_privilege(n.oid, 'USAGE')
+            AND has_table_privilege(c.oid, 'SELECT')
+        `,
+          params
+        )
+        relationKind = presence.rows[0]?.relation_kind
+        if (!relationKind)
+          throw new ConnectionError(
+            'TABLE_NOT_FOUND',
+            `Object ${JSON.stringify(namespace)}.${JSON.stringify(tableName)} does not exist or is not visible with the current privileges.`,
+            []
+          )
+      }
+      // Catalog columns also cover materialized views, absent from information_schema.
+
+      const columnQuery =
+        options?.namespace !== undefined
+          ? `
+        SELECT a.attname as name,
+          pg_catalog.format_type(a.atttypid, a.atttypmod) as type,
+          NOT a.attnotnull as nullable,
+          pg_catalog.pg_get_expr(d.adbin, d.adrelid) as default_value,
+          EXISTS (SELECT 1 FROM pg_catalog.pg_index i WHERE i.indrelid = c.oid
+            AND i.indisprimary AND a.attnum = ANY(i.indkey)) as is_primary_key,
+          (a.attidentity <> '' OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE 'nextval%') as auto_increment,
+          pg_catalog.col_description(c.oid, a.attnum) as comment
+        FROM pg_catalog.pg_attribute a
+        JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+        WHERE c.relname = $1 AND n.nspname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+        ORDER BY a.attnum
+      `
+          : `
         SELECT
           c.column_name as name,
           c.data_type as type,
@@ -296,7 +341,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         LEFT JOIN pg_catalog.pg_description pgd
           ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position
         WHERE c.table_name = $1
-          AND c.table_schema = 'public'
+          AND c.table_schema = ${namespaceSQL}
         ORDER BY c.ordinal_position
       `
 
@@ -308,11 +353,22 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         is_primary_key: boolean
         auto_increment: boolean
         comment: string | null
-      }>(columnQuery, [tableName])
+      }>(columnQuery, params)
       const columns = columnResult.rows
 
       // Query enum values for columns with enum types
-      const enumQuery = `
+      const enumQuery =
+        options?.namespace !== undefined
+          ? `
+        SELECT a.attname as name, array_agg(e.enumlabel::text ORDER BY e.enumsortorder) as enum_values
+        FROM pg_catalog.pg_attribute a
+        JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_enum e ON e.enumtypid = a.atttypid
+        WHERE c.relname = $1 AND n.nspname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+        GROUP BY a.attname
+      `
+          : `
         SELECT
           c.column_name as name,
           array_agg(e.enumlabel::text ORDER BY e.enumsortorder) as enum_values
@@ -324,14 +380,14 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           AND enum_schema.nspname = c.udt_schema
         JOIN pg_catalog.pg_enum AS e ON e.enumtypid = enum_type.oid
         WHERE c.table_name = $1
-          AND c.table_schema = 'public'
+          AND c.table_schema = ${namespaceSQL}
         GROUP BY c.column_name
       `
 
       const enumResult = await this.execute<{
         name: string
         enum_values: string[]
-      }>(enumQuery, [tableName])
+      }>(enumQuery, params)
       const enumResults = enumResult.rows
 
       const enumMap = new Map<string, string[]>()
@@ -369,7 +425,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           AND referenced_column.attnum = referenced_key.attnum
         WHERE constraint_info.contype = 'f'
           AND source_table.relname = $1
-          AND source_schema.nspname = 'public'
+          AND source_schema.nspname = ${namespaceSQL}
         GROUP BY
           constraint_info.oid,
           constraint_info.conname,
@@ -384,7 +440,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         ref_schema: string
         ref_table: string
         ref_columns: string[]
-      }>(fkQuery, [tableName])
+      }>(fkQuery, params)
       const fkResults = fkResult.rows
 
       // Create map of single-column foreign keys for quick lookup
@@ -400,14 +456,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         SELECT
           i.relname as name,
           array_agg(a.attname::text ORDER BY array_position(ix.indkey, a.attnum)) as columns,
-          ix.indisunique as is_unique
+          ix.indisunique as is_unique,
+          bool_and(NOT (0 = ANY(ix.indkey)) AND ix.indpred IS NULL) as columns_complete
         FROM pg_index ix
         JOIN pg_class t ON t.oid = ix.indrelid
         JOIN pg_class i ON i.oid = ix.indexrelid
         JOIN pg_namespace n ON n.oid = t.relnamespace
-        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        ${options?.metadataProtection ? 'LEFT JOIN' : 'JOIN'} pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
         WHERE t.relname = $1
-          AND n.nspname = 'public'
+          AND n.nspname = ${namespaceSQL}
           AND NOT ix.indisprimary
         GROUP BY i.relname, ix.indisunique
       `
@@ -416,7 +473,8 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         name: string
         columns: string[]
         is_unique: boolean
-      }>(indexQuery, [tableName])
+        columns_complete?: boolean
+      }>(indexQuery, params)
       const indexResults = indexResult.rows
 
       // Get estimated row count from pg_class
@@ -426,11 +484,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         JOIN pg_catalog.pg_namespace AS source_schema
           ON source_schema.oid = source_table.relnamespace
         WHERE source_table.relname = $1
-          AND source_schema.nspname = 'public'
+          AND source_schema.nspname = ${namespaceSQL}
       `
-      const estimateResult = await this.execute<{ estimated_rows: number | null }>(estimateQuery, [
-        tableName,
-      ])
+      const estimateResult = await this.execute<{ estimated_rows: number | null }>(
+        estimateQuery,
+        params
+      )
       const estimateResults = estimateResult.rows
 
       // Extract primary key constraint
@@ -449,17 +508,17 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           AND primary_key_column.attnum = primary_key.attnum
         WHERE index_info.indisprimary
           AND source_table.relname = $1
-          AND source_schema.nspname = 'public'
+          AND source_schema.nspname = ${namespaceSQL}
       `
 
-      const pkResult = await this.execute<{ columns: string[] }>(pkQuery, [tableName])
+      const pkResult = await this.execute<{ columns: string[] }>(pkQuery, params)
       const pkResults = pkResult.rows
 
       // 精確列數要掃全表。掃描模式關掉它，改用 pg_class 的估計值——一百張表
       // 的資料庫做不起一百次全表 COUNT（#49）。
       const qualifiedTableName = `${quoteIdentifier('public', 'postgresql')}.${quoteIdentifier(tableName, 'postgresql')}`
       const exactRowCount =
-        options?.exactRowCount === false
+        options?.namespace !== undefined || options?.exactRowCount === false
           ? undefined
           : (
               await this.execute<{ count: number }>(
@@ -481,7 +540,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
       const schema: TableSchema = {
         name: tableName,
-        schema: 'public',
+        schema: namespace,
+        ...(relationKind && {
+          tableType:
+            relationKind === 'v' || relationKind === 'm' ? ('view' as const) : ('table' as const),
+        }),
         columns: columns.map((col) => ({
           name: col.name,
           type: col.type,
@@ -493,7 +556,10 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           comment: col.comment ? fixDoubleEncodedUtf8(col.comment) : null,
           enumValues: enumMap.get(col.name),
         })),
-        rowCount: exactRowCount ?? Math.max(0, estimateResults[0]?.estimated_rows || 0),
+        rowCount:
+          options?.namespace !== undefined
+            ? undefined
+            : (exactRowCount ?? Math.max(0, estimateResults[0]?.estimated_rows || 0)),
         engine: 'PostgreSQL',
         primaryKey: primaryKeyArray,
         foreignKeys: safeForeignKeys,
@@ -501,8 +567,17 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
           name: idx.name,
           columns: Array.isArray(idx.columns) ? idx.columns : [],
           unique: idx.is_unique,
+          ...(options?.metadataProtection &&
+            idx.columns_complete === false && { columnsComplete: false }),
         })),
-        estimatedRowCount: Math.max(0, estimateResults[0]?.estimated_rows || 0),
+        estimatedRowCount:
+          options?.namespace !== undefined
+            ? relationKind !== 'v' &&
+              estimateResults[0]?.estimated_rows != null &&
+              Number(estimateResults[0].estimated_rows) >= 0
+              ? Number(estimateResults[0].estimated_rows)
+              : undefined
+            : Math.max(0, estimateResults[0]?.estimated_rows || 0),
       }
 
       return schema

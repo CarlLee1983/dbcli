@@ -37,5 +37,7 @@ Use this task before applying a schema migration. It only PLANS — it never run
 Save the pre-change `schema {{table}} --format json` output as the baseline. After the
 migration is applied (out of band, via your migration tool), re-run
 `schema {{table}} --format json` and diff the two to confirm the change matches intent.
-Always prepare and record an explicit rollback statement before applying. Requires
-data-admin permission to actually run DDL — this task does not grant it.
+Always prepare and record an explicit rollback statement before applying.
+Read-only planning and review need no elevated permission beyond this task's existing
+requirements. Running DDL out of band requires `admin` permission — this task neither
+grants that permission nor runs DDL.

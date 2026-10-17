@@ -44,6 +44,20 @@ describe('builtin pack: migration-review', () => {
     expect(logOut).toContain('"name": "migration-review"')
   })
 
+  test('show distinguishes read-only review from DDL execution requiring admin', async () => {
+    const program = makeRoot()
+    await program.parseAsync(['node', 'dbcli', 'skill', 'tasks', 'show', 'migration-review'], {
+      from: 'node',
+    })
+    expect(exitCode).toBeUndefined()
+    const notes = logOut.slice(logOut.indexOf('# Agent Notes')).replace(/\s+/g, ' ')
+    expect(notes).not.toContain('data-admin')
+    expect(notes).toContain('Read-only planning and review need no elevated permission')
+    expect(notes).toContain("beyond this task's existing requirements")
+    expect(notes).toContain('Running DDL out of band requires `admin` permission')
+    expect(notes).toContain('this task neither grants that permission nor runs DDL')
+  })
+
   test('plan resolves table and ddl templates', async () => {
     const program = makeRoot()
     await program.parseAsync(

@@ -230,6 +230,38 @@ is read outside dbcli. A platform a Role Skill does not cover reports its
 platform-layer state as indeterminate.
 _Avoid_: infrastructure layer, cloud layer
 
+## DBA 工作流程用語
+
+本節描述 Role Skill 的工作結論，與上述 dbcli outcome vocabularies 分屬不同層次。
+決策與判定規則見 [ADR-0046](docs/adr/ADR-0046-dba-conclusions-reference-tool-evidence.md)。
+
+**工具執行結果（Tool outcome）**：
+一次工具操作是否成功執行的結果，不代表 DBA 主張成立。
+_Avoid_: DBA 驗證通過
+
+**DBA 主張（DBA claim）**：
+在指定對象、環境、時間與適用條件下，需要證據判定的敘述；例如備份存在或某次演練符合復原目標。
+它不是 dbcli evidence pack 的 Claim，也不是工具已給出的驗證判決。
+
+**主張結果（Claim conclusion）**：
+對單一 DBA 主張的判定：符合（`met`）、不符合（`not-met`）、受阻（`blocked`）或無法判定（`indeterminate`）。
+它不等同於命令成功、dbcli verification status 或整個流程的完成狀態。
+
+**工作流程結果（Workflow result）**：
+一次有明確範圍的 DBA 評估紀錄，連結各主張的結論、理由、證據與缺口。
+其摘要保留混合結果，不能由部分主張成立推導全部符合。
+_Avoid_: Operation envelope, evidence receipt
+
+**本次未評估（Not assessed）**：
+某主張不在本次評估範圍內的標示，不是通過，也不是主張結果的第五種狀態。
+
+**必要證據（Required evidence）**：
+主張的判定規則事先要求具備且符合適用條件的證據；欠缺時不能證成符合或不符合。
+
+**歷史結論（Historical conclusion）**：
+某次評估在當時範圍與條件下留下的判定，不保證現在仍適用。
+證據後續失效或新的評估不會覆寫它。
+
 ## Connection configuration language
 
 **Connection string**:

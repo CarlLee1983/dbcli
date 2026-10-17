@@ -34,9 +34,15 @@ steps:
 # Agent Notes
 
 Use this task when a user wants to backfill or correct existing rows. This task only
-PLANS — it never writes. After reviewing the plan, run the real backfill manually in
-two steps: first `dbcli update ... --dry-run` (or `dbcli query "<sql>" --dry-run`) to
-preview the generated SQL, then re-run with `--execute` only once the dry-run looks
-correct. Prefer a narrow `WHERE` clause and verify the affected row count with a
-read-only `SELECT count(*)` before writing. Requires read-write (or higher) permission
-to actually execute.
+PLANS — it never writes. After reviewing the plan, run the real backfill manually:
+
+1. Confirm a narrow `WHERE` clause and capture its scope with a read-only
+   `SELECT count(*)` before writing.
+2. Preview the structured write with
+   `dbcli update <table> --where "<predicate>" --set '<json>' --dry-run`.
+   Keep raw SQL writes in `dbcli plan "<sql>"`; `query` does not dry-run arbitrary writes.
+3. Once the preview looks correct, re-run the write command without `--dry-run`
+   and with the required confirmation/force flag for your environment. The existing
+   write gate still applies; execution requires read-write (or higher) permission.
+4. Read the rows back afterwards to confirm the backfill achieved its goal. If the
+   result does not match, stop and investigate before attempting another write.

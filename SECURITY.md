@@ -13,18 +13,19 @@ support branch and none is promised: an older major is fixed by upgrading.
 
 | Version | Status |
 | ------- | ------ |
-| **11.x** | :white_check_mark: **Supported** — use the latest 11.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
-| **10.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **9.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **8.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **7.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **6.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **5.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **4.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **3.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **2.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **1.x** | :x: **Not supported** — superseded by 11.x; upgrade to **11.x**. |
-| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **11.x**. |
+| **12.x** | :white_check_mark: **Supported** — use the latest 12.x patch (see [CHANGELOG.md](CHANGELOG.md)). |
+| **11.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **10.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **9.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **8.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **7.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **6.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **5.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **4.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **3.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **2.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **1.x** | :x: **Not supported** — superseded by 12.x; upgrade to **12.x**. |
+| **&lt; 1.0** (legacy / pre-release tags) | :x: **Not supported** — upgrade to **12.x**. |
 
 The supported major above is checked against `package.json` by
 `bun run manifest:check`, so this table cannot silently fall behind a release.

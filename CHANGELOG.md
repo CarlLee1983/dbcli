@@ -7,17 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.0.0] - 2026-10-18
+
+版本為 **12.0.0**。SQL 單一物件 `schema` 現在將含點號的輸入解析為完整名稱，
+會改變既有命令的查詢對象，因此採用 major 版本。升級前請檢查含點號的名稱、依賴完整
+schema metadata 的腳本、SHOW GRANTS 輸出用途，以及原生授權錯誤的處理分支。
+本版不需要連線設定、schema 快取或 recovery envelope 的資料遷移。
+
 ### Fixed
 
 - **assert --expect 的 evidence receipt**：只投影檢查 pass bits，沿用既有 schema，
   排除原始 SQL 與結果值；成功與失敗斷言都可產生 receipt。`--no-fail` 只影響斷言退出碼，
   失敗 receipt 不會變成功，receipt 寫入失敗仍 exit 1。
+- **MongoDB Unix socket URI 與錯誤去敏**：`init --uri` 與互動貼上的 Unix socket
+  連線字串保留原始 `uri`、認證與 options，不再拆成 TCP host／port；既有明文儲存警告
+  仍會顯示。URI fallback 連線測試失敗時，同時遮蔽原始 URI、編碼及解碼後的密碼。
+- **內建 task pack 的操作指引**：`safe-backfill` 改用真實支援的
+  `update ... --dry-run`，raw SQL 的預覽使用 `plan`；移除不存在的 `query --dry-run`
+  與 `--execute` 指引，實際寫入仍需既有確認與權限。`migration-review` 說明執行 DDL
+  需要 `admin`，唯讀規劃不升權，也不執行 DDL。
+- **CLI 啟動 bundle**：建置使用 syntax minification 降低 runtime bundle 大小，
+  維持啟動效能預算；保留 whitespace，避免 Bun 對動態 import 的錯誤改寫。
 
 ### Added
 
 - **單一物件 schema 支援完整名稱**：PostgreSQL 可用 `schema.table`，MySQL／MariaDB
   可用 `database.table` 檢視表與系統視圖；支援原生識別字引用、內嵌點號與跳脫引號。
   完整名稱不可搭配 `--refresh`／`--reset`，不改連線設定或 schema 快取，也不擴大掃描範圍。
+- **`blacklist.read` capability 與 agent-mode task planning**：唯讀的 `blacklist list`
+  有獨立 capability，內建需要檢視 blacklist 的 task pack 改用它；`connection-health`
+  不要求 blacklist capability。引擎與權限符合時，`DBCLI_AGENT_MODE=1` 可產生這些
+  plan-only 計畫；`blacklist.manage` 仍是設定異動，在 agent mode 下不可用。
+  規劃不執行任何步驟，也不授予執行權限。
 
 ### Changed
 
@@ -44,11 +65,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   舊、新 SQL 單一物件名稱都套用 blacklist；隱藏受保護欄位及涉及它的整項主鍵、索引與外鍵，
   無法安全表達完整欄位相依性的 expression／partial index 也會整項省略；省略時 JSON 輸出
   `metadataOmitted: true`，文字輸出顯示省略通知，回傳 metadata 不保證完整。
-  必要 metadata 讀取失敗會回報失敗，不以空集合冒充成功。
-- **含點號名稱的相容性差異**：未限定名稱仍依 PostgreSQL `public`／MySQL、MariaDB
-  預設 database 與既有精確名稱語意處理；局部名稱本身含點號時，須改用完整名稱中的 quoted
-  component，例如 `dbcli schema 'public."audit.orders"' --format json`。完整名稱不存在時
-  不會退回預設 namespace 的同名物件；其他命令的名稱解析不變。
+  必要 metadata 讀取失敗會回報失敗，不以空集合冒充成功；省略不代表該 metadata 不存在。
+  MySQL／MariaDB 的 `indexes[].unique` 正規化為宣告的 boolean 型別，不再輸出 driver 的
+  數字 0／1；複合外鍵欄位順序與目標 namespace 依 catalog 正確呈現。
+- **破壞性變更：含點號名稱的解析**：原本 `dbcli schema audit.orders` 查詢預設
+  namespace 中字面名稱為 `audit.orders` 的物件，現在會查詢 namespace `audit` 中的
+  `orders`。PostgreSQL 原本的局部含點號名稱須改成
+  `dbcli schema 'public."audit.orders"' --format json`；MySQL／MariaDB 以 backtick
+  分別引用 database 與局部名稱，例如
+  ``dbcli schema '`reporting`.`audit.orders`' --format json``，仍須符合該引擎允許的名稱規則。
+  未限定且不含點號的名稱維持 PostgreSQL `public`／MySQL、MariaDB 預設 database 與既有
+  精確名稱語意。完整名稱不存在時不會退回預設 namespace 的同名物件；其他命令的名稱解析不變。
 
 ## [11.0.0] - 2026-10-14
 

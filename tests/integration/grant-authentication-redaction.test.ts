@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { createConnection } from 'mysql2/promise'
 import { parseEvidenceReceipt } from '@/core/evidence-receipt'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
+
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 const ROOT = resolve(import.meta.dir, '../..')
 const CLI = join(ROOT, 'src/cli.ts')

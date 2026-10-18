@@ -1,5 +1,9 @@
-import { expect, test } from 'bun:test'
+import { beforeAll, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { BUILD_HOOK_TIMEOUT_MS, ensureDistBuilt } from '../helpers/ensure-dist'
+
+// HTML export needs the generated template before the child deliberately loses PATH.
+beforeAll(() => ensureDistBuilt(), BUILD_HOOK_TIMEOUT_MS)
 
 test('CI skip mode runs offline grant coverage without Docker or live database fixtures', async () => {
   const child = Bun.spawn(

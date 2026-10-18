@@ -87,6 +87,7 @@ const RECOVERY_CODE_BY_CONNECTION_CODE: Record<ConnectionErrorCode, RecoveryCode
   ETIMEDOUT: 'CONN_TIMEOUT',
   STATEMENT_TIMEOUT: 'CONN_TIMEOUT',
   AUTH_FAILED: 'CONN_AUTH_FAILED',
+  DB_PERMISSION_DENIED: 'PERMISSION_DENIED',
   // 不是 CONN_AUTH_FAILED：那份計畫的第二步是 `dbcli init --force`，而 init 問的是
   // 帳密與 host，不會問 caPath / rejectUnauthorized。憑證的步驟由 connectionCode
   // 在步驟庫另外給。
@@ -106,6 +107,8 @@ const RECOVERY_CODE_BY_CONNECTION_CODE: Record<ConnectionErrorCode, RecoveryCode
  * 那一份，說反話比籠統更糟。字串全為硬編，不含 host / port / SQL / 憑證。
  */
 const MESSAGE_BY_CONNECTION_CODE: Partial<Record<ConnectionErrorCode, string>> = {
+  DB_PERMISSION_DENIED:
+    'The database denied access because the account lacks a required native permission. Confirm the intended database or object and the required permission with its administrator. After access is resolved, run the original command again.',
   EHOSTUNREACH: 'The host name resolved, but the host or network is unreachable (routing or VPN).',
   TOO_MANY_CONNECTIONS:
     'The server has no connection slots left; the limit is on concurrent connections, not on this caller.',

@@ -27,6 +27,8 @@ import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
 import { resolveTimeoutPolicy, statementTimeoutSql } from './timeout-policy'
 import { isTransportFailure } from '@/utils/connection-error-message'
+import { isGrantQuery } from './grant-query'
+import { redactGrant, OMITTED_GRANT } from './grant-redaction'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -45,6 +47,7 @@ function parseEnumValues(columnType: string): string[] | undefined {
  */
 export class MySQLAdapter implements DatabaseAdapter {
   private db: mysql.Connection | null = null
+  private serverVersion?: string
   private executionTail: Promise<void> = Promise.resolve()
   private options: ConnectionOptions
   private system: 'mysql' | 'mariadb'
@@ -65,6 +68,7 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if connection fails
    */
   async connect(): Promise<void> {
+    this.serverVersion = undefined
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
       const timeouts = resolveTimeoutPolicy(this.options)
@@ -98,6 +102,7 @@ export class MySQLAdapter implements DatabaseAdapter {
       // Check server version against minimum requirements
       try {
         const rawVersion = await this.getServerVersion()
+        this.serverVersion = rawVersion
         const result = checkDbVersion(rawVersion, this.system)
         warnIfUnsupported(result)
       } catch {
@@ -153,6 +158,7 @@ export class MySQLAdapter implements DatabaseAdapter {
     const db = requireConnected(this.db)
 
     return withMappedConnectionError(this.system, this.options, async () => {
+      const grantQuery = isGrantQuery(sql, this.serverVersion)
       const execution = this.executionTail.then(async () => {
         if (options?.sqlMode === 'native-read-only') {
           return this.executeReadOnly<T>(db, sql, params)
@@ -182,7 +188,24 @@ export class MySQLAdapter implements DatabaseAdapter {
         () => undefined,
         () => undefined
       )
-      return execution
+      const result = await execution
+      if (!grantQuery) return result
+      // The shared result boundary also covers native-read-only transactions and shell/export.
+      // Never allow a formatter or direct consumer to receive the original grant payloads.
+      try {
+        return {
+          ...result,
+          rows: result.rows.map((row) => {
+            if (Array.isArray(row)) return row.map(redactGrant) as T
+            if (!row || typeof row !== 'object') return OMITTED_GRANT as T
+            return Object.fromEntries(
+              Object.entries(row).map(([key, value]) => [key, redactGrant(value)])
+            ) as T
+          }),
+        }
+      } catch {
+        throw new ConnectionError('UNKNOWN', 'Could not safely redact SHOW GRANTS results.', [])
+      }
     })
   }
 

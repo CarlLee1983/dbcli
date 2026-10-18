@@ -737,6 +737,8 @@ dbcli skill tasks plan migration-review \
 | `--verification-subject <kind:name>` | 是（啟用旗標時）| 被驗證的標的。允許的 kind：`recovery`、`task-pack`、`assertion`、`migration`、`backfill`、`manual`。 |
 | `--verification-summary <text>` | 否 | 可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。 |
 
+`assert --expect ... --evidence-receipt <path>` 不必搭配 `--write-verification-artifact` 也能寫入 receipt。只有各項檢查的布林 pass bits 會投影至既有 receipt schema，不包含原始 SQL 或結果值。要求 receipt 時，失敗斷言仍會寫入 `failed` receipt。`--no-fail` 只影響斷言的退出行為，不會把 receipt 改成成功；receipt 寫入失敗仍 exit 1。
+
 `evidence compose` 可用 `--receipt <path>` 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。
 
 `inspect`、`report`、`schema`、`plan`、`lint`、`explain` 與 `impact assess` 也支援 `--evidence-receipt <工作區相對路徑>`。receipt 只記錄指令 capability、固定 command subject、時間、安全 context digest 與可選 correlation ID；絕不複製指令輸入、SQL、rows、路徑或原始錯誤。要求 receipt 時，成功與失敗的指令結果都會產生 receipt。receipt 寫入失敗會另外回報，不會改變指令結果或 exit code。
@@ -1671,6 +1673,35 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 - **Redis**:`q @snippet` 只能跑**唯讀**命令;`delete` 涵蓋 `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM`(需 `data-admin`);用 key glob blacklist(`secrets:*`)加上可選的值遮罩保護 key。`query` 沒有 `--dry-run`——安全來自權限閘門;要預覽刪除請用 `delete <key> --dry-run`。
 - **Elasticsearch**:用 DSL body 或 Lucene 字串查詢(`--collection <index>`);用 `match_all` scroll `export` 整個 index;`shell` 開啟 Kibana Dev Tools 風格 REPL。
 
+### SHOW GRANTS 認證內容去敏（MySQL/MariaDB）
+
+`SHOW GRANTS` 結果一律在 MySQL/MariaDB 共用 adapter 回傳給任何消費端之前去敏，涵蓋正常與 native-read-only 執行。`query`、互動 `shell` 與 SQL 查詢 `export`，以及各命令支援的 JSON、CSV、表格與 HTML 輸出都適用。所有權限層級與 agent 模式均受保護，blacklist 為空也生效，沒有 bypass 選項。
+
+條件式可執行註解會依建立連線時已讀取的伺服器版本判讀，不額外查詢版本。若無法取得該版本，且無法安全確定實際執行的語句，dbcli 會回報固定的安全錯誤，不回傳原始結果列。已確定不是 `SHOW GRANTS` 的語句維持既有行為。
+
+可安全辨識的 grant 文字會把認證 payload 換成 `[REDACTED]`，保留可判讀的帳號、角色、授權範圍與權限。辨識格式包含 `IDENTIFIED BY`、`IDENTIFIED BY PASSWORD`，以及 `IDENTIFIED VIA` / `WITH` 搭配 `USING` / `AS`、`PASSWORD(...)` 或以 `OR` 串接的多認證方法。所有認證參數都會遮蔽，包含空字串與 service name。可安全辨識且只有權限或角色的列保留原文字。
+
+未知、不完整、語意歧義或型態異常的儲存格會換成 `[OMITTED: grant text could not be safely redacted]`。列數、欄名與結果結構保留，其他可安全辨識的儲存格照常呈現。被省略的儲存格不代表完整授權資訊。去敏結果供檢視使用，**不能當成可重播的 grant SQL**。
+
+此保護只涵蓋 `SHOW GRANTS`，不掃描 `SHOW CREATE USER`、直接讀取 `mysql.user` 等系統表、任意 SQL 結果，或 SQL 輸入、既有檔案與歷史紀錄中原有的秘密。既有命令與政策限制仍適用；saved query 仍拒絕 `SHOW GRANTS`。
+
+### RDS CALL 拒絕與人工證據交接
+
+Query-only 維持拒絕 `CALL`，包含 `CALL mysql.rds_show_configuration`，不建立 RDS 程序允許清單。實際 CLI 結果是本機政策拒絕；DBA 對 RDS 配置的觀察結論則維持 **indeterminate（證據不足）**。這是證據結論，不是新增 CLI 或 receipt 狀態或 schema。此拒絕不代表程序不存在、原生帳號權限不足、binlog 保留為零或備份不健康。缺少證據既不能判為成功，也不能判為配置不健康。
+
+既有 [Q024/Q025 觀察](../../research/dba-system-view-probes.md) 記錄本機 MySQL/MariaDB 在預設 limit 與 `--no-limit` 下的 query-only 拒絕，未驗證 RDS 程序可用性、原生權限、唯讀交易相容性或結果處理能力。共享權限邊界維持不變。即使既有拒絕訊息提到 admin，也不應將升權視為補救。操作人員只能在既有授權內取得證據；dbcli 不會自動改用 admin 重試、呼叫原生客戶端或 AWS API，也不修改 RDS 資源。
+
+請區分所需觀察：AWS 文件中的 [`binlog retention hours`](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-stored-proc-configuring.html) 是以小時計算的 binary log 保留設定，由 `mysql.rds_show_configuration` 觀察；[`BackupRetentionPeriod`](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DBInstance.html) 則是自動 DB 快照保留天數。快照欄位不能證明 binlog 設定；沒有來源證明對所需觀察等價時，不得以平台 API 欄位替代。
+
+人工交接時可複製以下模板，明確保留未取得的證據：
+
+- **目標部署與引擎版本：** RDS 部署識別／類型、引擎與精確版本（未知則註明）。
+- **所需觀察：** 要確認的具體配置，例如 `binlog retention hours`。
+- **拒絕原因：** 嘗試的語句、query-only 政策拒絕與去敏後 CLI 錯誤；這不是原生資料庫拒絕。
+- **證據時間與來源：** 各項觀察的時間／時區、目標及來源；區分本機拒絕證據與操作人員取得的 RDS 證據。
+- **去敏後結果：** 僅列出操作人員在既有授權內取得的必要非秘密配置與單位；未取得時明確註記。
+- **仍缺項目：** 未解決的觀察，以及誰能在既有授權內取得；證據充分前，DBA 結論維持 indeterminate。
+
 ---
 
 <!-- doc-key: agent-recovery-workflow -->
@@ -1679,6 +1710,22 @@ Pack 解析順序為 **local > shared > builtin**:`assets/tasks/`(builtin)、`.d
 > 此處只列出最常見的三個情境與通用流程，完整失敗代碼對照、Multi-turn `--next`、Risk gate 詳細語意、Audit ↔ Envelope 反查請見 [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs)。
 
 當 `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` / `diff --against-orm` 帶 `--recovery` 失敗時，stdout 會輸出 `RecoveryEnvelope` JSON，並把同一份內容**原子寫入** `.dbcli/last-recovery.json`。Agent 隨後用 `dbcli recover` 檢視，或 `dbcli recover --apply` 自動執行（預設只跑 `readonly` + `dry-run` 步驟）。
+
+### 資料庫原生授權不足
+
+| 失敗類型 | Adapter 代碼 | Recovery envelope |
+| --- | --- | --- |
+| 資料庫原生授權不足 | `DB_PERMISSION_DENIED` | `error.code: "PERMISSION_DENIED"`、`error.details.connectionCode: "DB_PERMISSION_DENIED"` |
+| 登入驗證失敗 | `AUTH_FAILED` | `error.code: "CONN_AUTH_FAILED"` |
+| dbcli 本機政策拒絕 | 不適用（本機 `PermissionError`） | `error.code: "PERMISSION_DENIED"`，不帶原生 discriminator |
+
+原生分類涵蓋 MySQL/MariaDB 的 `ER_DBACCESS_DENIED_ERROR`（1044）、`ER_TABLEACCESS_DENIED_ERROR`（1142）、`ER_COLUMNACCESS_DENIED_ERROR`（1143）與 `ER_SPECIFIC_ACCESS_DENIED_ERROR`（1227），包含只有 errno 的錯誤；PostgreSQL 則使用 `42501`（`insufficient_privilege`）。只有 SQLSTATE `42000` 或訊息含有「access denied」不足以套用此分類。MySQL/MariaDB 1045、1698 與 PostgreSQL `28000`、`28P01` 等登入失敗仍保留驗證失敗分類。
+
+原生授權不足可能發生於建立連線或執行操作時。這個代碼不代表登入已成功；連線成功也不代表有權查詢物件。它不是傳輸故障，不會觸發自動重連或連線修復分支。
+
+請確認目標資料庫／物件，以及該操作所需權限；必要時交由 DBA 處理，再重新執行原命令。錯誤只提供靜態人工指引，不建議更換憑證、執行 `init` 或放寬 dbcli 政策。本機 `canWrite`／`canDestruct` 旗標無法證明原生授權已修復。
+
+Recovery 維持 schema v1：`recovery: []`，並省略 `verify`（不是 JSON `null`）。此路徑沒有可執行的修復或診斷命令，因此 `recover --apply` 不會進行修復。既有 v1 envelope 可繼續讀取，不需遷移；既有本機 `PERMISSION_DENIED` 復原行為不變。呼叫端應同時判讀上表的兩層錯誤碼，不能把所有 `PERMISSION_DENIED` envelope 都當成本機政策拒絕。
 
 ### 情境 1：連線失敗（`CONN_REFUSED`）
 

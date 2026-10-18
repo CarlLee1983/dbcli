@@ -22,6 +22,7 @@ export const IS_TRANSPORT_FAILURE: Record<ConnectionErrorCode, boolean> = {
   ECONNREFUSED: true,
   ETIMEDOUT: true,
   AUTH_FAILED: true,
+  DB_PERMISSION_DENIED: false,
   ENOTFOUND: true,
   EHOSTUNREACH: true,
   CONNECTION_LOST: true,

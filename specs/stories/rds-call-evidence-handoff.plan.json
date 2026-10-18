@@ -1,0 +1,14 @@
+{
+  "goal": {
+    "id": "rds-call-evidence-handoff",
+    "title": "G4 document refused RDS CALL evidence and human handoff",
+    "require_approval": true
+  },
+  "nodes": [
+    {
+      "id": "rds-call-evidence-handoff",
+      "story": "specs/stories/rds-call-evidence-handoff.md",
+      "depends_on": []
+    }
+  ]
+}

@@ -196,7 +196,10 @@ export const assertCommand = new Command()
             verificationArtifactRef: verificationArtifactPath
               ? basename(verificationArtifactPath)
               : null,
-            verdict,
+            verdict: {
+              pass: verdict.pass,
+              checks: verdict.checks.map(({ pass }) => ({ pass })),
+            },
           })
           evidenceReceiptPath = await writeEvidenceReceipt(
             process.cwd(),

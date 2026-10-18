@@ -1,0 +1,14 @@
+{
+  "goal": {
+    "id": "retro-receipt-and-agent-workflow",
+    "title": "Repair assertion receipts and streamline agent workflow",
+    "require_approval": true
+  },
+  "nodes": [
+    {
+      "id": "retro-receipt-and-agent-workflow",
+      "story": "specs/stories/retro-receipt-and-agent-workflow.md",
+      "depends_on": []
+    }
+  ]
+}

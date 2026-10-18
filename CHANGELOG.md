@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **assert --expect 的 evidence receipt**：只投影檢查 pass bits，沿用既有 schema，
+  排除原始 SQL 與結果值；成功與失敗斷言都可產生 receipt。`--no-fail` 只影響斷言退出碼，
+  失敗 receipt 不會變成功，receipt 寫入失敗仍 exit 1。
+
 ### Added
 
 - **單一物件 schema 支援完整名稱**：PostgreSQL 可用 `schema.table`，MySQL／MariaDB
@@ -15,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **文件釐清 RDS CALL 證據交接**：query-only 仍拒絕 CALL，未新增 RDS 程序支援。
+  區分 CLI 政策拒絕與 DBA 的 indeterminate（證據不足）結論，提供既有授權內的人工
+  交接模板，並區分 binlog 保留小時與自動快照保留天數；不以升權或 AWS 自動化作為補救。
+- **SHOW GRANTS 認證內容去敏**：MySQL／MariaDB 的正常與 native-read-only 執行，
+  一律在 adapter 回傳前把可安全辨識的認證參數換成 `[REDACTED]`，保留帳號、角色、
+  授權範圍與權限；未知、不完整或歧義格式及異常型態則整格改為
+  `[OMITTED: grant text could not be safely redacted]`，保留列數、欄名與結果結構。
+  query、互動 shell 與 SQL 查詢 export 的適用輸出格式均受保護，不依賴 blacklist，
+  所有權限與 agent 模式均無 bypass。省略格不代表完整授權資訊，去敏結果不可作為可重播 SQL。
+  僅涵蓋 SHOW GRANTS；SHOW CREATE USER、直接系統表查詢與任意 SQL 不在掃描範圍，
+  saved query 仍拒絕 SHOW GRANTS。
+- **原生授權錯誤代碼**：MySQL／MariaDB 1044、1142、1143、1227 與 PostgreSQL
+  `42501` 現在分類為 `DB_PERMISSION_DENIED`，與登入驗證失敗 `AUTH_FAILED` 及本機政策
+  `PERMISSION_DENIED` 區分。Recovery 維持 schema v1 與 `error.code: "PERMISSION_DENIED"`，
+  以 `error.details.connectionCode: "DB_PERMISSION_DENIED"` 識別原生拒絕；只提供人工指引，
+  `recovery: []` 並省略 `verify`，`recover --apply` 不執行修復。既有 envelope 無需遷移，
+  呼叫端須依新 discriminator 區分拒絕來源。
 - **Schema 輸出與 metadata 保護**：完整名稱 JSON 保留局部 `name` 並另帶 `schema`，
   文字輸出可區分兩個 component；`tableType` 正確呈現 table／view（materialized view 為 view）。
   完整名稱不執行關係資料 `COUNT(*)`，未知筆數與大小分類為 null，不再以假零值或 small 表示。

@@ -796,6 +796,8 @@ Persist a **result evidence record** (v1 VerificationArtifact JSON) to `.dbcli/v
 | `--verification-subject <kind:name>` | yes (when flag is set) | Subject being verified. Allowed kinds: `recovery`, `task-pack`, `assertion`, `migration`, `backfill`, `manual`. |
 | `--verification-summary <text>` | no | Human-readable summary line. Defaults: pass → "Assertion verified the expected state."; fail → "Assertion did not verify the expected state." |
 
+`assert --expect ... --evidence-receipt <path>` can write a receipt without `--write-verification-artifact`. Only boolean check pass bits are projected into the existing receipt schema; raw SQL and result values are excluded. A failed assertion still writes a `failed` receipt when requested. `--no-fail` changes only the assertion's exit behavior: it does not turn the receipt into a success, and a receipt write error still exits 1.
+
 `evidence compose` may reference that explicit workspace-contained receipt with `--receipt <path>`; provenance is not execution approval.
 
 `inspect`, `report`, `schema`, `plan`, `lint`, `explain`, and `impact assess` also accept `--evidence-receipt <workspace-relative-path>`. Their receipt records only the command capability, a fixed command subject, timestamp, safe context digests, and an optional correlation ID; it never copies command input, SQL, rows, paths, or raw errors. Successful and failed command outcomes both produce a receipt when requested. A receipt write failure is reported separately and does not change the command result or exit code.
@@ -1835,6 +1837,35 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 - **Redis**: `q @snippet` runs **read-only** commands only; `delete` covers `DEL` / `HDEL` / `LREM` / `SREM` / `ZREM` (needs `data-admin`); protect keys with a glob blacklist (`secrets:*`) plus optional value masking. There is no `--dry-run` on `query` — safety is the permission gate; preview a delete with `delete <key> --dry-run`.
 - **Elasticsearch**: query with a DSL body or Lucene string (`--collection <index>`); `export` a whole index via `match_all` scroll; `shell` opens a Kibana Dev Tools-style REPL.
 
+### SHOW GRANTS authentication redaction (MySQL/MariaDB)
+
+`SHOW GRANTS` results are always redacted in the shared MySQL/MariaDB adapter before reaching any consumer, in both normal and native-read-only execution. This covers `query`, interactive `shell`, and SQL-query `export`, including JSON, CSV, table, and HTML output where supported. Protection applies at every permission level and in agent mode, works with an empty blacklist, and has no bypass option.
+
+Conditional executable comments are interpreted using the server version already read when connecting; no extra version query is issued. If that version is unavailable and the actual statement cannot be determined safely, dbcli returns a fixed safe error without returning raw rows. Statements known not to be `SHOW GRANTS` keep their existing behavior.
+
+For safely recognized grant text, authentication payloads become `[REDACTED]`; account names, roles, privilege scopes, and privileges remain readable. Recognized forms include `IDENTIFIED BY`, `IDENTIFIED BY PASSWORD`, and `IDENTIFIED VIA` / `WITH` with `USING` / `AS`, `PASSWORD(...)`, or multiple methods joined by `OR`. All authentication parameters are masked, including empty strings and service names. Safely recognized privilege-only and role rows retain their original text.
+
+Unknown, incomplete, ambiguous, or unexpected cell values become `[OMITTED: grant text could not be safely redacted]`. Row counts, column names, and result structure are preserved; other safely recognized cells remain visible. An omitted cell does not provide complete grant information. Redacted results are for inspection and are **not replayable grant SQL**.
+
+This protection covers only `SHOW GRANTS`. It does not scan `SHOW CREATE USER`, direct catalog queries such as `mysql.user`, arbitrary SQL results, or secrets already present in SQL input, existing files, or history. Existing command and policy restrictions still apply; saved queries continue to reject `SHOW GRANTS`.
+
+### RDS CALL refusal and operator evidence handoff
+
+Query-only continues to refuse `CALL`, including `CALL mysql.rds_show_configuration`; there is no RDS procedure allowlist. The actual CLI outcome is a local policy refusal. The DBA observation about the RDS configuration remains **indeterminate (insufficient evidence)**, which is an evidence conclusion, not a new CLI or receipt status or schema. This refusal does not prove that the procedure is absent, that the native account lacks permission, that binlog retention is zero, or that backups are unhealthy. Missing evidence establishes neither success nor an unhealthy configuration.
+
+The existing [Q024/Q025 observations](../../research/dba-system-view-probes.md) record local MySQL/MariaDB query-only refusals with both the default limit and `--no-limit`. They do not validate RDS procedure availability, native privileges, read-only transaction compatibility, or result handling. The shared permission boundary remains unchanged. Even if an existing refusal mentions admin, do not treat elevation as the remedy. An operator may obtain evidence only under existing authorization; dbcli does not automatically retry with admin, invoke a native client or AWS API, or modify RDS resources.
+
+Keep the observations distinct: AWS documents [`binlog retention hours`](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-stored-proc-configuring.html) as binary log retention in hours, observed through `mysql.rds_show_configuration`. [`BackupRetentionPeriod`](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DBInstance.html) is the automatic DB snapshot retention period in days. The snapshot field is not evidence of the binlog setting; do not substitute a platform API field without a source establishing equivalence for the required observation.
+
+Copy this template into the human handoff and keep unavailable evidence explicit:
+
+- **Target deployment and engine version:** RDS deployment identifier/type, engine, and exact version (or unknown).
+- **Required observation:** the specific configuration to confirm, such as `binlog retention hours`.
+- **Refusal:** the attempted statement, query-only policy refusal, and sanitized CLI error; this is not a native database denial.
+- **Evidence time and source:** timestamp/timezone, target, and source of each observation; distinguish local refusal evidence from operator-obtained RDS evidence.
+- **Sanitized result:** only the required non-secret configuration and units, obtained by an operator under existing authorization; mark unavailable results as not obtained.
+- **Missing evidence:** unresolved observations and who can obtain them within existing authorization; keep the DBA conclusion indeterminate until sufficient evidence is available.
+
 ---
 
 <!-- doc-key: agent-recovery-workflow -->
@@ -1843,6 +1874,22 @@ Packs resolve **local > shared > builtin**: `assets/tasks/` (builtin), `.dbcli-s
 > This section covers the three most common scenarios and the shared flow only. The full error-code matrix, multi-turn `--next` semantics, risk-gate details, and the Audit ↔ Envelope pivot live in [`assets/reference.md` Recovery Cookbook](../../../assets/reference.md#recovery-cookbook-agent-walkthroughs).
 
 When any of `query` / `q` / `insert` / `update` / `delete` / `export` / `schema` / `inspect` / `lint` / `diff --against-orm` is invoked with `--recovery` and fails, a `RecoveryEnvelope` JSON is printed to stdout **and atomically written** to `.dbcli/last-recovery.json`. The agent then inspects it with `dbcli recover` or executes it automatically with `dbcli recover --apply` (which by default only runs `readonly` + `dry-run` steps).
+
+### Native database authorization failures
+
+| Failure | Adapter code | Recovery envelope |
+| --- | --- | --- |
+| Database-native authorization denial | `DB_PERMISSION_DENIED` | `error.code: "PERMISSION_DENIED"`, `error.details.connectionCode: "DB_PERMISSION_DENIED"` |
+| Login authentication failure | `AUTH_FAILED` | `error.code: "CONN_AUTH_FAILED"` |
+| dbcli local policy denial | N/A (local `PermissionError`) | `error.code: "PERMISSION_DENIED"` without the native discriminator |
+
+The native classification covers MySQL/MariaDB `ER_DBACCESS_DENIED_ERROR` (1044), `ER_TABLEACCESS_DENIED_ERROR` (1142), `ER_COLUMNACCESS_DENIED_ERROR` (1143), and `ER_SPECIFIC_ACCESS_DENIED_ERROR` (1227), including errno-only errors; PostgreSQL uses `42501` (`insufficient_privilege`). SQLSTATE `42000` or text containing “access denied” alone does not identify this classification. Login failures such as MySQL/MariaDB 1045 or 1698 and PostgreSQL `28000` or `28P01` keep their authentication classification.
+
+Native authorization can fail while establishing a connection or executing an operation. This code does not prove login succeeded, and a successful connection does not prove permission to query an object. It is not a transport failure and does not trigger automatic reconnection or connection-repair branches.
+
+Confirm the intended database/object and the privileges required for the operation; ask a DBA to resolve the denial when needed, then rerun the original command. The error provides static manual guidance: it does not suggest changing credentials, running `init`, or widening dbcli policy. Local `canWrite`/`canDestruct` flags cannot establish that native authorization is repaired.
+
+Recovery stays at schema v1: `recovery: []`, with `verify` omitted (not JSON `null`). There are no executable repair or diagnostic commands for this path, so `recover --apply` performs no remediation. Existing v1 envelopes remain readable without migration; existing local `PERMISSION_DENIED` recovery is unchanged. Consumers should check both error layers shown above rather than treating all `PERMISSION_DENIED` envelopes as local policy failures.
 
 ### Scenario 1 — Connection refused (`CONN_REFUSED`)
 

@@ -1,0 +1,14 @@
+{
+  "goal": {
+    "id": "native-database-authorization",
+    "title": "G2 distinguish native database authorization from authentication",
+    "require_approval": true
+  },
+  "nodes": [
+    {
+      "id": "native-database-authorization",
+      "story": "specs/stories/native-database-authorization.md",
+      "depends_on": []
+    }
+  ]
+}

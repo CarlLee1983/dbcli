@@ -71,6 +71,8 @@ export function verifyForCode(code: RecoveryCode, ctx: RecoveryContext): GuideSt
   // 仍然逾時的情況下回報 passed。這個錯誤沒有「不重跑原查詢就能驗證」的辦法，而原
   // 查詢只有 agent 手上有，所以誠實的答案是不給 verify。
   if (ctx.connectionCode === STATEMENT_TIMEOUT_CODE) return null
+  // A successful connection or local capability check cannot verify native access.
+  if (code === 'PERMISSION_DENIED' && ctx.connectionCode === 'DB_PERMISSION_DENIED') return null
   const command = VERIFY_COMMAND_BY_CODE[code]
   if (!command) return null
   return {

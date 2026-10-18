@@ -32,77 +32,10 @@ test("hello world", () => {
 
 ## Frontend
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
-
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+Use HTML imports with `Bun.serve()`, not Vite. When implementing or changing a
+frontend server, HTML entry point, or React/CSS imports, read
+[the Bun frontend reference](docs/development/bun-frontend.md) for the full examples
+and local API documentation pointer.
 
 ## dbcli Development Mode
 
@@ -127,18 +60,13 @@ defines how work is specified and reviewed; this repository's `make verify` is
 the canonical verification. ForgePilot is an operator tool — dbcli neither
 imports nor requires it, and `.forgepilot/` is local state, not source.
 
-Before starting engineering work:
-
-1. `forgepilot status`
-2. `forgepilot next`
-3. `forgepilot start <work-id>`
-4. Read that Work Item's Warrant Story at `specs/stories/<slug>.md`
-5. Implement only that Story
-6. Commit; the worktree must be clean
-7. `forgepilot verify <work-id>` — it runs `make verify` against the exact commit
-8. Do not claim DONE before Human Review; ForgePilot has no completion command
-
-ForgePilot's own documentation lives in its repository; do not restate it here.
+For engineering work, use the existing `$forgepilot` skill and
+`forgepilot --help` for work selection, Story lookup, and verification details.
+Implement only the approved Story. When commit is not explicitly authorized,
+verify the working tree with ForgePilot's `--snapshot` mode; a WIP commit is
+not required. Commit only with explicit user authorization. Verification must
+run the canonical `make verify` against the exact candidate; a passing candidate
+still awaits Human Review before completion is claimed.
 
 ## Warrant
 
@@ -198,54 +126,23 @@ Notes:
 <!-- graft:start -->
 ## Graft — repo context graph
 
-This repo is indexed in `graft/`: small linked markdown nodes that explain each
-system and carry exact file:line spans, kept in sync with the code through git.
+For any repository task, consult `graft/` before source searches. Use the CLI or
+its matching MCP tool from this single navigation table:
 
-For ANY task here — understanding how something works, finding where code lives,
-or scoping a change — get context from the graph before grepping or opening
-source files. Re-ask freely (it's cheap) and reuse literal identifiers you
-already have (symbol, error string, file name) as the query. New to this repo?
-Run `graft map` first — a token-budgeted orientation (dir clusters, hubs,
-hotspots), no LLM, no key.
+| Need | CLI | MCP tool |
+| --- | --- | --- |
+| Unfamiliar area / orientation | `graft map` | `graft_repo_map` |
+| Locate or understand code before broad search | `graft ask "<question or literal identifier>" --source` | `graft_find_code` |
+| File API before reading a large file | `graft skeleton <file>` | `graft_file_api` |
+| Callers before changing public symbols/contracts | `graft callers <symbol>` | `graft_trace_calls` |
+| Exhaustive occurrences / callers of a pattern | `graft grep "<pattern>"` | `graft_find_all` |
+| Freshness after code changes | `graft check` | `graft_check_freshness` |
 
-- Run `graft ask "<your question>" --source` → ranked nodes with the relevant
-  code spans inlined (each hit's ≤8-line crux by default; `--full` for whole
-  definitions when the crux isn't enough). Match the tool to the task shape:
-  for understanding or editing, the top node IS the answer — cite its
-  `covers:` file:line spans and edit straight from `--source`. For
-  exhaustive tasks ("every occurrence / every caller of this pattern"), ranked
-  results are top-N, not complete — run `graft grep "<literal>"` instead
-  (exhaustive over indexed files, grouped by enclosing symbol), falling back
-  to raw `grep -rn` only for unindexed files.
-- `graft skeleton <file>` → every definition's signature + span, ~10× cheaper
-  than reading the file; use it to skim an API surface.
-- `graft callers <symbol>` gives precomputed, exact edges — who calls this.
-  Add `--direction out` for what it calls, or `--depth N` to walk
-  transitively for the full blast radius. For structural questions, skip
-  ranking and use this directly.
-- Or browse: `graft/INDEX.md` lists every node; follow the links.
-- Monorepos and folders of multiple repos rank fairly across sub-projects —
-  hits carry `[scope/]` labels naming which one they're from. Narrow with
-  `graft ask "<task>" --in <scope>/` once you know where you're working.
-
-If a returned span is truncated ("+N more lines"), open the file at that exact
-range before finalizing. Only open source files when a node genuinely lacks a
-needed detail, and then at the exact file:line the node points to — never
-re-read whole files.
-
-After big code changes, refresh the graph with `graft build` (deterministic,
-no API key, $0).
+Ranked lookup is not exhaustive. Reuse known identifiers; narrow multi-project
+queries with `--in <scope>/`. Trace outgoing or transitive calls with
+`--direction out` or `--depth N`. Follow `covers:` file:line spans from the top
+relevant node; open exact ranges when truncated or missing needed detail rather
+than rereading whole files. Browse `graft/INDEX.md` when useful. Fall back to native
+file search for unindexed or incomplete results. After big code changes, refresh
+with `graft build` (deterministic, no API key).
 <!-- graft:end -->
-
-## Graft usage
-
-For repository orientation, feature discovery, cross-file changes,
-dependency analysis, and refactoring:
-
-- Use `graft_repo_map` before exploring an unfamiliar area.
-- Use `graft_find_code` before broad manual file searches.
-- Use `graft_file_api` before reading an entire large file.
-- Use `graft_trace_calls` before changing public symbols or contracts.
-- Use `graft_find_all` when exhaustive matching is required.
-- Run `graft_check_freshness` after code changes.
-- Fall back to native file search when Graft results are incomplete.

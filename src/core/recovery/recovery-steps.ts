@@ -213,6 +213,9 @@ function draftsForCode(code: RecoveryCode, ctx: RecoveryContext): StepDraft[] {
       ]
 
     case 'PERMISSION_DENIED': {
+      // Native privileges cannot be repaired by changing local dbcli policy.
+      // Manual guidance lives in the error message; every GuideStep is executable.
+      if (ctx.connectionCode === 'DB_PERMISSION_DENIED') return []
       const usedTablePlaceholder = !ctx.table
       const table = ctx.table ? shellQuote(ctx.table) : '<table>'
       const out: StepDraft[] = []

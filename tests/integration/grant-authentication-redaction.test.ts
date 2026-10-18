@@ -1,4 +1,5 @@
 /** G3 AC-05/06/07: real CLI routes and actual adapter with a synthetic driver. */
+import { SKIP_BY_ENV } from './helpers'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -324,87 +325,92 @@ test('nonexecuting plan receipt excludes grant result data (AC-07)', async () =>
   await artifacts(work, [SECRET], true)
 }, 30000)
 
-beforeAll(async () => {
-  for (const engine of ['mysql', 'mariadb'] as const) {
-    await fixtureSql(
-      engine,
-      `CREATE DATABASE \`${DATABASE}\`; CREATE USER '${USER}'@'%' IDENTIFIED BY '${PASSWORD}'; GRANT SELECT ON \`${DATABASE}\`.* TO '${USER}'@'%';`
-    )
-    initialized.push(engine)
-  }
-}, 30000)
-
 afterAll(async () => {
-  for (const engine of initialized) {
-    await fixtureSql(engine as Engine, `DROP DATABASE \`${DATABASE}\`; DROP USER '${USER}'@'%';`)
-  }
   await Promise.all(directories.map((dir) => rm(dir, { recursive: true, force: true })))
-}, 30000)
-
-describe('isolated Compose SHOW GRANTS with real CLI (AC-06)', () => {
-  for (const engine of ['mysql', 'mariadb'] as const) {
-    test(`${engine}: real grant output retains privileges without authentication payloads`, async () => {
-      const work = await project(engine, { blacklist: true })
-      await prerequisites(work, true)
-      const { system: _system, ...options } = connection(engine)
-      const client = await createConnection(options)
-      let secrets: string[] = [PASSWORD]
-      try {
-        const [rows] = await client.query('SHOW GRANTS')
-        const cells = (rows as Array<Record<string, string>>).flatMap((row) => Object.values(row))
-        const payloads = cells.flatMap((cell) =>
-          Array.from(cell.matchAll(/IDENTIFIED BY PASSWORD '([^']+)'/g), (match) => match[1]!)
-        )
-        // These observations prove local engine behavior; they do not claim other versions' grammar.
-        expect(payloads.length > 0).toBe(engine === 'mariadb')
-        expect(cells.some((cell) => cell.includes('GRANT SELECT'))).toBe(true)
-        secrets = [...secrets, ...payloads]
-      } finally {
-        await client.end()
-      }
-      await formats(work, secrets, [
-        'GRANT SELECT',
-        USER,
-        ...(engine === 'mariadb' ? ['[REDACTED]'] : []),
-      ])
-    }, 60000)
-  }
 })
 
-test('real MariaDB configured as mysql protects adjacent executable-comment grants', async () => {
-  const work = await project('mariadb', {
-    configuredSystem: 'mysql',
-    blacklist: true,
-    permission: 'admin',
-  })
-  await prerequisites(work, true)
-  const { system: _system, ...options } = connection('mariadb')
-  const client = await createConnection(options)
-  let payloads: string[]
-  try {
-    const [rows] = await client.query('SHOW GRANTS')
-    payloads = (rows as Array<Record<string, string>>).flatMap((row) =>
-      Object.values(row).flatMap((cell) =>
-        Array.from(cell.matchAll(/IDENTIFIED BY PASSWORD '([^']+)'/g), (match) => match[1]!)
+describe.skipIf(SKIP_BY_ENV)('isolated Compose fixtures', () => {
+  beforeAll(async () => {
+    for (const engine of ['mysql', 'mariadb'] as const) {
+      await fixtureSql(
+        engine,
+        `CREATE DATABASE \`${DATABASE}\`; CREATE USER '${USER}'@'%' IDENTIFIED BY '${PASSWORD}'; GRANT SELECT ON \`${DATABASE}\`.* TO '${USER}'@'%';`
       )
-    )
-    expect(payloads.length > 0).toBe(true)
-  } finally {
-    await client.end()
-  }
-  // Existing query-only policy rejects the configured-mysql MariaDB-specific form as unknown.
-  // Admin already supports native execution; this test does not loosen that policy.
-  for (const sql of ['/*M!100000SHOW GRANTS */', '/*!100000SHOW GRANTS */']) {
-    const result = await run(work, ['query', sql, '--format', 'json'])
-    expect(result.code).toBe(0)
-    safe(
-      result.stdout + result.stderr,
-      [PASSWORD, ...payloads],
-      ['[REDACTED]', 'GRANT SELECT', USER]
-    )
-  }
-  await artifacts(work, [PASSWORD, ...payloads])
-}, 30000)
+      initialized.push(engine)
+    }
+  }, 30000)
+
+  afterAll(async () => {
+    for (const engine of initialized) {
+      await fixtureSql(engine as Engine, `DROP DATABASE \`${DATABASE}\`; DROP USER '${USER}'@'%';`)
+    }
+  }, 30000)
+
+  describe('isolated Compose SHOW GRANTS with real CLI (AC-06)', () => {
+    for (const engine of ['mysql', 'mariadb'] as const) {
+      test(`${engine}: real grant output retains privileges without authentication payloads`, async () => {
+        const work = await project(engine, { blacklist: true })
+        await prerequisites(work, true)
+        const { system: _system, ...options } = connection(engine)
+        const client = await createConnection(options)
+        let secrets: string[] = [PASSWORD]
+        try {
+          const [rows] = await client.query('SHOW GRANTS')
+          const cells = (rows as Array<Record<string, string>>).flatMap((row) => Object.values(row))
+          const payloads = cells.flatMap((cell) =>
+            Array.from(cell.matchAll(/IDENTIFIED BY PASSWORD '([^']+)'/g), (match) => match[1]!)
+          )
+          // These observations prove local engine behavior; they do not claim other versions' grammar.
+          expect(payloads.length > 0).toBe(engine === 'mariadb')
+          expect(cells.some((cell) => cell.includes('GRANT SELECT'))).toBe(true)
+          secrets = [...secrets, ...payloads]
+        } finally {
+          await client.end()
+        }
+        await formats(work, secrets, [
+          'GRANT SELECT',
+          USER,
+          ...(engine === 'mariadb' ? ['[REDACTED]'] : []),
+        ])
+      }, 60000)
+    }
+  })
+
+  test('real MariaDB configured as mysql protects adjacent executable-comment grants', async () => {
+    const work = await project('mariadb', {
+      configuredSystem: 'mysql',
+      blacklist: true,
+      permission: 'admin',
+    })
+    await prerequisites(work, true)
+    const { system: _system, ...options } = connection('mariadb')
+    const client = await createConnection(options)
+    let payloads: string[]
+    try {
+      const [rows] = await client.query('SHOW GRANTS')
+      payloads = (rows as Array<Record<string, string>>).flatMap((row) =>
+        Object.values(row).flatMap((cell) =>
+          Array.from(cell.matchAll(/IDENTIFIED BY PASSWORD '([^']+)'/g), (match) => match[1]!)
+        )
+      )
+      expect(payloads.length > 0).toBe(true)
+    } finally {
+      await client.end()
+    }
+    // Existing query-only policy rejects the configured-mysql MariaDB-specific form as unknown.
+    // Admin already supports native execution; this test does not loosen that policy.
+    for (const sql of ['/*M!100000SHOW GRANTS */', '/*!100000SHOW GRANTS */']) {
+      const result = await run(work, ['query', sql, '--format', 'json'])
+      expect(result.code).toBe(0)
+      safe(
+        result.stdout + result.stderr,
+        [PASSWORD, ...payloads],
+        ['[REDACTED]', 'GRANT SELECT', USER]
+      )
+    }
+    await artifacts(work, [PASSWORD, ...payloads])
+  }, 30000)
+})
 
 test('saved SHOW GRANTS remains rejected rather than gaining a new route (AC-05)', async () => {
   const { parseSavedQuery } = await import('@/core/saved-queries/parser')

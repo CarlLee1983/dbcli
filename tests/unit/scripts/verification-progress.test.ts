@@ -23,6 +23,20 @@ function observe(path: string, ...args: string[]) {
   })
 }
 
+function observeWithInterruptEvent(path: string) {
+  return Bun.spawn(
+    [
+      process.execPath,
+      '--preload',
+      './tests/fixtures/verification-progress-interrupt.ts',
+      'scripts/verification-progress.ts',
+      path,
+      '--follow',
+    ],
+    { stdout: 'pipe', stderr: 'pipe', timeout: 15_000, killSignal: 'SIGKILL', ipc() {} }
+  )
+}
+
 const attestation = (result: 'PASS' | 'FAIL') =>
   `verification attestation: ${result} at ${'a'.repeat(40)} (sha256:${'b'.repeat(64)})\n`
 
@@ -73,46 +87,70 @@ test('bounds one-shot output and ignores incomplete final attestations and overs
   expect(stdout).not.toContain('PASS')
 })
 
-test('follow completes partial lines once, suppresses duplicate markers, and remains interruptible at EOF', async () => {
-  const path = await fixture('==> [1] bun run test\n<== [1] bun run test 7')
-  const child = observe(path, '--follow')
-  let output = ''
-  const reading = (async () => {
-    const reader = child.stdout.getReader()
-    const decoder = new TextDecoder()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      output += decoder.decode(value, { stream: true })
+// Windows subprocess.kill() terminates directly; it cannot deliver a catchable
+// SIGINT. Exercise the handler through IPC there, and both paths on POSIX.
+const interruptModes = process.platform === 'win32' ? ['event'] : ['event', 'signal']
+test.each(interruptModes)(
+  'follow completes partial lines once, suppresses duplicate markers, and handles interruption at EOF (%s)',
+  async (mode) => {
+    const path = await fixture('==> [1] bun run test\n<== [1] bun run test 7')
+    const child = mode === 'event' ? observeWithInterruptEvent(path) : observe(path, '--follow')
+    let output = ''
+    const reading = (async () => {
+      const reader = child.stdout.getReader()
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        output += decoder.decode(value, { stream: true })
+      }
+    })()
+    const until = async (text: string, count = 1) => {
+      const deadline = Date.now() + 3000
+      while (output.split(text).length - 1 < count && Date.now() < deadline) await Bun.sleep(10)
+      expect(output.split(text).length - 1).toBeGreaterThanOrEqual(count)
     }
-  })()
-  const until = async (text: string, count = 1) => {
-    const deadline = Date.now() + 3000
-    while (output.split(text).length - 1 < count && Date.now() < deadline) await Bun.sleep(10)
-    expect(output.split(text).length - 1).toBeGreaterThanOrEqual(count)
+    try {
+      await until('attestation UNKNOWN')
+      await Bun.write(
+        path,
+        (await Bun.file(path).text()) + 's exit 0\n<== [1] bun run test 7s exit 0\n'
+      )
+      await until('END [1] 7s exit 0')
+      await Bun.write(path, (await Bun.file(path).text()) + attestation('PASS'))
+      await until('ATTESTATION PASS')
+      expect(child.exitCode).toBeNull()
+      await Bun.write(path, (await Bun.file(path).text()) + '==> [1] bun run test\n')
+      await until('START [1]\n', 2)
+      if (mode === 'event') child.send('SIGINT')
+      else child.kill('SIGINT')
+      expect(await child.exited).toBe(130)
+      await reading
+      expect(output.match(/END \[1\]/g)).toHaveLength(1)
+      expect(output.match(/ATTESTATION PASS/g)).toHaveLength(1)
+      expect(output.trimEnd()).toEndWith('attestation UNKNOWN')
+    } finally {
+      child.kill()
+      await child.exited
+      await reading
+    }
   }
+)
+
+test('a follower waiting at EOF can be terminated externally', async () => {
+  const path = await fixture('==> [1] bun run test\n')
+  const child = observe(path, '--follow')
+  const reader = child.stdout.getReader()
   try {
-    await until('attestation UNKNOWN')
-    await Bun.write(
-      path,
-      (await Bun.file(path).text()) + 's exit 0\n<== [1] bun run test 7s exit 0\n'
-    )
-    await until('END [1] 7s exit 0')
-    await Bun.write(path, (await Bun.file(path).text()) + attestation('PASS'))
-    await until('ATTESTATION PASS')
+    const first = await reader.read()
+    expect(first.done).toBe(false)
     expect(child.exitCode).toBeNull()
-    await Bun.write(path, (await Bun.file(path).text()) + '==> [1] bun run test\n')
-    await until('START [1]\n', 2)
     child.kill('SIGINT')
     expect(await child.exited).toBe(130)
-    await reading
-    expect(output.match(/END \[1\]/g)).toHaveLength(1)
-    expect(output.match(/ATTESTATION PASS/g)).toHaveLength(1)
-    expect(output.trimEnd()).toEndWith('attestation UNKNOWN')
   } finally {
     child.kill()
     await child.exited
-    await reading
+    await reader.cancel()
   }
 })
 

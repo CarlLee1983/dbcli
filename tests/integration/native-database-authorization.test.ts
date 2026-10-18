@@ -1,4 +1,5 @@
 /** AC-06: real native authorization denials, using only disposable Compose fixtures. */
+import { SKIP_BY_ENV } from './helpers'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -186,120 +187,124 @@ async function expectRecoveryDenial(work: Project, result: Result): Promise<void
   expect(await Bun.file(configPath).text()).toBe(before)
 }
 
-beforeAll(async () => {
-  for (const engine of engines) {
-    if (engine === 'postgresql') {
-      await fixtureSql(
-        engine,
-        `CREATE ROLE "${READER}" LOGIN PASSWORD '${PASSWORD}';
+describe.skipIf(SKIP_BY_ENV)('isolated Compose fixtures', () => {
+  beforeAll(async () => {
+    for (const engine of engines) {
+      if (engine === 'postgresql') {
+        await fixtureSql(
+          engine,
+          `CREATE ROLE "${READER}" LOGIN PASSWORD '${PASSWORD}';
          CREATE SCHEMA "${DATABASE}";
          CREATE TABLE "${DATABASE}".${ALLOWED} (id integer PRIMARY KEY);
          CREATE TABLE "${DATABASE}".${DENIED} (id integer PRIMARY KEY);
          GRANT USAGE ON SCHEMA "${DATABASE}" TO "${READER}";
          GRANT SELECT ON "${DATABASE}".${ALLOWED} TO "${READER}";
          GRANT SELECT, REFERENCES ON "${DATABASE}".${DENIED} TO "${READER}";`
-      )
-    } else {
-      await fixtureSql(
-        engine,
-        `CREATE DATABASE \`${DATABASE}\`;
+        )
+      } else {
+        await fixtureSql(
+          engine,
+          `CREATE DATABASE \`${DATABASE}\`;
          CREATE DATABASE \`${OTHER_DATABASE}\`;
          CREATE USER '${READER}'@'%' IDENTIFIED BY '${PASSWORD}';
          CREATE TABLE \`${DATABASE}\`.${ALLOWED} (id integer PRIMARY KEY);
          CREATE TABLE \`${DATABASE}\`.${DENIED} (id integer PRIMARY KEY);
          GRANT SELECT ON \`${DATABASE}\`.${ALLOWED} TO '${READER}'@'%';
          GRANT REFERENCES ON \`${DATABASE}\`.${DENIED} TO '${READER}'@'%';`
+        )
+      }
+      initialized.push(engine)
+    }
+  }, 30000)
+
+  afterAll(async () => {
+    for (const engine of initialized) {
+      await fixtureSql(
+        engine,
+        engine === 'postgresql'
+          ? `DROP SCHEMA "${DATABASE}" CASCADE; DROP ROLE "${READER}";`
+          : `DROP DATABASE \`${DATABASE}\`; DROP DATABASE \`${OTHER_DATABASE}\`; DROP USER '${READER}'@'%';`
       )
     }
-    initialized.push(engine)
-  }
-}, 30000)
+    await Promise.all(workspaces.map((dir) => rm(dir, { recursive: true, force: true })))
+  }, 30000)
 
-afterAll(async () => {
-  for (const engine of initialized) {
-    await fixtureSql(
-      engine,
-      engine === 'postgresql'
-        ? `DROP SCHEMA "${DATABASE}" CASCADE; DROP ROLE "${READER}";`
-        : `DROP DATABASE \`${DATABASE}\`; DROP DATABASE \`${OTHER_DATABASE}\`; DROP USER '${READER}'@'%';`
-    )
-  }
-  await Promise.all(workspaces.map((dir) => rm(dir, { recursive: true, force: true })))
-}, 30000)
+  describe('native database authorization through restricted real accounts (AC-06)', () => {
+    for (const engine of ['mysql', 'mariadb'] as const) {
+      test(`${engine}: allowed database connects, another database returns native 1044 and CLI denial`, async () => {
+        const work = await project(engine)
+        await prerequisites(work, ALLOWED)
+        const allowed = await createConnection(connection(engine))
+        try {
+          await allowed.query(`SELECT id FROM ${ALLOWED}`)
+        } finally {
+          await allowed.end()
+        }
+        const native = await nativeDenial(() =>
+          createConnection(connection(engine, OTHER_DATABASE))
+        )
+        expect(native).toEqual({ code: 'ER_DBACCESS_DENIED_ERROR', errno: 1044 })
+        console.info(`${engine} native database denial ${JSON.stringify(native)}`)
+        const denied = await project(engine, OTHER_DATABASE)
+        expect((await run(denied, ['blacklist', 'list', '--format', 'json'])).code).toBe(0)
+        // No query follows failed schema discovery for the inaccessible database.
+        const result = await run(denied, ['schema', ALLOWED, '--format', 'json', '--recovery'])
+        console.info(`${engine} CLI database denial exit=${result.code}`)
+        await expectRecoveryDenial(denied, result)
+      }, 30000)
 
-describe('native database authorization through restricted real accounts (AC-06)', () => {
-  for (const engine of ['mysql', 'mariadb'] as const) {
-    test(`${engine}: allowed database connects, another database returns native 1044 and CLI denial`, async () => {
-      const work = await project(engine)
-      await prerequisites(work, ALLOWED)
-      const allowed = await createConnection(connection(engine))
+      test(`${engine}: successful connection still denies table reads with native 1142`, async () => {
+        const work = await project(engine)
+        // Qualified metadata discovery does not need SELECT to count table rows.
+        await prerequisites(work, `${DATABASE}.${DENIED}`)
+        const client = await createConnection(connection(engine))
+        try {
+          const native = await nativeDenial(() => client.query(`SELECT id FROM ${DENIED}`))
+          expect(native).toEqual({ code: 'ER_TABLEACCESS_DENIED_ERROR', errno: 1142 })
+          console.info(`${engine} native table denial ${JSON.stringify(native)}`)
+        } finally {
+          await client.end()
+        }
+        const result = await run(work, [
+          'query',
+          `SELECT id FROM ${DENIED}`,
+          '--format',
+          'json',
+          '--recovery',
+        ])
+        console.info(`${engine} CLI table denial exit=${result.code}`)
+        await expectRecoveryDenial(work, result)
+      }, 30000)
+    }
+
+    test('postgresql: successful connection still denies table reads with native 42501', async () => {
+      const work = await project('postgresql')
+      const table = `${DATABASE}.${DENIED}`
+      await prerequisites(work, table)
+      // PG schema inspection currently probes SELECT privileges. Discover while granted,
+      // then use fixture administration to establish the denied-read state under test.
+      await fixtureSql('postgresql', `REVOKE SELECT ON "${DATABASE}".${DENIED} FROM "${READER}";`)
+      const client = new Client(connection('postgresql'))
+      await client.connect()
       try {
-        await allowed.query(`SELECT id FROM ${ALLOWED}`)
-      } finally {
-        await allowed.end()
-      }
-      const native = await nativeDenial(() => createConnection(connection(engine, OTHER_DATABASE)))
-      expect(native).toEqual({ code: 'ER_DBACCESS_DENIED_ERROR', errno: 1044 })
-      console.info(`${engine} native database denial ${JSON.stringify(native)}`)
-      const denied = await project(engine, OTHER_DATABASE)
-      expect((await run(denied, ['blacklist', 'list', '--format', 'json'])).code).toBe(0)
-      // No query follows failed schema discovery for the inaccessible database.
-      const result = await run(denied, ['schema', ALLOWED, '--format', 'json', '--recovery'])
-      console.info(`${engine} CLI database denial exit=${result.code}`)
-      await expectRecoveryDenial(denied, result)
-    }, 30000)
-
-    test(`${engine}: successful connection still denies table reads with native 1142`, async () => {
-      const work = await project(engine)
-      // Qualified metadata discovery does not need SELECT to count table rows.
-      await prerequisites(work, `${DATABASE}.${DENIED}`)
-      const client = await createConnection(connection(engine))
-      try {
-        const native = await nativeDenial(() => client.query(`SELECT id FROM ${DENIED}`))
-        expect(native).toEqual({ code: 'ER_TABLEACCESS_DENIED_ERROR', errno: 1142 })
-        console.info(`${engine} native table denial ${JSON.stringify(native)}`)
+        await client.query(`SELECT id FROM "${DATABASE}".${ALLOWED}`)
+        const native = await nativeDenial(() =>
+          client.query(`SELECT id FROM "${DATABASE}".${DENIED}`)
+        )
+        expect(native).toEqual({ code: '42501' })
+        console.info(`postgresql native table denial ${JSON.stringify(native)}`)
       } finally {
         await client.end()
       }
       const result = await run(work, [
         'query',
-        `SELECT id FROM ${DENIED}`,
+        `SELECT id FROM "${DATABASE}".${DENIED}`,
         '--format',
         'json',
         '--recovery',
       ])
-      console.info(`${engine} CLI table denial exit=${result.code}`)
+      console.info(`postgresql CLI table denial exit=${result.code}`)
       await expectRecoveryDenial(work, result)
     }, 30000)
-  }
-
-  test('postgresql: successful connection still denies table reads with native 42501', async () => {
-    const work = await project('postgresql')
-    const table = `${DATABASE}.${DENIED}`
-    await prerequisites(work, table)
-    // PG schema inspection currently probes SELECT privileges. Discover while granted,
-    // then use fixture administration to establish the denied-read state under test.
-    await fixtureSql('postgresql', `REVOKE SELECT ON "${DATABASE}".${DENIED} FROM "${READER}";`)
-    const client = new Client(connection('postgresql'))
-    await client.connect()
-    try {
-      await client.query(`SELECT id FROM "${DATABASE}".${ALLOWED}`)
-      const native = await nativeDenial(() =>
-        client.query(`SELECT id FROM "${DATABASE}".${DENIED}`)
-      )
-      expect(native).toEqual({ code: '42501' })
-      console.info(`postgresql native table denial ${JSON.stringify(native)}`)
-    } finally {
-      await client.end()
-    }
-    const result = await run(work, [
-      'query',
-      `SELECT id FROM "${DATABASE}".${DENIED}`,
-      '--format',
-      'json',
-      '--recovery',
-    ])
-    console.info(`postgresql CLI table denial exit=${result.code}`)
-    await expectRecoveryDenial(work, result)
-  }, 30000)
+  })
 })

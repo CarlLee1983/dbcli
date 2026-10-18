@@ -3,7 +3,7 @@ import { SKIP_BY_ENV } from './helpers'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { createConnection } from 'mysql2/promise'
 import { parseEvidenceReceipt } from '@/core/evidence-receipt'
 
@@ -180,13 +180,15 @@ async function artifacts(work: Work, secrets: string[], requireReceipt = false):
   const files = await Array.fromAsync(
     new Bun.Glob('**/*').scan({ cwd: work.dir, dot: true, onlyFiles: true })
   )
-  expect(files.some((file) => file.includes('/audit/') && file.endsWith('.jsonl'))).toBe(true)
+  expect(files.some((file) => file.includes(`${sep}audit${sep}`) && file.endsWith('.jsonl'))).toBe(
+    true
+  )
   if (requireReceipt) expect(files.some((file) => file.endsWith('.receipt.json'))).toBe(true)
   // Fixture config intentionally holds its disposable login password. Only consumer
   // artifacts can contain a returned grant; config/anchors/transport scripts are inputs.
   const outputs = files.filter(
     (file) =>
-      file.includes('/audit/') ||
+      file.includes(`${sep}audit${sep}`) ||
       file.endsWith('.receipt.json') ||
       /^grants\.(json|csv|html)$/.test(file) ||
       file.startsWith('shell-')

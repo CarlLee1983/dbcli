@@ -35,7 +35,9 @@ test('CI skip mode runs offline grant coverage without Docker or live database f
   ])
   const output = stdout + stderr
   expect(output).not.toContain('Executable not found')
-  expect(code).toBe(0)
+  // Report failing test names, never raw child output containing grant payloads.
+  const failedTests = output.match(/^\(fail\) .+$/gm) ?? []
+  expect({ code, failedTests }).toEqual({ code: 0, failedTests: [] })
   expect(output).toContain('(pass) synthetic grants through actual adapter and output routes')
   expect(output).toContain('(pass) nonexecuting plan receipt excludes grant result data')
   expect(output).toContain('(pass) saved SHOW GRANTS remains rejected')

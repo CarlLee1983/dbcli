@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { parseEvidenceReceipt } from '@/core/evidence-receipt'
 import { spawn } from 'node:child_process'
 import { mkdtemp, writeFile, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -186,6 +187,62 @@ describe('dbcli assert --write-verification-artifact (integration)', () => {
     expect(raw.status).toBe('not_verified')
     expect(raw.evidence[0].exitCode).toBe(1)
   })
+
+  test('a passing assertion writes a parseable receipt without SQL or result values', async () => {
+    if (!DB_OK) return
+    const secret = 'RETRO_RECEIPT_RESULT_SENTINEL'
+    const sql = `SELECT '${secret}' AS payload`
+    const result = await run([
+      'assert',
+      sql,
+      '--expect',
+      'rows == 1',
+      '--evidence-receipt',
+      'passing.receipt.json',
+    ])
+    expect(result.code).toBe(0)
+    const verdict = JSON.parse(result.stdout)
+    expect(verdict.pass).toBe(true)
+    expect(verdict.evidenceReceiptError).toBeUndefined()
+    expect(verdict.evidenceReceiptPath).toBeDefined()
+    const text = await readFile(join(WORK, 'passing.receipt.json'), 'utf8')
+    const receipt = parseEvidenceReceipt(JSON.parse(text))
+    expect(receipt.operation).toBe('assert')
+    expect(receipt.outcome).toBe('succeeded')
+    expect(receipt.observation).toEqual({ kind: 'assert-verdict', checksPassed: 1, checksTotal: 1 })
+    expect(text.includes(sql) || text.includes(secret) || text.includes('payload')).toBe(false)
+  })
+
+  for (const noFail of [false, true]) {
+    test(`a failing assertion writes a failed receipt with no-fail=${noFail}`, async () => {
+      if (!DB_OK) return
+      const path = `failed-${noFail}.receipt.json`
+      const { stdout, code } = await run([
+        'assert',
+        'SELECT 314159 AS private_value',
+        '--expect',
+        'value == 0',
+        '--evidence-receipt',
+        path,
+        ...(noFail ? ['--no-fail'] : []),
+      ])
+      const verdict = JSON.parse(stdout)
+      expect(verdict.pass).toBe(false)
+      expect(verdict.evidenceReceiptError).toBeUndefined()
+      expect(code).toBe(noFail ? 0 : 1)
+      const text = await readFile(join(WORK, path), 'utf8')
+      const receipt = parseEvidenceReceipt(JSON.parse(text))
+      expect(receipt.outcome).toBe('failed')
+      expect(receipt.observation).toEqual({
+        kind: 'assert-verdict',
+        checksPassed: 0,
+        checksTotal: 1,
+      })
+      expect(
+        text.includes('314159') || text.includes('private_value') || text.includes('SELECT')
+      ).toBe(false)
+    })
+  }
 
   test('a failed receipt write is reported beside the verdict, never instead of it', async () => {
     if (!DB_OK) return

@@ -542,6 +542,7 @@ dbcli diff --against-orm prisma/schema.prisma --recovery --format json</code></p
                     <tr><td><code>--verification-summary &lt;text&gt;</code></td><td>否</td><td>可讀的摘要文字。預設值：通過 → "Assertion verified the expected state."；失敗 → "Assertion did not verify the expected state."。</td></tr>
                 </tbody>
             </table>
+            <p class="mb-4"><code>assert --expect ... --evidence-receipt &lt;path&gt;</code> 不必搭配 <code>--write-verification-artifact</code> 也能寫入 receipt。只有各項檢查的布林 pass bits 會投影至既有 receipt schema，不包含原始 SQL 或結果值。要求 receipt 時，失敗斷言仍會寫入 <code>failed</code> receipt。<code>--no-fail</code> 只影響斷言的退出行為，不會把 receipt 改成成功；receipt 寫入失敗仍 exit 1。</p>
             <p class="mb-4"><code>evidence compose</code> 可用 <code>--receipt &lt;path&gt;</code> 參照該明確且 workspace-contained 的 receipt；provenance 不是執行核准。</p>
             <p class="mt-4 mb-2"><strong>輸出合約：</strong></p>
             <ul>
@@ -1285,6 +1286,27 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
                 <li><strong>Redis</strong>：<code>q @snippet</code> 只能跑<strong>唯讀</strong>命令；<code>delete</code> 涵蓋 <code>DEL</code> / <code>HDEL</code> / <code>LREM</code> / <code>SREM</code> / <code>ZREM</code>（需 <code>data-admin</code>）；用 key glob blacklist（<code>secrets:*</code>）加上可選值遮罩保護 key。<code>query</code> 沒有 <code>--dry-run</code>——安全來自權限閘門；要預覽刪除請用 <code>delete &lt;key&gt; --dry-run</code>。</li>
                 <li><strong>Elasticsearch</strong>：用 DSL body 或 Lucene 字串查詢（<code>--collection &lt;index&gt;</code>）；用 <code>match_all</code> scroll <code>export</code> 整個 index；<code>shell</code> 開啟 Kibana Dev Tools 風格 REPL。</li>
             </ul>
+            <h3 class="mt-10">SHOW GRANTS 認證內容去敏（MySQL/MariaDB）</h3>
+            <p><code>SHOW GRANTS</code> 結果一律在 MySQL/MariaDB 共用 adapter 回傳給任何消費端之前去敏，涵蓋正常與 native-read-only 執行。<code>query</code>、互動 <code>shell</code> 與 SQL 查詢 <code>export</code>，以及各命令支援的 JSON、CSV、表格與 HTML 輸出都適用。所有權限層級與 agent 模式均受保護，blacklist 為空也生效，沒有 bypass 選項。</p>
+            <p>條件式可執行註解會依建立連線時已讀取的伺服器版本判讀，不額外查詢版本。若無法取得該版本，且無法安全確定實際執行的語句，dbcli 會回報固定的安全錯誤，不回傳原始結果列。已確定不是 <code>SHOW GRANTS</code> 的語句維持既有行為。</p>
+            <p>可安全辨識的 grant 文字會把認證 payload 換成 <code>[REDACTED]</code>，保留可判讀的帳號、角色、授權範圍與權限。辨識格式包含 <code>IDENTIFIED BY</code>、<code>IDENTIFIED BY PASSWORD</code>，以及 <code>IDENTIFIED VIA</code> / <code>WITH</code> 搭配 <code>USING</code> / <code>AS</code>、<code>PASSWORD(...)</code> 或以 <code>OR</code> 串接的多認證方法。所有認證參數都會遮蔽，包含空字串與 service name。可安全辨識且只有權限或角色的列保留原文字。</p>
+            <p>未知、不完整、語意歧義或型態異常的儲存格會換成 <code>[OMITTED: grant text could not be safely redacted]</code>。列數、欄名與結果結構保留，其他可安全辨識的儲存格照常呈現。被省略的儲存格不代表完整授權資訊。去敏結果供檢視使用，<strong>不能當成可重播的 grant SQL</strong>。</p>
+            <p>此保護只涵蓋 <code>SHOW GRANTS</code>，不掃描 <code>SHOW CREATE USER</code>、直接讀取 <code>mysql.user</code> 等系統表、任意 SQL 結果，或 SQL 輸入、既有檔案與歷史紀錄中原有的秘密。既有命令與政策限制仍適用；saved query 仍拒絕 <code>SHOW GRANTS</code>。</p>
+
+            <h3 class="mt-10">RDS CALL 拒絕與人工證據交接</h3>
+            <p>Query-only 維持拒絕 <code>CALL</code>，包含 <code>CALL mysql.rds_show_configuration</code>，不建立 RDS 程序允許清單。實際 CLI 結果是本機政策拒絕；DBA 對 RDS 配置的觀察結論則維持 <strong>indeterminate（證據不足）</strong>。這是證據結論，不是新增 CLI 或 receipt 狀態或 schema。此拒絕不代表程序不存在、原生帳號權限不足、binlog 保留為零或備份不健康。缺少證據既不能判為成功，也不能判為配置不健康。</p>
+            <p>既有 <a href="https://github.com/CarlLee1983/dbcli/blob/main/docs/research/dba-system-view-probes.md" class="text-primary font-bold underline">Q024/Q025 觀察</a> 記錄本機 MySQL/MariaDB 在預設 limit 與 <code>--no-limit</code> 下的 query-only 拒絕，未驗證 RDS 程序可用性、原生權限、唯讀交易相容性或結果處理能力。共享權限邊界維持不變。即使既有拒絕訊息提到 admin，也不應將升權視為補救。操作人員只能在既有授權內取得證據；dbcli 不會自動改用 admin 重試、呼叫原生客戶端或 AWS API，也不修改 RDS 資源。</p>
+            <p>請區分所需觀察：AWS 文件中的 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-stored-proc-configuring.html" class="text-primary font-bold underline"><code>binlog retention hours</code></a> 是以小時計算的 binary log 保留設定，由 <code>mysql.rds_show_configuration</code> 觀察；<a href="https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DBInstance.html" class="text-primary font-bold underline"><code>BackupRetentionPeriod</code></a> 則是自動 DB 快照保留天數。快照欄位不能證明 binlog 設定；沒有來源證明對所需觀察等價時，不得以平台 API 欄位替代。</p>
+            <p>人工交接時可複製以下模板，明確保留未取得的證據：</p>
+            <ul>
+                <li><strong>目標部署與引擎版本：</strong> RDS 部署識別／類型、引擎與精確版本（未知則註明）。</li>
+                <li><strong>所需觀察：</strong> 要確認的具體配置，例如 <code>binlog retention hours</code>。</li>
+                <li><strong>拒絕原因：</strong> 嘗試的語句、query-only 政策拒絕與去敏後 CLI 錯誤；這不是原生資料庫拒絕。</li>
+                <li><strong>證據時間與來源：</strong> 各項觀察的時間／時區、目標及來源；區分本機拒絕證據與操作人員取得的 RDS 證據。</li>
+                <li><strong>去敏後結果：</strong> 僅列出操作人員在既有授權內取得的必要非秘密配置與單位；未取得時明確註記。</li>
+                <li><strong>仍缺項目：</strong> 未解決的觀察，以及誰能在既有授權內取得；證據充分前，DBA 結論維持 indeterminate。</li>
+            </ul>
+
             <p>完整能力矩陣見 <a href="#engines" class="text-primary font-bold underline">引擎支援</a>。</p>
         </section>
 
@@ -1293,6 +1315,22 @@ dbcli skill tasks plan &lt;pack&gt; --param k=v --format json    # 產生帶風�
             <h2>🔁 Agent 修復工作流</h2>
             <p>此處只列三個最常見情境與通用流程。完整失敗代碼對照、Multi-turn <code>--next</code>、Risk gate 詳細語意與 Audit ↔ Envelope 反查請見 <a href="https://github.com/CarlLee1983/dbcli/blob/main/assets/reference.md#recovery-cookbook-agent-walkthroughs" class="text-primary font-bold underline"><code>reference.md</code> Recovery Cookbook</a>。</p>
             <p>當 <code>query</code> / <code>q</code> / <code>insert</code> / <code>update</code> / <code>delete</code> / <code>export</code> / <code>schema</code> / <code>inspect</code> / <code>lint</code> / <code>diff --against-orm</code> 帶 <code>--recovery</code> 失敗時，stdout 會輸出 <code>RecoveryEnvelope</code> JSON，並原子寫入 <code>.dbcli/last-recovery.json</code>。Agent 隨後用 <code>dbcli recover</code> 檢視，或 <code>dbcli recover --apply</code> 自動執行（預設只跑 <code>readonly</code> + <code>dry-run</code> 步驟）。</p>
+
+            <h3 class="mt-10">資料庫原生授權不足</h3>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead><tr><th>失敗類型</th><th>Adapter 代碼</th><th>Recovery envelope</th></tr></thead>
+                    <tbody>
+                        <tr><td>資料庫原生授權不足</td><td><code>DB_PERMISSION_DENIED</code></td><td><code>error.code: &quot;PERMISSION_DENIED&quot;</code>、<code>error.details.connectionCode: &quot;DB_PERMISSION_DENIED&quot;</code></td></tr>
+                        <tr><td>登入驗證失敗</td><td><code>AUTH_FAILED</code></td><td><code>error.code: &quot;CONN_AUTH_FAILED&quot;</code></td></tr>
+                        <tr><td>dbcli 本機政策拒絕</td><td>不適用（本機 <code>PermissionError</code>）</td><td><code>error.code: &quot;PERMISSION_DENIED&quot;</code>，不帶原生 discriminator</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>原生分類涵蓋 MySQL/MariaDB 的 <code>ER_DBACCESS_DENIED_ERROR</code>（1044）、<code>ER_TABLEACCESS_DENIED_ERROR</code>（1142）、<code>ER_COLUMNACCESS_DENIED_ERROR</code>（1143）與 <code>ER_SPECIFIC_ACCESS_DENIED_ERROR</code>（1227），包含只有 errno 的錯誤；PostgreSQL 則使用 <code>42501</code>（<code>insufficient_privilege</code>）。只有 SQLSTATE <code>42000</code> 或訊息含有「access denied」不足以套用此分類。MySQL/MariaDB 1045、1698 與 PostgreSQL <code>28000</code>、<code>28P01</code> 等登入失敗仍保留驗證失敗分類。</p>
+            <p>原生授權不足可能發生於建立連線或執行操作時。這個代碼不代表登入已成功；連線成功也不代表有權查詢物件。它不是傳輸故障，不會觸發自動重連或連線修復分支。</p>
+            <p>請確認目標資料庫／物件，以及該操作所需權限；必要時交由 DBA 處理，再重新執行原命令。錯誤只提供靜態人工指引，不建議更換憑證、執行 <code>init</code> 或放寬 dbcli 政策。本機 <code>canWrite</code>／<code>canDestruct</code> 旗標無法證明原生授權已修復。</p>
+            <p>Recovery 維持 schema v1：<code>recovery: []</code>，並省略 <code>verify</code>（不是 JSON <code>null</code>）。此路徑沒有可執行的修復或診斷命令，因此 <code>recover --apply</code> 不會進行修復。既有 v1 envelope 可繼續讀取，不需遷移；既有本機 <code>PERMISSION_DENIED</code> 復原行為不變。呼叫端應同時判讀上表的兩層錯誤碼，不能把所有 <code>PERMISSION_DENIED</code> envelope 都當成本機政策拒絕。</p>
 
             <h3 class="mt-10">三個典型情境</h3>
             <div class="grid grid-cols-1 gap-4 mb-12">

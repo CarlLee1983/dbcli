@@ -502,6 +502,23 @@ describe('ReplEngine', () => {
     expect(sql).toBe('SELECT 1;')
   })
 
+  test('native authorization denial does not reconnect or retry the target', async () => {
+    const adapter = createMockAdapter()
+    adapter.execute = mock(async () => {
+      throw new ConnectionError('DB_PERMISSION_DENIED', 'Native permission denied', [])
+    })
+    const engine = new ReplEngine(
+      adapter,
+      { ...mockContext, permission: 'query-only' },
+      historyPath
+    )
+    const result = await engine.processInput('SELECT 1;')
+    expect(result.action).toBe('continue')
+    expect(result.output).toContain('Native permission denied')
+    expect(adapter.execute).toHaveBeenCalledTimes(1)
+    expect(adapter.connect).not.toHaveBeenCalled()
+  })
+
   test('attempts reconnection on connection error', async () => {
     const adapter = createMockAdapter()
     let callCount = 0

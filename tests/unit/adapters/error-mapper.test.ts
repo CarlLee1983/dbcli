@@ -239,10 +239,10 @@ test('mapError: 表名含 "user" 的 undefined_table 仍分類為 TABLE_NOT_FOUN
 })
 
 test('mapError: 未知 code 的伺服器錯誤不套用連線疑難排解提示', () => {
-  const error = { code: '42501', message: 'permission denied for table users' }
+  const error = { code: 'XX999', message: 'unrecognized failure for table users' }
   const result = mapError(error, 'postgresql', mockOptions)
   expect(result.code).toBe('UNKNOWN')
-  expect(result.message).toContain('permission denied for table users')
+  expect(result.message).toContain('unrecognized failure for table users')
   expect(result.message).not.toContain('Connection failed')
   expect(result.hints.join(' ')).not.toContain('host=')
 })
@@ -589,3 +589,65 @@ test('mapError: 其餘新增 key 的分類（ECONNABORTED / ENETDOWN / 08000 / e
     }).code
   ).toBe('CONNECTION_LOST')
 })
+
+for (const system of ['mysql', 'mariadb'] as const) {
+  for (const [code, errno] of [
+    ['ER_DBACCESS_DENIED_ERROR', 1044],
+    ['ER_TABLEACCESS_DENIED_ERROR', 1142],
+    ['ER_COLUMNACCESS_DENIED_ERROR', 1143],
+    ['ER_SPECIFIC_ACCESS_DENIED_ERROR', 1227],
+  ] as const) {
+    for (const native of [{ code }, { errno }, { code, errno }]) {
+      test(`${system} native authorization ${JSON.stringify(native)} is distinct and sanitized`, () => {
+        const result = mapError(
+          { ...native, message: 'private-user private-table private-password' },
+          system,
+          mockOptions
+        )
+        expect(result.code).toBe('DB_PERMISSION_DENIED')
+        expect(result.message).toContain('permission')
+        expect(JSON.stringify(result)).not.toContain('private-')
+        expect(result.hints.join(' ')).not.toMatch(/password|init|reconnect/i)
+      })
+    }
+  }
+}
+
+test('PostgreSQL 42501 is native authorization, not authentication', () => {
+  const result = mapError(
+    { code: '42501', message: 'permission denied for private-table' },
+    'postgresql',
+    mockOptions
+  )
+  expect(result.code).toBe('DB_PERMISSION_DENIED')
+  expect(result.message).not.toContain('private-table')
+})
+
+for (const system of ['mysql', 'mariadb', 'postgresql'] as const) {
+  test(`${system} does not infer native authorization from ambiguous messages or SQLSTATE`, () => {
+    for (const error of [
+      { code: '42000', message: 'access denied' },
+      { message: 'access denied' },
+      { code: 'UNKNOWN_CODE', message: 'permission denied' },
+    ]) {
+      expect(mapError(error, system, mockOptions).code).toBe('UNKNOWN')
+    }
+  })
+}
+
+for (const system of ['mysql', 'mariadb'] as const) {
+  for (const errno of [1045, 1698]) {
+    test(`${system} authentication errno ${errno} remains authentication`, () => {
+      expect(mapError({ errno, message: 'access denied' }, system, mockOptions).code).toBe(
+        'AUTH_FAILED'
+      )
+    })
+  }
+}
+for (const code of ['28000', '28P01']) {
+  test(`PostgreSQL authentication ${code} remains authentication`, () => {
+    expect(mapError({ code, message: 'login rejected' }, 'postgresql', mockOptions).code).toBe(
+      'AUTH_FAILED'
+    )
+  })
+}

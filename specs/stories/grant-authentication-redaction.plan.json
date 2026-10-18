@@ -1,0 +1,14 @@
+{
+  "goal": {
+    "id": "grant-authentication-redaction",
+    "title": "G3 redact authentication material from SHOW GRANTS results",
+    "require_approval": true
+  },
+  "nodes": [
+    {
+      "id": "grant-authentication-redaction",
+      "story": "specs/stories/grant-authentication-redaction.md",
+      "depends_on": []
+    }
+  ]
+}

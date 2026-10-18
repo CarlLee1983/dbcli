@@ -27,6 +27,7 @@ const TRANSPORT_CODES = [
 ] as const satisfies readonly ConnectionErrorCode[]
 
 const STATEMENT_CODES = [
+  'DB_PERMISSION_DENIED',
   'STATEMENT_TIMEOUT',
   'SQL_SYNTAX_ERROR',
   'TABLE_NOT_FOUND',

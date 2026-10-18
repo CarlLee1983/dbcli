@@ -19,6 +19,7 @@ type CodedCategory =
   | 'ETIMEDOUT'
   | 'ENOTFOUND'
   | 'AUTH_FAILED'
+  | 'DB_PERMISSION_DENIED'
   | 'TABLE_NOT_FOUND'
   | 'COLUMN_NOT_FOUND'
   | 'SQL_SYNTAX_ERROR'
@@ -72,7 +73,10 @@ const MYSQL_CODES: Record<string, CodedCategory> = {
   ER_BAD_FIELD_ERROR: 'COLUMN_NOT_FOUND',
   ER_PARSE_ERROR: 'SQL_SYNTAX_ERROR',
   ER_ACCESS_DENIED_ERROR: 'AUTH_FAILED',
-  ER_DBACCESS_DENIED_ERROR: 'AUTH_FAILED',
+  ER_DBACCESS_DENIED_ERROR: 'DB_PERMISSION_DENIED',
+  ER_TABLEACCESS_DENIED_ERROR: 'DB_PERMISSION_DENIED',
+  ER_COLUMNACCESS_DENIED_ERROR: 'DB_PERMISSION_DENIED',
+  ER_SPECIFIC_ACCESS_DENIED_ERROR: 'DB_PERMISSION_DENIED',
   ER_NOT_SUPPORTED_AUTH_MODE: 'AUTH_FAILED',
   ER_MUST_CHANGE_PASSWORD_LOGIN: 'AUTH_FAILED',
   // MySQL 3024 / MariaDB 1969：兩者都只由各自的語句上限觸發，與 KILL QUERY 的
@@ -86,7 +90,10 @@ const MYSQL_CODES: Record<string, CodedCategory> = {
 /** MySQL / MariaDB 的數字 errno（部分 driver 只給數字） */
 const MYSQL_ERRNOS: Record<number, CodedCategory> = {
   1045: 'AUTH_FAILED',
-  1044: 'AUTH_FAILED',
+  1044: 'DB_PERMISSION_DENIED',
+  1142: 'DB_PERMISSION_DENIED',
+  1143: 'DB_PERMISSION_DENIED',
+  1227: 'DB_PERMISSION_DENIED',
   1054: 'COLUMN_NOT_FOUND',
   1064: 'SQL_SYNTAX_ERROR',
   1146: 'TABLE_NOT_FOUND',
@@ -105,6 +112,7 @@ const MYSQL_ERRNOS: Record<number, CodedCategory> = {
 
 /** PostgreSQL SQLSTATE */
 const SQLSTATES: Record<string, CodedCategory> = {
+  '42501': 'DB_PERMISSION_DENIED', // insufficient_privilege
   '28000': 'AUTH_FAILED', // invalid_authorization_specification
   '28P01': 'AUTH_FAILED', // invalid_password
   '42601': 'SQL_SYNTAX_ERROR', // syntax_error
@@ -374,6 +382,16 @@ export function mapError(
         `Verify DNS resolution: nslookup ${options.host}`,
         `If using localhost, try 127.0.0.1 (IPv4 vs IPv6 issue)`,
       ])
+
+    case 'DB_PERMISSION_DENIED':
+      return new ConnectionError(
+        'DB_PERMISSION_DENIED',
+        'The database denied access because the account lacks a required native permission.',
+        [
+          'Confirm the intended database or object and the permission required for the operation with its administrator',
+          'After the administrator resolves access, run the original command again',
+        ]
+      )
 
     case 'AUTH_FAILED':
       return new ConnectionError(

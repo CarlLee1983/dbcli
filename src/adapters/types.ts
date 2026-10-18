@@ -210,6 +210,7 @@ export type ConnectionErrorCode =
   | 'ECONNREFUSED'
   | 'ETIMEDOUT'
   | 'AUTH_FAILED'
+  | 'DB_PERMISSION_DENIED'
   | 'ENOTFOUND'
   | 'EHOSTUNREACH'
   | 'CONNECTION_LOST'

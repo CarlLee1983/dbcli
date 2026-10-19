@@ -1,7 +1,7 @@
 # Stories
 
-This repository follows Warrant; the contract is the `## Warrant` section of
-`AGENTS.md`, and the reasons are in ADR-0040.
+This repository follows Warrant; the contract is the intent, verification and
+review section of `AGENTS.md`, and the reasons are in ADR-0040 and ADR-0051.
 
 A Story is a single file, `specs/stories/<slug>.md`, with a `# Title` heading
 followed by exactly three sections: **Goal**, **Out of Scope**, and
@@ -11,8 +11,9 @@ running something or looking at something.
 
 A Story is approved only when a human commits it to the default branch, or
 explicitly assigns it in the current session. A Story an agent drafted or
-committed itself is not approved, and approval is not a work queue: the human,
-through ForgePilot, chooses which Story to do.
+committed itself is not approved, and approval is not a work queue: the human
+directly chooses which Story to do. Record dependency order when needed, using
+the [workflow's evidence paths](../../docs/development/agent-workflow.md#choose-one-evidence-record).
 
 Completion is proven by `make verify`, together with an observation for every
 acceptance criterion. Passing makes work eligible for human review; it does not

@@ -2,7 +2,8 @@
 
 This repository operator tool reads a specified `make verify` log. It does not
 execute verification, alter any gate, or write to the log. Run canonical
-verification separately and keep its actual exit status and ForgePilot evidence.
+verification separately and keep its actual exit status and candidate-bound
+evidence in the [selected handoff record](agent-workflow.md#choose-one-evidence-record).
 Use one log file per verification run.
 
 ```sh
@@ -50,7 +51,9 @@ the previous verdict. Prefer separate logs so repeated runs cannot be ambiguous.
 
 The tool reports marker evidence; it does not authenticate a log or validate the
 attestation JSON/hash. A forged marker in raw test output can imitate that
-evidence. Canonical process status and ForgePilot evidence remain authoritative.
+evidence. The canonical process's actual exit status determines its result;
+retain that result with the candidate identity and criterion observations in
+the selected handoff record. Observer output alone cannot prove completion.
 It expects an append-only file; do not rotate, replace, or truncate the log while
 following. It does not add timestamps or infer elapsed time for a running step.
 If observation fails, inspect the original log and canonical process directly.

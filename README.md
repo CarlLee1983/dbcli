@@ -1756,10 +1756,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release pr
 
 ## Governance
 
-For people changing this repository. dbcli itself depends on none of the tools
-below: `package.json` and `src/` never mention them, `.forgepilot/` is
-gitignored local state, and a clone without any of them runs `make verify`
-normally.
+For people changing this repository. Warrant governs approved intent;
+`make verify` and human review establish whether that intent is satisfied.
+Work is selected directly by a human and needs no external scheduler.
 
 ### How work is specified: Warrant
 
@@ -1767,26 +1766,30 @@ Each unit of work is a Story: one file, `specs/stories/<slug>.md`, with exactly
 three sections — Goal, Out of Scope, and Acceptance Criteria. A Story is
 approved only when a human commits it to the default branch or explicitly
 assigns it in the current session; an agent never approves its own. The
-contract agents follow is the `## Warrant` section of `AGENTS.md`, and
+contract agents follow is the intent, verification and review section of `AGENTS.md`, and
 `specs/stories/README.md` describes the format. The `DBCLI-*` directories under
 `specs/stories/` are legacy records from an earlier protocol, not pending work.
 
 Warrant defines what a Story must contain and what counts as evidence: every
 acceptance criterion needs a reproducible observation, and the requirements,
-criteria, and scope stay as the human approved them. ForgePilot and
-`make verify` decide when it is done.
+criteria, and scope stay as the human approved them.
 
-### When work is done: ForgePilot and `make verify`
+### When work is done: `make verify` and human review
 
 `make verify` is the automated completion authority. Passing it makes work
 *eligible* for human review; it does not approve or merge anything. Do not
 bypass verification or delete failing tests to obtain a pass.
 
-ForgePilot is an operator tool that holds the work queue and the verification
-evidence. It runs this repository's own `make verify` inside a detached worktree
-at an exact commit, so a recorded pass is bound to that revision rather than
-meaning "it passes on a machine that already has everything installed". It has
-no completion command — only a human can approve.
+Verification and review must refer to the same candidate. A clean committed PR
+may use CI evidence for its actual checkout revision. An uncommitted candidate
+uses a local handoff with reconstructable source content, verification output,
+criterion observations and human review. Follow the
+[evidence paths](docs/development/agent-workflow.md#choose-one-evidence-record);
+a passing run for different source content does not verify the current work.
+
+ForgePilot is no longer used by this project. Its ignored `.forgepilot/` data
+and historical records remain available; global tools and skills are unaffected.
+The decision is recorded in [ADR-0051](docs/adr/ADR-0051-retire-forgepilot-from-the-repository-workflow.md).
 
 ### Where decisions live: `docs/adr/`
 

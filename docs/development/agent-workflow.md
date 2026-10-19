@@ -9,21 +9,46 @@ paths; selecting a tool does not authorize external writes.
 | Candidate or task | Required path | Authoritative completion/evidence record |
 | --- | --- | --- |
 | Single committed PR, clean checkout | Exact-revision CI and PR review may be used | PR: approved Story, actual CI checkout revision, passing canonical evidence and human review for that candidate |
-| Uncommitted candidate | ForgePilot snapshot verification | Selected ForgePilot work item: snapshot/tree, canonical verification, criterion observations and candidate-bound human review |
-| Multiple work items with dependencies, or candidate-bound local handoff | ForgePilot scheduling/handoff | ForgePilot goal/work items: dependency order and each candidate's evidence/review |
+| Uncommitted candidate | Run `make verify` against the recorded candidate | Local handoff: reconstructable candidate content, canonical verification, criterion observations and human review for that candidate |
+| Multiple Stories with dependencies | Human-selected Story and recorded dependency order | Each Story's selected PR or local handoff record links its prerequisites and evidence/review |
 
 A dirty or uncommitted workspace cannot use the PR-only path. CI must identify
 its actual checkout revision: equal branch-head metadata does not prove equal
 PR merge/check-out content. A changed source candidate needs new verification
 and review; retain a PASS only while its candidate and environment remain valid.
 
-For ForgePilot, use the existing `$forgepilot` skill and `forgepilot --help` for
-selection, Story lookup, start/verify/review commands and dependency scheduling.
-Use `--snapshot` when commits are not authorized; a WIP commit is not required.
-Record the canonical `make verify` result for the exact snapshot. ForgePilot
-and `.forgepilot/` are operator infrastructure, not product dependencies or
-tracked source. A one-item plan still provides snapshot and review binding;
-it adds no dependency scheduling benefit.
+The human selects the Story directly. Record prerequisite order when work spans
+multiple Stories; approval of one Story does not select or authorize the next.
+
+For an uncommitted candidate, keep one local handoff record with:
+
+1. The approved Story and base revision, a complete diff against that base
+   (including staged, unstaged, binary and deleted files), and an inventory of
+   added files with their reconstructable contents. Hash the candidate's source
+   contents, including added files; record file modes and symlink targets where
+   they affect reconstruction. A hash alone cannot reconstruct a candidate.
+2. The `make verify` command, working directory, relevant environment, actual
+   exit status, complete log, attestation when produced, and observations for
+   every acceptance criterion. Exclude credentials and private environment
+   values from the handoff. The attestation's revision and `dirty_worktree`
+   flag alone do not identify an uncommitted candidate.
+3. A comparison of the recorded source before and after verification. If source
+   changed, refresh the candidate record and rerun verification. Generated
+   outputs are not source evidence; build assets must come from the verified
+   candidate. Keep unrelated local changes out of the candidate, using an
+   isolated checkout when needed, and preserve the original worktree.
+4. Human review referencing the same candidate content identity and criterion
+   observations. Recheck that identity before handoff; changed content requires
+   new verification and review. A pending review stays explicitly pending.
+
+Keep the patch, added-file contents and observations with the local record so
+another reviewer can reconstruct the candidate from the base. No WIP commit or
+replacement snapshot tool is required. Local records may remain outside the
+repository; committing or publishing them needs separate authorization.
+
+ForgePilot is retired from this workflow. Existing `.forgepilot/` data remains
+ignored local history; historical instructions do not select current work.
+See [ADR-0051](../adr/ADR-0051-retire-forgepilot-from-the-repository-workflow.md).
 
 ## Completion and handoff
 

@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# Canonical checks live in one place. After ForgePilot verified this exact
-# candidate, run release:extras directly instead of this full wrapper.
+# Canonical checks live in one place. To reuse a PASS for this exact candidate
+# and valid environment, build and run release:extras instead of this wrapper.
 make verify
 bun run release:extras
 

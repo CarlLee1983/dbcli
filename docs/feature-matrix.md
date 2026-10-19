@@ -62,9 +62,9 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 The canonical gate is `make verify`; its existing 22-step roster, order,
 failure behavior and attestation contract remain unchanged. Choose either
-`bun run release:check` (canonical gate once, then release extras) or ForgePilot
-snapshot canonical verification followed by a build and `bun run release:extras`
-on the identical source candidate. Built assets must match that candidate;
+`bun run release:check` (canonical gate once, then release extras) or reuse an
+existing canonical PASS for the identical source candidate and valid environment,
+followed by a build and `bun run release:extras`. Built assets must match that candidate;
 a source change invalidates the earlier PASS. See the
 [local checklist](../CONTRIBUTING.md#pre-release-checklist) for both paths.
 

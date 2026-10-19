@@ -338,14 +338,16 @@ Choose **one** local verification path before tagging:
 
 1. **Standalone:** run `bun run release:check`. It runs `make verify` once;
    only a passing canonical gate proceeds to `bun run release:extras`.
-2. **ForgePilot snapshot:** run canonical verification through
-   `forgepilot verify <selected-work-item> --snapshot`, then `bun run build` and
-   `bun run release:extras` against that same candidate. Record the build and
-   extras with the snapshot verification; do not rerun the full release wrapper.
+2. **Reuse an existing canonical PASS:** if `make verify` already passed for
+   the exact candidate and its environment remains valid, run `bun run build`
+   and `bun run release:extras` against that same candidate. Record the build
+   and extras with the existing verification in the selected evidence record;
+   do not rerun the full release wrapper. For uncommitted work, retain the
+   [reconstructable candidate evidence](docs/development/agent-workflow.md#choose-one-evidence-record).
 
 Both paths require the test services and the canonical environment. Build assets
 must come from the verified source: preserve the exact source candidate through
-verification, build and extras. The build after snapshot verification refreshes
+verification, build and extras. The build when reusing a canonical PASS refreshes
 ignored `dist/` assets without changing source; it does not rerun tests. Any
 candidate change invalidates the old PASS and requires fresh verification.
 `release:extras` requires built assets and runs post-build dist smoke plus checks

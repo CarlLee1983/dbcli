@@ -2,6 +2,7 @@
 
 * Status: accepted
 * Date: 2026-09-30
+* Partially superseded by: [ADR-0051](ADR-0051-retire-forgepilot-from-the-repository-workflow.md) (ForgePilot control plane and required evidence-consumer assumptions only; the Warrant decision remains in force).
 
 This repository specified work with ForgeFlow: a Story was a directory holding
 `story.md`, `acceptance.md` and an optional `task.md`, copied from a template,

@@ -150,7 +150,7 @@ dbcli capabilities check --require data.delete --format json      # machine-read
 ```
 
 `connection.tls` derives support from the engine matrix and maps to existing
-connection command surfaces, with PostgreSQL the only supported engine. It adds
+connection command surfaces, supporting PostgreSQL, MySQL and MariaDB. It adds
 no TLS subcommand. Check with
 `dbcli capabilities check --require connection.tls --format json`.
 `available` establishes tool support only, not TLS configuration, readable CA,
@@ -331,11 +331,11 @@ or `doctor` / `status` reports a missing or invalid config, follow this flow.
 > If a `.dbcli` already contains `{"$env": "..."}` references, **do not** rerun
 > `init` to "fill them in" — the env-ref form is intentional for CI/multi-env.
 
-### PostgreSQL verified TLS
+### PostgreSQL, MySQL and MariaDB verified TLS
 
 When verified TLS is required, use the named `init` entry with both
-`--sql-tls verify-full --sql-tls-ca <path>`. Only PostgreSQL supports this SQL
-contract; explicit requests on MySQL/MariaDB or other engines fail. The saved
+`--sql-tls verify-full --sql-tls-ca <path>`. PostgreSQL, MySQL and MariaDB support this SQL
+contract; explicit requests on other engines fail. The saved
 `sqlTls: { mode: 'verify-full', caPath: '/absolute/path/root-ca.pem' }` uses an
 absolute literal PEM path; `init` resolves relative paths from cwd. CA environment
 references are unsupported. Existing host/user environment references and profiles
@@ -346,7 +346,8 @@ before connecting or writing, preserving the original. Migrate that case by
 creating a verified named profile in a separate config directory, verifying it,
 then selecting it; preserve `sqlTls` throughout.
 
-Each connection reloads the CA and verifies encryption, trust, validity and the
+Ambient TLS settings cannot weaken verification or supply another profile’s trust.
+Each connection reloads its own CA and verifies encryption, trust, validity and the
 configured DNS/IP identity; explicit SQL TLS refuses Unix sockets. Failures stop
 before the user query. Repair the CA, hostname or certificate; keep verification
 and TLS required. On binary rollback, stop TLS-required workflows or retain a
@@ -354,8 +355,19 @@ supporting version: older binaries may strip `sqlTls`. Local fixture evidence do
 not establish real RDS acceptance. Configured permitted reads work in agent mode;
 `init` and other configuration changes remain refused.
 
+For TLS error recovery, repair certificates while retaining TLS, then explicitly
+select `--config <path>` or `--global`; v2 also requires `--use <name>` or
+`DBCLI_CONNECTION`. The selected profile must retain `sqlTls.mode: verify-full`.
+Missing, ambiguous or plaintext selections block live steps. Saved envelopes
+redact original selectors, so current targeting does not establish original
+provenance. Apply and verification use the current CLI binary. Example:
+
+```bash
+bun run src/cli.ts --config .dbcli --use verified-mysql recover --apply --format json
+```
+
 For the complete configuration, example and failure contract, read
-[PostgreSQL verified TLS](.windsurf/skills/dbcli/reference.md#verified-tls-for-postgresql).
+[SQL verified TLS](.windsurf/skills/dbcli/reference.md#verified-tls-for-postgresql-mysql-and-mariadb).
 
 ### Decision tree (ask before writing)
 

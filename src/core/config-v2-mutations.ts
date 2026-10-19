@@ -1,4 +1,5 @@
 import { t } from '@/i18n/message-loader'
+import { supportsSqlTls } from '@/adapters/capabilities'
 import { DEFAULT_AUDIT_ROTATION } from '@/utils/validation'
 import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
@@ -103,7 +104,7 @@ export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
  *  per-connection envFile。編輯時保留既有 permission;新建預設 'query-only'。 */
 export function upsertConnection(config: DbcliConfigV2, input: ConnectionInput): DbcliConfigV2 {
   const existing = config.connections[input.name]
-  if (existing && 'sqlTls' in existing && existing.sqlTls && input.system !== 'postgresql') {
+  if (existing && 'sqlTls' in existing && existing.sqlTls && !supportsSqlTls(input.system)) {
     throw new Error(t('errors.sql_tls_change_engine'))
   }
   const connection = {

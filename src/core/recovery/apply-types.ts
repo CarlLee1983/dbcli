@@ -75,6 +75,8 @@ export interface ApplyOptions {
   now?: () => number
   /** P4: skip the verify step even when finalStatus is 'ok'. Default false. */
   noVerify?: boolean
+  /** @internal Validated selection from the current CLI invocation, not the saved envelope. */
+  target?: import('./apply-exec').RecoveryTarget
 }
 
 export interface ApplyResult {

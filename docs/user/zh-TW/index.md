@@ -97,9 +97,9 @@ dbcli init
 
 這解決的是終端機回顯，不是儲存：dbcli 不會加密靜態憑證。要讓憑證不落在設定檔裡，用的是 `--use-env-refs` 與家目錄儲存。
 
-### PostgreSQL 驗證式 TLS
+### PostgreSQL、MySQL 與 MariaDB 驗證式 TLS
 
-建立具名 PostgreSQL profile 時，必須一起提供兩個 SQL TLS 參數。以下範例會詢問密碼，並在保存前測試連線：
+建立具名 PostgreSQL、MySQL 或 MariaDB profile 時，必須一起提供兩個 SQL TLS 參數。以下範例會詢問密碼，並在保存前測試連線：
 
 ```bash
 dbcli init --conn-name verified-pg --system postgresql \
@@ -108,6 +108,17 @@ dbcli init --conn-name verified-pg --system postgresql \
 dbcli --use verified-pg blacklist list
 dbcli --use verified-pg schema public.events --format json
 dbcli --use verified-pg query "SELECT id FROM public.events LIMIT 10" --format json
+```
+
+MySQL 與 MariaDB 使用相同參數，各自保存具名 profile 與 CA 路徑。選取對應 profile 後，同樣先檢查 blacklist 與 schema，再執行已獲授權的查詢：
+
+```bash
+dbcli init --conn-name verified-mysql --system mysql \
+  --host mysql.example.com --port 3306 --user reader --name appdb \
+  --permission query-only --sql-tls verify-full --sql-tls-ca ./certs/mysql-ca.pem
+dbcli init --conn-name verified-mariadb --system mariadb \
+  --host mariadb.example.com --port 3306 --user reader --name appdb \
+  --permission query-only --sql-tls verify-full --sql-tls-ca ./certs/mariadb-ca.pem
 ```
 
 請將主機、資料庫與資料表換成已獲授權的目標，並先透過 schema 確認實際欄位再查詢。保存的連線會包含獨立的 SQL 設定物件（以下為連線片段）：
@@ -121,15 +132,21 @@ dbcli --use verified-pg query "SELECT id FROM public.events LIMIT 10" --format j
 }
 ```
 
-`--sql-tls verify-full` 與 `--sql-tls-ca <path>` 必須成對提供；空值、其他模式與不支援的引擎都會明確失敗。此 SQL TLS 契約僅支援 PostgreSQL；MySQL、MariaDB 與其他引擎會拒絕明確要求。MongoDB 的 `tls` 與 Elasticsearch 的 TLS 設定仍是各自獨立的契約。未設定 `sqlTls` 的既有 profile 維持原行為，不新增全域 TLS 政策。V1 目錄與 v2 profile 的讀取、正常 `init` 從 V1 目錄匯入 v2，以及公開的 `migrateV1ToV2` helper，均保留 TLS 物件。Legacy V1 單檔 TLS profile 仍可在人類模式下讀取與使用，但自動 `init` 匯入會在連線或寫入前明確拒絕，保留原檔不變。此情況請在獨立設定目錄建立具名驗證式 TLS profile，完成驗證後再選取；遷移全程保留 `sqlTls`。
+`--sql-tls verify-full` 與 `--sql-tls-ca <path>` 必須成對提供；空值、其他模式與不支援的引擎都會明確失敗。此 SQL TLS 契約支援 PostgreSQL、MySQL 與 MariaDB；其他引擎會拒絕明確要求。MongoDB 的 `tls` 與 Elasticsearch 的 TLS 設定仍是各自獨立的契約。未設定 `sqlTls` 的既有 profile 維持原行為，不新增全域 TLS 政策。V1 目錄與 v2 profile 的讀取、正常 `init` 從 V1 目錄匯入 v2，以及公開的 `migrateV1ToV2` helper，均保留 TLS 物件。Legacy V1 單檔 TLS profile 仍可在人類模式下讀取與使用，但自動 `init` 匯入會在連線或寫入前明確拒絕，保留原檔不變。此情況請在獨立設定目錄建立具名驗證式 TLS profile，完成驗證後再選取；遷移全程保留 `sqlTls`。
 
-`init` 會以執行時的工作目錄解析相對 CA 路徑，再保存為絕對路徑。保存的 `caPath` 必須是非空白的 PEM CA bundle 絕對字面路徑，不接受環境變數參照；host／user 等既有欄位的受支援環境參照仍可使用。每次建立連線都會重新讀取 CA bundle；無法讀取、空白或無效的 bundle 會在連線前停止。`--skip-test` 只略過初始化測試，不會略過後續使用時的驗證。
+`init` 會以執行時的工作目錄解析相對 CA 路徑，再保存為絕對路徑。保存的 `caPath` 必須是非空白的 PEM CA bundle 絕對字面路徑，不接受環境變數參照；host／user 等既有欄位的受支援環境參照仍可使用。明確 TLS 只使用所選 profile 的 CA 與身分設定；ambient TLS 設定不能降低驗證要求或帶入其他 profile 的信任條件。每次建立連線都會重新讀取 CA bundle；無法讀取、空白或無效的 bundle 會在連線前停止。`--skip-test` 只略過初始化測試，不會略過後續使用時的驗證。
 
 `verify-full` 要求加密、可信憑證鏈、有效日期，以及憑證身分符合設定的 DNS 主機名或 IP 位址。明確 SQL TLS 會拒絕 Unix socket。不受信任、過期或主機名不符的憑證，以及不支援 TLS 的伺服器，均在使用者查詢前失敗；不會明文重試或降低驗證要求。請修正 CA、目標主機名或憑證有效期後重試。只有 cipher 證據不能證明身分驗證成立。
 
+TLS 錯誤復原時，請保留 TLS 設定，先修正 CA、主機名或憑證，再以 `--config <path>`（或 `--global`）明確選取設定；v2 還需以 `--use <name>` 選取具名 profile（也接受 `DBCLI_CONNECTION`）。所選 profile 必須仍有 `sqlTls.mode: verify-full`；缺少、無法明確解析或明文連線選取會阻擋即時復原步驟，不會退回預設明文連線。保存的 recovery envelope 已遮蔽原始 selector；目前選取代表你刻意指定的目標，不是原始目標的證明。Recovery apply 與驗證使用目前執行的 CLI，避免呼叫 PATH 上的舊版 `dbcli`。以上述 MySQL 範例為例：
+
+```bash
+bun run src/cli.ts --config .dbcli --use verified-mysql recover --apply --format json
+```
+
 Agent mode 仍允許透過已設定 profile 執行權限內的唯讀操作；`DBCLI_AGENT_MODE=1` 仍拒絕 `init` 與其他設定修改。TLS 不會繞過 production 明確選取、原生資料庫授權、permission、黑名單、write gate 或 audit 控制。
 
-回滾執行檔時，請停止需要驗證式 TLS 的流程，或維持支援此功能的版本。舊版可能剝除 `sqlTls`；降版後保留 profile 並不保證仍符合要求。移除 TLS 設定或改用明文重試都不能恢復符合。本機隔離 PostgreSQL fixture 結果不代表真實 RDS 已通過驗收；MySQL／MariaDB TLS 支援不在此功能範圍。
+回滾執行檔時，請停止需要驗證式 TLS 的流程，或維持支援此功能的版本。舊版可能剝除 `sqlTls`；降版後保留 profile 並不保證仍符合要求。移除 TLS 設定或改用明文重試都不能恢復符合。本機隔離 PostgreSQL、MySQL 與 MariaDB fixture 結果不代表真實 RDS 已通過驗收；RDS 仍未驗證。
 
 ---
 
@@ -399,7 +416,7 @@ dbcli capabilities --format json
 dbcli capabilities check --require schema.read,query.read --format json
 ```
 
-`connection.tls` 由引擎 capability matrix 表示 PostgreSQL 的支援能力，對應既有連線指令介面，不新增 TLS 子指令。可執行 `dbcli --use verified-pg capabilities check --require connection.tls --format json`。`available` 只表示工具支援，不證明此 profile 已設定 TLS、CA 可讀取、握手成功或操作已獲授權。Catalog／check 維持離線，不讀取 CA bundle、不握手、不修改設定。其他引擎不會回報此能力為 available；沒有此 ID 的舊版回傳 `unknown`。設定修改仍需獨立授權。
+`connection.tls` 由引擎 capability matrix 表示 PostgreSQL、MySQL 與 MariaDB 的支援能力，對應既有連線指令介面，不新增 TLS 子指令。可執行 `dbcli --use verified-pg capabilities check --require connection.tls --format json`。`available` 只表示工具支援，不證明此 profile 已設定 TLS、CA 可讀取、握手成功或操作已獲授權。Catalog／check 維持離線，不讀取 CA bundle、不握手、不修改設定。其他引擎不會回報此能力為 available；沒有此 ID 的舊版回傳 `unknown`。設定修改仍需獨立授權。
 
 套件內的 `assets/integration-kit/` 提供可直接複製的 Bun/TypeScript consumer 與 Task Pack
 fixture。它會 pin 兩個 schema version、strictly parse catalog 與 Operation Envelope，並示範

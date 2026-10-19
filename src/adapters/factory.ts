@@ -20,6 +20,7 @@ import type { RedisMaskRule } from '@/types/blacklist'
 import { isBlacklistOverrideEnabled } from '@/core/blacklist-manager'
 import { t } from '@/i18n/message-loader'
 import { withResolvedTimeout } from '@/utils/connection-timeout'
+import { supportsSqlTls } from './capabilities'
 
 /**
  * The part of a dbcli configuration a Redis adapter needs.
@@ -51,7 +52,7 @@ export interface RedisAdapterConfig {
  * Enables system-aware instantiation without coupling CLI commands to specific drivers
  */
 function assertSqlTlsEngine(options: ConnectionOptions): void {
-  if (options.sqlTls !== undefined && options.system !== 'postgresql') {
+  if (options.sqlTls !== undefined && !supportsSqlTls(options.system)) {
     throw new Error(t('errors.sql_tls_unsupported'))
   }
 }

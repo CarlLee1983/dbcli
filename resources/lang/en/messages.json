@@ -60,7 +60,7 @@
     "connection_already_exists": "Connection '{name}' already exists",
     "rename_invalid_format": "Usage: --rename <old-name>:<new-name>",
     "prompt_sqlite_file": "SQLite database file path: ",
-    "sql_tls_help": "Verified SQL TLS mode (verify-full; PostgreSQL only)",
+    "sql_tls_help": "Verified SQL TLS mode (verify-full; PostgreSQL/MySQL/MariaDB)",
     "sql_tls_ca_help": "PEM CA bundle for --sql-tls verify-full"
   },
   "inspect": {
@@ -231,9 +231,9 @@
     "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry",
     "invalid_output_format": "--format {format} is not supported here — use text or json",
     "sqlite_file_required": "A SQLite connection needs a file path. Pass --file <path> or run init interactively.",
-    "sql_tls_unsupported": "Explicit SQL TLS is supported only for PostgreSQL",
+    "sql_tls_unsupported": "Explicit SQL TLS is supported only for PostgreSQL, MySQL and MariaDB",
     "sql_tls_options_required": "Provide both --sql-tls verify-full and --sql-tls-ca <path>",
-    "sql_tls_change_engine": "Explicit SQL TLS is supported only for PostgreSQL; cannot discard it when editing a profile",
+    "sql_tls_change_engine": "Explicit SQL TLS is supported only for PostgreSQL, MySQL and MariaDB; cannot discard it when editing a profile",
     "sql_tls_legacy_import": "SQL TLS legacy single-file import is unsupported. Keep the original profile; create a verified named profile in a separate config directory before switching. Do not remove SQL TLS.",
     "sql_tls_ca_absolute": "SQL TLS CA path must be absolute",
     "sql_tls_network_host": "Explicit SQL TLS requires a DNS or IP host, not a Unix socket",
@@ -243,7 +243,14 @@
     "sql_tls_handshake": "TLS handshake failed: {detail}",
     "sql_tls_ca_hint": "Set sqlTls.caPath to the correct readable PEM CA bundle.",
     "sql_tls_identity_hint": "Verify the certificate validity and DNS/IP identity for {host}.",
-    "sql_tls_no_downgrade": "Keep verify-full enabled; do not remove SQL TLS or retry without verification."
+    "sql_tls_no_downgrade": "Keep verify-full enabled; do not remove SQL TLS or retry without verification.",
+    "sql_tls_driver_identity": "SQL TLS identity verification is unavailable in this driver",
+    "sql_tls_peer_unverified": "SQL TLS peer is not authenticated",
+    "sql_tls_peer_missing": "SQL TLS peer certificate is unavailable",
+    "sql_tls_recovery_config": "TLS recovery requires an explicit --config <path> or --global and the intended TLS profile; defaults cannot identify the failed target.",
+    "sql_tls_recovery_profile": "TLS recovery requires --use <name> (or DBCLI_CONNECTION); it cannot fall back to the default profile.",
+    "sql_tls_recovery_required": "TLS recovery requires a profile with explicit sqlTls verify-full; plaintext recovery is refused.",
+    "sql_tls_recovery_target": "TLS recovery requires an explicitly selected, verified TLS profile."
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",

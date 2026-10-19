@@ -60,7 +60,7 @@
     "connection_already_exists": "連線 '{name}' 已存在",
     "rename_invalid_format": "用法：--rename <舊名稱>:<新名稱>",
     "prompt_sqlite_file": "SQLite 資料庫檔案路徑：",
-    "sql_tls_help": "驗證式 SQL TLS 模式（verify-full；僅 PostgreSQL）",
+    "sql_tls_help": "驗證式 SQL TLS 模式（verify-full；PostgreSQL／MySQL／MariaDB）",
     "sql_tls_ca_help": "供 --sql-tls verify-full 使用的 PEM CA bundle"
   },
   "inspect": {
@@ -231,9 +231,9 @@
     "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試",
     "invalid_output_format": "無法使用 --format {format}，請使用 text 或 json",
     "sqlite_file_required": "SQLite 連線需要一個檔案路徑。請用 --file <path>，或以互動模式執行 init。",
-    "sql_tls_unsupported": "明確 SQL TLS 目前僅支援 PostgreSQL",
+    "sql_tls_unsupported": "明確 SQL TLS 目前僅支援 PostgreSQL、MySQL 與 MariaDB",
     "sql_tls_options_required": "請同時提供 --sql-tls verify-full 與 --sql-tls-ca <path>",
-    "sql_tls_change_engine": "明確 SQL TLS 目前僅支援 PostgreSQL；編輯連線時不能捨棄此要求",
+    "sql_tls_change_engine": "明確 SQL TLS 目前僅支援 PostgreSQL、MySQL 與 MariaDB；編輯連線時不能捨棄此要求",
     "sql_tls_legacy_import": "不支援帶有 SQL TLS 的舊版單檔自動匯入。請保留原連線，在另一個設定目錄建立並驗證具名連線後再切換；不要移除 SQL TLS。",
     "sql_tls_ca_absolute": "SQL TLS CA 路徑必須為絕對路徑",
     "sql_tls_network_host": "明確 SQL TLS 必須指定 DNS 或 IP 主機，不接受 Unix socket",
@@ -243,7 +243,14 @@
     "sql_tls_handshake": "TLS 握手失敗：{detail}",
     "sql_tls_ca_hint": "請將 sqlTls.caPath 設為正確且可讀的 PEM CA bundle。",
     "sql_tls_identity_hint": "請確認憑證有效期及 {host} 的 DNS／IP 身分相符。",
-    "sql_tls_no_downgrade": "請保持 verify-full；不要移除 SQL TLS，也不要關閉驗證後重試。"
+    "sql_tls_no_downgrade": "請保持 verify-full；不要移除 SQL TLS，也不要關閉驗證後重試。",
+    "sql_tls_driver_identity": "此驅動程式無法執行 SQL TLS 身分驗證",
+    "sql_tls_peer_unverified": "SQL TLS 對端尚未通過驗證",
+    "sql_tls_peer_missing": "無法取得 SQL TLS 對端憑證",
+    "sql_tls_recovery_config": "TLS 復原須明確指定 --config <path> 或 --global 與預期的 TLS profile；預設值無法識別失敗的目標。",
+    "sql_tls_recovery_profile": "TLS 復原須指定 --use <name>（或 DBCLI_CONNECTION）；不能退回預設 profile。",
+    "sql_tls_recovery_required": "TLS 復原須使用明確設定 sqlTls verify-full 的 profile；拒絕明文復原。",
+    "sql_tls_recovery_target": "TLS 復原須明確選取已設定驗證式 TLS 的 profile。"
   },
   "success": {
     "inserted": "成功插入 {count} 列",

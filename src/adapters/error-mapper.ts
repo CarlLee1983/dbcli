@@ -34,6 +34,8 @@ type CodedCategory =
 
 /** OS / driver 層級的連線錯誤代碼 */
 const TRANSPORT_CODES: Record<string, CodedCategory> = {
+  HANDSHAKE_SSL_ERROR: 'TLS_ERROR',
+  HANDSHAKE_NO_SSL_SUPPORT: 'TLS_ERROR',
   ECONNREFUSED: 'ECONNREFUSED',
   ETIMEDOUT: 'ETIMEDOUT',
   ESOCKETTIMEDOUT: 'ETIMEDOUT',

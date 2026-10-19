@@ -13,27 +13,32 @@ afterEach(async () => {
   await Promise.all(workspaces.splice(0).map((work) => work.close()))
 })
 
-test('normal named init persists verified SQL TLS through profile reread and selection', async () => {
-  const work = await tlsWorkspace()
-  workspaces.push(work)
-  const initialized = await tlsCli(work, [
-    ...initArgs('verified'),
-    '--skip-test',
-    '--sql-tls',
-    'verify-full',
-    '--sql-tls-ca',
-    'trust.pem',
-  ])
-  expect(initialized.code, initialized.stderr).toBe(0)
-  const loaded = await readTlsProfile(work, 'verified')
-  expect(loaded.code, loaded.stderr).toBe(0)
-  expect(JSON.parse(loaded.stdout).connection.sqlTls).toEqual({
-    mode: 'verify-full',
-    caPath: join(work.dir, 'trust.pem'),
-  })
-})
+test.each(['postgresql', 'mysql', 'mariadb'])(
+  'normal named %s init persists verified SQL TLS through profile reread and selection',
+  async (system) => {
+    const work = await tlsWorkspace()
+    workspaces.push(work)
+    const initialized = await tlsCli(work, [
+      ...initArgs('verified'),
+      '--system',
+      system,
+      '--skip-test',
+      '--sql-tls',
+      'verify-full',
+      '--sql-tls-ca',
+      'trust.pem',
+    ])
+    expect(initialized.code, initialized.stderr).toBe(0)
+    const loaded = await readTlsProfile(work, 'verified')
+    expect(loaded.code, loaded.stderr).toBe(0)
+    expect(JSON.parse(loaded.stdout).connection.sqlTls).toEqual({
+      mode: 'verify-full',
+      caPath: join(work.dir, 'trust.pem'),
+    })
+  }
+)
 
-test.each(['mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch', 'sqlite'])(
+test.each(['mongodb', 'redis', 'elasticsearch', 'sqlite'])(
   'profile read rejects explicit SQL TLS for %s instead of stripping it',
   async (system) => {
     const work = await tlsWorkspace()
@@ -63,54 +68,59 @@ test.each(['mysql', 'mariadb', 'mongodb', 'redis', 'elasticsearch', 'sqlite'])(
   }
 )
 
-test('offline discovery exposes only PostgreSQL TLS and never loads CA, connects or modifies the profile', async () => {
-  const work = await tlsWorkspace()
-  workspaces.push(work)
-  const initialized = await tlsCli(work, [
-    ...initArgs('offline', 1),
-    '--skip-test',
-    '--sql-tls',
-    'verify-full',
-    '--sql-tls-ca',
-    '/does-not-exist.pem',
-  ])
-  expect(initialized.code).toBe(0)
-  const before = (await readTlsProfile(work, 'offline')).stdout
-  const configBefore = await Bun.file(join(work.config, 'config.json')).text()
-  const catalog = await tlsCli(work, ['capabilities', '--format', 'json'])
-  expect(catalog.code).toBe(0)
-  const parsed = JSON.parse(catalog.stdout)
-  expect(parsed.schemaVersion).toBe(1)
-  expect(
-    parsed.capabilities.find((entry: { id: string }) => entry.id === 'connection.tls')
-  ).toMatchObject({
-    command: 'query',
-    engines: ['postgresql'],
-    mutatesConfiguration: false,
-    minimumPermission: 'query-only',
-    requiresConnection: true,
-  })
-  const checked = await tlsCli(
-    work,
-    [
-      '--use',
-      'offline',
-      'capabilities',
-      'check',
-      '--require',
-      'connection.tls',
-      '--format',
-      'json',
-    ],
-    { DBCLI_AGENT_MODE: '1' }
-  )
-  expect(checked.code, checked.stderr).toBe(0)
-  expect(JSON.parse(checked.stdout).results).toEqual([
-    { id: 'connection.tls', status: 'available', reason: null },
-  ])
-  expect((await readTlsProfile(work, 'offline')).stdout).toBe(before)
-  expect(await Bun.file(join(work.config, 'config.json')).text()).toBe(configBefore)
-})
+test.each(['postgresql', 'mysql', 'mariadb'])(
+  'offline %s TLS discovery never loads CA, connects or modifies the profile',
+  async (system) => {
+    const work = await tlsWorkspace()
+    workspaces.push(work)
+    const initialized = await tlsCli(work, [
+      ...initArgs('offline', 1),
+      '--system',
+      system,
+      '--skip-test',
+      '--sql-tls',
+      'verify-full',
+      '--sql-tls-ca',
+      '/does-not-exist.pem',
+    ])
+    expect(initialized.code).toBe(0)
+    const before = (await readTlsProfile(work, 'offline')).stdout
+    const configBefore = await Bun.file(join(work.config, 'config.json')).text()
+    const catalog = await tlsCli(work, ['capabilities', '--format', 'json'])
+    expect(catalog.code).toBe(0)
+    const parsed = JSON.parse(catalog.stdout)
+    expect(parsed.schemaVersion).toBe(1)
+    expect(
+      parsed.capabilities.find((entry: { id: string }) => entry.id === 'connection.tls')
+    ).toMatchObject({
+      command: 'query',
+      engines: ['postgresql', 'mysql', 'mariadb'],
+      mutatesConfiguration: false,
+      minimumPermission: 'query-only',
+      requiresConnection: true,
+    })
+    const checked = await tlsCli(
+      work,
+      [
+        '--use',
+        'offline',
+        'capabilities',
+        'check',
+        '--require',
+        'connection.tls',
+        '--format',
+        'json',
+      ],
+      { DBCLI_AGENT_MODE: '1' }
+    )
+    expect(checked.code, checked.stderr).toBe(0)
+    expect(JSON.parse(checked.stdout).results).toEqual([
+      { id: 'connection.tls', status: 'available', reason: null },
+    ])
+    expect((await readTlsProfile(work, 'offline')).stdout).toBe(before)
+    expect(await Bun.file(join(work.config, 'config.json')).text()).toBe(configBefore)
+  }
+)
 
 test('legacy V1 reads refuse CA environment references before resolving them', async () => {
   const work = await tlsWorkspace()
@@ -134,7 +144,7 @@ test('legacy V1 reads refuse CA environment references before resolving them', a
   expect(read.code).not.toBe(0)
 })
 
-test.each(['mysql', 'mariadb', 'sqlite', 'mongodb', 'redis', 'elasticsearch'])(
+test.each(['sqlite', 'mongodb', 'redis', 'elasticsearch'])(
   'offline TLS check does not claim support for %s',
   async (system) => {
     const work = await tlsWorkspace()
@@ -177,8 +187,8 @@ test.each(
     ['--sql-tls', 'require', '--sql-tls-ca', '/ca.pem'],
     ['--sql-tls', 'verify-full'],
     ['--sql-tls-ca', '/ca.pem'],
-    ['--system', 'mysql', '--sql-tls', 'verify-full', '--sql-tls-ca', '/ca.pem'],
-    ['--system', 'mariadb', '--sql-tls', 'verify-full', '--sql-tls-ca', '/ca.pem'],
+    ['--system', 'sqlite', '--sql-tls', 'verify-full', '--sql-tls-ca', '/ca.pem'],
+    ['--system', 'redis', '--sql-tls', 'verify-full', '--sql-tls-ca', '/ca.pem'],
   ].map((args) => ({ args }))
 )('normal init refuses unsupported or incomplete explicit requirements: %j', async ({ args }) => {
   const work = await tlsWorkspace()

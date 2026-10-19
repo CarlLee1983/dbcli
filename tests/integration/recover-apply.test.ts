@@ -78,11 +78,14 @@ beforeAll(async () => {
   await writeFile(idxPath, JSON.stringify(raw, null, 2))
   FIXTURE = await realpath(fixDir)
 
-  // Create a local dbcli shim so recovery steps find it on PATH
+  // A different installed dbcli must never replace the invoking candidate in
+  // either recovery or verification children (older versions may discard TLS).
   const shimName = process.platform === 'win32' ? 'dbcli.cmd' : 'dbcli'
   const shimPath = join(FIXTURE, shimName)
   const shimContent =
-    process.platform === 'win32' ? `@bun run "${CLI}" %*` : `#!/bin/sh\nbun run "${CLI}" "$@"`
+    process.platform === 'win32'
+      ? '@echo WRONG_DBCLI_FROM_PATH\r\n@exit /b 99\r\n'
+      : '#!/bin/sh\necho WRONG_DBCLI_FROM_PATH\nexit 99\n'
   await writeFile(shimPath, shimContent)
   if (process.platform !== 'win32') {
     const { chmod } = await import('node:fs/promises')

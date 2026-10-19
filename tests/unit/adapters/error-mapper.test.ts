@@ -4,7 +4,7 @@
  */
 
 import { test, expect } from 'bun:test'
-import { mapError, ConnectionError } from 'src/adapters/error-mapper'
+import { mapError, ConnectionError, isTransportDriverCode } from 'src/adapters/error-mapper'
 import type { ConnectionOptions } from 'src/adapters/types'
 
 const mockOptions: ConnectionOptions = {
@@ -15,6 +15,23 @@ const mockOptions: ConnectionOptions = {
   password: 'testpass',
   database: 'testdb',
 }
+
+test.each(['HANDSHAKE_SSL_ERROR', 'HANDSHAKE_NO_SSL_SUPPORT'])(
+  'MySQL TLS failure %s retains strict recovery guidance',
+  (code) => {
+    for (const system of ['mysql', 'mariadb'] as const) {
+      const result = mapError({ code, message: 'fixture TLS failure' }, system, {
+        ...mockOptions,
+        system,
+        sqlTls: { mode: 'verify-full', caPath: '/fixture/ca.pem' },
+      })
+      expect(result.code).toBe('TLS_ERROR')
+      expect(result.hints.join(' ')).toContain('Keep verify-full enabled')
+      expect(result.hints.join(' ')).not.toContain('rejectUnauthorized')
+      expect(isTransportDriverCode(code)).toBe(true)
+    }
+  }
+)
 
 test('mapError categorizes ECONNREFUSED error', () => {
   const error = { code: 'ECONNREFUSED', message: 'Connection refused' }

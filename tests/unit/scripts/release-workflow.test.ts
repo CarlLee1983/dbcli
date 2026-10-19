@@ -15,6 +15,8 @@ interface Step {
   uses?: string
   run?: string
   with?: Record<string, unknown>
+  if?: string
+  'continue-on-error'?: boolean
 }
 
 interface Job {
@@ -22,6 +24,8 @@ interface Job {
   needs?: string | string[]
   environment?: string | { name: string }
   permissions?: Record<string, string>
+  if?: string
+  'continue-on-error'?: boolean
 }
 
 const workflow = Bun.YAML.parse(raw) as {
@@ -82,6 +86,22 @@ describe('release.yml', () => {
     const runs = (workflow.jobs['check-tag']?.steps ?? []).map((step) => step.run ?? '').join('\n')
     expect(runs).toContain('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
     expect(runs).toContain('merge-base --is-ancestor')
+  })
+
+  test('publishing requires successful canonical verification of the checked-out tag', () => {
+    const verify = workflow.jobs.verify
+    if (!verify) throw new Error('Release is missing canonical verification')
+    expect(verify.if).toBeUndefined()
+    expect(verify['continue-on-error']).toBeUndefined()
+    const checkout = verify.steps?.find((step) => step.uses?.startsWith('actions/checkout@'))
+    expect(checkout).toBeDefined()
+    expect(checkout?.with?.ref).toBeUndefined()
+    const canonical = verify.steps?.filter((step) => step.run === 'make verify') ?? []
+    expect(canonical).toHaveLength(1)
+    expect(canonical[0]?.if).toBeUndefined()
+    expect(canonical[0]?.['continue-on-error']).toBeUndefined()
+    expect(needs('publish')).toEqual(['verify'])
+    expect(workflow.jobs.publish?.if).toBeUndefined()
   })
 
   test('publish asserts npm >= 11.5.1, installs frozen, and leaves registry-url unset', () => {

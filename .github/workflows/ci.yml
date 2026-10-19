@@ -1,6 +1,10 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
 
 # Least privilege by default. No job here writes to the repository, publishes a
 # package, or comments on a PR, so nothing needs more than read. A job that ever
@@ -86,6 +90,8 @@ jobs:
         run: bun run test:perf
 
   format:
+    # Release runs the canonical gate on this exact tag; keep the matrix above.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # Formatting is platform-independent, so this runs once rather than per matrix
     # entry. It exists because `release:check` was the only thing enforcing prettier:
     # four unformatted files reached main through green CI and were caught minutes
@@ -104,6 +110,8 @@ jobs:
         run: bun run format:check
 
   build-determinism:
+    # Release runs the canonical gate on this exact tag; keep the matrix above.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # A bundler free to decide differently on the next run ships a different
     # product than the one that was tested (#56). Builds twice, compares hashes.
     runs-on: ubuntu-latest
@@ -117,6 +125,8 @@ jobs:
         run: bun run build:determinism
 
   integration:
+    # Release runs the canonical gate on this exact tag; keep the matrix above.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # The matrix job runs with SKIP_INTEGRATION_TESTS=true, so until this
     # existed `tests/integration` was compiled and skipped in CI — 600-odd
     # assertions against MySQL, PostgreSQL, Redis, MongoDB and Elasticsearch
@@ -177,6 +187,8 @@ jobs:
         run: docker compose -f docker-compose.test.yml down -v
 
   docs-parity:
+    # Release runs the canonical gate on this exact tag; keep the matrix above.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
     # platform copies, or user docs fall out of sync. Runs once (not per matrix).
     runs-on: ubuntu-latest
@@ -196,6 +208,8 @@ jobs:
           bun run plan:check
 
   audit:
+    # Release runs the canonical gate on this exact tag; keep the matrix above.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # Dependency advisories were only ever seen by whoever ran `release:check`
     # by hand, which is one person shortly before a release. Blocking, and on
     # every push: an advisory that lands mid-cycle should turn the branch red

@@ -327,23 +327,42 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The release gate is defined in [`docs/feature-matrix.md → Required CI validation`](./docs/feature-matrix.md#required-ci-validation). Its documentation/skill drift-guards run in CI on every push/PR (the `docs-parity` job); the full gate (encoded in `scripts/release-check.sh`) must pass locally via `bun run release:check` before tagging. Tagging itself triggers the publish workflow, see "Publishing" below.
+The canonical gate is `make verify`; its roster, order, failure behavior and
+attestation contract remain unchanged. See [Required CI validation](./docs/feature-matrix.md#required-ci-validation)
+for CI coverage and [agent workflow](./docs/development/agent-workflow.md#choose-one-evidence-record)
+for the authoritative evidence record.
 
 ### Pre-Release Checklist
 
-Run all of these before pushing a `vX.Y.Z` tag and confirm green:
+Choose **one** local verification path before tagging:
 
-- [ ] `bun run typecheck` — `tsc --noEmit` 無錯誤
-- [ ] `bun run typecheck:tests` — 測試檔同樣無型別錯誤（#97）
-- [ ] `bun run test` — 單元 + 整合測試（含 `tests/integration/dist-smoke.test.ts` 守護 packaged assets path）綠燈
-- [ ] `bun run lint` — `--max-warnings=0`，任何新 ESLint warning 都會擋下 release
-- [ ] `bun run build` — `dist/cli.mjs` 與 `dist/assets/` 產出成功
-- [ ] `./dist/cli.mjs --help` / `./dist/cli.mjs --version` 可執行（dist smoke）
-- [ ] `bun run agent-core:check` — 公開 agent-core 不含資料庫專屬詞彙或內部／CLI framework 相依
-- [ ] `bun run release:check` — 包含文件／manifest 檢查、`docs/feature-matrix.md` 的 `audit` row、`CHANGELOG.md` 的 `## [<version>]` heading，以及 GitHub Pages 文件測試（D-78）
-- [ ] `CHANGELOG.md` 加上新版本區段（Added / Changed / Fixed / Removed）
-- [ ] `package.json` 的 `version` 已 bump（透過 `npm version patch|minor|major --no-git-tag-version`）
-- [ ] Benchmark（`bun run test:perf`）— blocking CI gate；確認所有預算與實測輸出皆通過
+1. **Standalone:** run `bun run release:check`. It runs `make verify` once;
+   only a passing canonical gate proceeds to `bun run release:extras`.
+2. **ForgePilot snapshot:** run canonical verification through
+   `forgepilot verify <selected-work-item> --snapshot`, then `bun run build` and
+   `bun run release:extras` against that same candidate. Record the build and
+   extras with the snapshot verification; do not rerun the full release wrapper.
+
+Both paths require the test services and the canonical environment. Build assets
+must come from the verified source: preserve the exact source candidate through
+verification, build and extras. The build after snapshot verification refreshes
+ignored `dist/` assets without changing source; it does not rerun tests. Any
+candidate change invalidates the old PASS and requires fresh verification.
+`release:extras` requires built assets and runs post-build dist smoke plus checks
+for the feature-matrix `audit` row and current package version's changelog
+heading. It does not replace or repeat general canonical gates.
+
+- [ ] The selected path passes on the final candidate, including release extras.
+- [ ] Version manifests agree and `CHANGELOG.md` has the new version section.
+- [ ] Exact-candidate human review and separate publication authorization are recorded.
+- [ ] Save the sanitized handoff in [`docs/development/release-evidence/<version>.json`](./docs/development/release-evidence/README.md).
+
+Full CI runs for PRs and pushes to `main`. A feature-branch push without a PR
+has no CI; open the PR to obtain CI evidence. Release tags retain all six
+OS/Bun test matrix jobs. The tag's integration, format, build-determinism,
+docs-parity and audit CI jobs are omitted because Release runs those canonical
+checks on the same tagged commit. Release still verifies before publishing and
+waits for the protected `npm-publish` environment approval.
 
 ### GitHub Pages
 

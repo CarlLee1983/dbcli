@@ -60,20 +60,34 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The release gate is `bun run release:check`, encoded in `scripts/release-check.sh`. The documentation/skill drift-guards (`platform:check`, `plugin:check`, `manifest:check`, `docs:check`, `contract:check`, and `plan:check`, plus the `reference.md` command-coverage test in `bun run test`) run in CI on every push/PR via the `docs-parity` job. The same release gate runs the published-page tests, including the `main` branch's legacy GitHub Pages `/docs` source, before tagging:
+The canonical gate is `make verify`; its existing 22-step roster, order,
+failure behavior and attestation contract remain unchanged. Choose either
+`bun run release:check` (canonical gate once, then release extras) or ForgePilot
+snapshot canonical verification followed by a build and `bun run release:extras`
+on the identical source candidate. Built assets must match that candidate;
+a source change invalidates the earlier PASS. See the
+[local checklist](../CONTRIBUTING.md#pre-release-checklist) for both paths.
 
-```bash
-bun run release:check
-```
+Release extras retain post-build dist smoke (including packaged `assets/`),
+the `audit` row in this matrix and the current version's `CHANGELOG.md` heading.
+General lint, type, test, dependency audit and documentation gates belong to
+canonical verification rather than extras. Canonical checks include user-doc
+parity, managed manifests, published Pages, agent-core purity, zero-warning lint
+and blocking performance budgets.
 
-- The `bun run agent-core:check` gate rejects database-specific terms and dependencies outside the stable agent-core boundary.
-- The `bun run lint` gate enforces `--max-warnings=0` — any new ESLint warning blocks release.
-- The release gate's dist smoke guards the packaged `assets/` path used by `dbcli skill --install`.
-- Its documentation checks confirm the `audit` row, matching `CHANGELOG.md` heading, managed manifest versions, user-doc parity, and the published Pages entrypoint. This catches doc drift before tagging.
-- Benchmark (`bun run test:perf`) is a blocking CI gate across the supported OS/Bun matrix; each budget is based on runner measurements and prints its observed value.
-- The CI test matrix runs with `SKIP_INTEGRATION_TESTS=true`, so the database-backed half runs in the separate `integration` job: docker-compose services, then `bun run services:check` (fails with the address of anything not listening), then `tests/integration` with `REQUIRE_INTEGRATION_SERVICES=true`, which turns the suite's auto-skip into a failure. Without that variable a job that starts no services reports the same green as one that starts all of them, which is how those tests sat in CI doing nothing.
+| Event | CI coverage |
+| --- | --- |
+| Pull request | Full CI, including the six OS/Bun matrix jobs |
+| Push to `main` | Full CI |
+| `v*.*.*` tag push | All six matrix jobs; Release runs exact-tag canonical verification before publish |
+| Feature-branch push without a PR | No CI; open a PR for CI evidence |
 
-See [CONTRIBUTING.md → Release Process](../CONTRIBUTING.md#release-process) for the full pre-tag checklist.
+On tags, CI omits integration, format, build-determinism, docs-parity and audit
+jobs only because Release supplies those checks through `make verify` on the
+same tagged commit. The matrix retains `SKIP_INTEGRATION_TESTS=true`; required
+database coverage comes from canonical verification with compose services,
+`services:check` and `REQUIRE_INTEGRATION_SERVICES=true`. An optional local skip
+is not evidence of completed database coverage.
 
 ## SQLite limitations summary
 

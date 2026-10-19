@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "version": "12.0.0",
+  "package": "@carllee1983/dbcli",
+  "evidenceKind": "historical-release-observations",
+  "recordedAt": "2026-10-18T15:21:52.675Z",
+  "provenance": {
+    "sourceRecords": [
+      {
+        "name": "handoff.json",
+        "sha256": "44acc305147e586e12f51c814afb82fdbd0782752eb15ee11c7ff2fa19c5e7aa"
+      },
+      {
+        "name": "publication.json",
+        "sha256": "e39fef3f77ee8241aa9f23f58f1b19cdc4b93da479a134a92a01512e22b6d06b"
+      },
+      {
+        "name": "github-release.json",
+        "sha256": "5073a756439668420fd5fc1ce6189c2f72593668998e1bb55f18b308a989793f"
+      },
+      {
+        "name": "release-result.json",
+        "sha256": "03f7770f2b19279f222f099da0efc144ad35b44641594e0520a18455729a030b"
+      },
+      {
+        "name": "npm-version.json",
+        "sha256": "ea81f7f5be274cf48cbabaaa7716307bd7b97ce1fca5ec15e0f69b8e41992bf5"
+      }
+    ],
+    "method": "Selected fields checked for consistency against existing source records; no verification, publication or install commands were rerun for this index.",
+    "limitations": [
+      "Local source records are not tracked; their names/digests identify provenance, not retrievable durable artifacts.",
+      "Local snapshot verification and install outputs are historical observations; public links cover the remote release chain.",
+      "CI conclusions are reported from publication.json, not a new GitHub query."
+    ]
+  },
+  "candidate": {
+    "base": "b3c30b5e11906c5ee8237192e759f31fca2a75e7",
+    "kind": "SNAPSHOT",
+    "approvedSnapshot": "bdff1a7d5542d988027a0c24ac11123b25274508",
+    "tree": "18547a8b4a82f92da31d8abf7f81be46bd56c38e",
+    "verification": {
+      "id": "EV-001",
+      "result": "PASS",
+      "revision": "bdff1a7d5542d988027a0c24ac11123b25274508",
+      "candidate_kind": "SNAPSHOT"
+    },
+    "review": {
+      "id": "EV-002",
+      "result": "APPROVED",
+      "revision": "bdff1a7d5542d988027a0c24ac11123b25274508",
+      "candidate_kind": "SNAPSHOT"
+    },
+    "reviewedBy": "carl (explicit approval in 2026-10-18 release session)",
+    "localCanonical": {
+      "command": "COMPOSE_PROJECT_NAME=dbcli forgepilot verify release-12-0-0 --snapshot",
+      "canonicalCommand": "make verify",
+      "result": "PASS",
+      "blockingSteps": 22,
+      "allStepExitCodes": [0],
+      "skippedChecks": [
+        "Performance: Query Execution (SQL) > query \"SELECT 1\" --format json 在預算內完成",
+        "Performance: Query Execution (SQL) > query \"SELECT 1\" table 格式在預算內完成"
+      ],
+      "observationKind": "historical-local"
+    }
+  },
+  "authorizations": {
+    "intent": {
+      "observation": "Existing handoff records local preparation as human approved; the distinct intent decision text was not included in the supplied source records.",
+      "limitation": "Do not infer publication authorization from this review."
+    },
+    "review": {
+      "decision": "APPROVED",
+      "recordId": "EV-002",
+      "candidate": "bdff1a7d5542d988027a0c24ac11123b25274508",
+      "actor": "carl"
+    },
+    "publication": {
+      "environment": "npm-publish",
+      "environmentId": 24179075564,
+      "decision": "approved",
+      "workflow": "https://github.com/CarlLee1983/dbcli/actions/runs/39138469040",
+      "observation": "Historical protected-environment approval recorded in publication.json; distinct from local review."
+    }
+  },
+  "releaseChain": {
+    "releaseCommit": {
+      "revision": "3b427b71c230e1584a5325cdce5a051780704ba4",
+      "url": "https://github.com/CarlLee1983/dbcli/commit/3b427b71c230e1584a5325cdce5a051780704ba4"
+    },
+    "mergeCommit": {
+      "revision": "0f751f92185db81abe485603744fcdc1231f68af",
+      "url": "https://github.com/CarlLee1983/dbcli/commit/0f751f92185db81abe485603744fcdc1231f68af"
+    },
+    "tag": {
+      "name": "v12.0.0",
+      "revision": "0f751f92185db81abe485603744fcdc1231f68af",
+      "url": "https://github.com/CarlLee1983/dbcli/tree/v12.0.0"
+    },
+    "pullRequest": "https://github.com/CarlLee1983/dbcli/pull/248",
+    "githubRelease": {
+      "url": "https://github.com/CarlLee1983/dbcli/releases/tag/v12.0.0",
+      "tag": "v12.0.0",
+      "publishedAt": "2026-10-18T15:18:55Z",
+      "isDraft": false,
+      "isPrerelease": false,
+      "bodyMatchesChangelog": true
+    },
+    "candidateBinding": {
+      "observation": "Snapshot and release commit resolve to the same tree; merge commit has release commit as its second parent.",
+      "checkedAt": "2026-10-19",
+      "commands": [
+        "git rev-parse bdff1a7d5542d988027a0c24ac11123b25274508^{tree} 3b427b71c230e1584a5325cdce5a051780704ba4^{tree}",
+        "git show --format=fuller --no-patch 0f751f92185db81abe485603744fcdc1231f68af"
+      ],
+      "observedTree": "18547a8b4a82f92da31d8abf7f81be46bd56c38e",
+      "mergeParents": [
+        "b3c30b5e11906c5ee8237192e759f31fca2a75e7",
+        "3b427b71c230e1584a5325cdce5a051780704ba4"
+      ],
+      "limitation": "Repository object inspection binds content/history; it does not rerun historical verification."
+    }
+  },
+  "verificationRuns": {
+    "revision": "0f751f92185db81abe485603744fcdc1231f68af",
+    "release": {
+      "url": "https://github.com/CarlLee1983/dbcli/actions/runs/39138469040",
+      "conclusion": "success",
+      "headSha": "0f751f92185db81abe485603744fcdc1231f68af",
+      "attestation": {
+        "schema_version": 2,
+        "revision": "0f751f92185db81abe485603744fcdc1231f68af",
+        "dirty_worktree": false,
+        "command": "make verify",
+        "result": "PASS",
+        "exit_code": 0,
+        "started_at": "2026-10-18T15:01:41.365Z",
+        "finished_at": "2026-10-18T15:08:37.843Z",
+        "duration_ms": 416478,
+        "environment": {
+          "os": "linux",
+          "arch": "x64",
+          "bun": "1.4.3",
+          "ci": true
+        },
+        "attestation_hash": "sha256:c43782377879ed5d3949f800d942d5d8490cd9979302885d65a5ab5f8863e0ff"
+      }
+    },
+    "main": {
+      "url": "https://github.com/CarlLee1983/dbcli/actions/runs/39138441424",
+      "conclusion": "success",
+      "attempt": 2,
+      "jobs": 11
+    },
+    "tag": {
+      "url": "https://github.com/CarlLee1983/dbcli/actions/runs/39138469041",
+      "conclusion": "success",
+      "jobs": 11
+    },
+    "pages": {
+      "url": "https://github.com/CarlLee1983/dbcli/actions/runs/39138440850",
+      "limitation": "Pages run referenced by source; no conclusion asserted here."
+    }
+  },
+  "npm": {
+    "version": "12.0.0",
+    "latestAtObservation": "12.0.0",
+    "gitHead": "0f751f92185db81abe485603744fcdc1231f68af",
+    "integrity": "sha512-trq3m+MlBw5nHtn+doN1lB3DSQDzAL/8MV+bkP4MMWfT6fMWF9xjx8Rcq1adGG3AT9IHIblJk6kEqorluFn1KA==",
+    "shasum": "ac5fddeb1142c6c1f3096eeeeab1dc0cab55fecb",
+    "tarball": "https://registry.npmjs.org/@carllee1983/dbcli/-/dbcli-12.0.0.tgz",
+    "provenance": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/@carllee1983%2fdbcli@12.0.0",
+      "provenance": {
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "downloadIntegrityVerified": true,
+    "metadataUrl": "https://registry.npmjs.org/@carllee1983/dbcli/12.0.0"
+  },
+  "publishedInstallSmoke": {
+    "command": "bun install --no-cache",
+    "exitCode": 0,
+    "versionCommand": "./node_modules/.bin/dbcli --version",
+    "versionOutput": "12.0.0",
+    "versionExitCode": 0,
+    "helpCommand": "./node_modules/.bin/dbcli --help",
+    "helpExitCode": 0,
+    "binary": "node_modules/@carllee1983/dbcli/dist/cli.mjs (within isolated installation)",
+    "observationKind": "historical-local"
+  },
+  "inspectTimingFollowup": {
+    "initialFailure": {
+      "run": 39138441424,
+      "attempt": 1,
+      "job": "test (windows-latest, latest)",
+      "test": "inspect collector completes well under the 200ms audit-read gate (no-connect)",
+      "observedMs": 221.3417999999947,
+      "limitMs": 200
+    },
+    "sameCommitTag": {
+      "run": 39138469041,
+      "job": 117707774761,
+      "conclusion": "success",
+      "testDurationMs": 8.25
+    },
+    "recovery": {
+      "action": "Rerun failed main CI job once",
+      "attempt": 2,
+      "sourceOrTestChanges": false,
+      "result": "success",
+      "testDurationMs": 15.74
+    },
+    "nextStep": "Establish a defensible measurement contract in a separate Story before changing the existing blocking 200ms assertion; this index changes no test or retry policy."
+  },
+  "residualRisks": [
+    "Major release: dotted schema input changes name resolution; migration guidance is in the published release notes.",
+    "A pre-existing Windows 200ms timing test failed once at 221ms, then passed on the same commit at 15.74ms; unchanged test also passed in tag CI at 8.25ms."
+  ],
+  "blockedChecks": []
+}

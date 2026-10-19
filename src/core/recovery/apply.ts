@@ -1,3 +1,4 @@
+import { t } from '@/i18n/message-loader'
 import { classifyStep } from './apply-gate'
 import { executeStep, type ExecOutcome, type ExecOptions } from './apply-exec'
 import { runVerifyStep } from './apply-verify'
@@ -35,6 +36,15 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
   let stoppedAt: number | null = null
 
   for (const step of input.envelope.recovery) {
+    if (input.envelope.error.details?.connectionCode === 'TLS_ERROR' && !opts.target) {
+      results.push({
+        order: step.order,
+        command: step.command,
+        status: 'skipped:unsafe-command',
+        reason: t('errors.sql_tls_recovery_target'),
+      })
+      continue
+    }
     const decision = classifyStep(step, opts.allowWrite, input.envelope.error.code)
     if (decision.kind !== 'run') {
       results.push({
@@ -52,6 +62,7 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
       timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       stdoutCap: opts.stdoutCap,
       stderrCap: opts.stderrCap,
+      target: opts.target,
     })
 
     const ok = outcome.exitCode === 0 && !outcome.timedOut
@@ -86,6 +97,7 @@ export async function runApply(input: ApplyInput, opts: ApplyOptions): Promise<A
       timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       stdoutCap: opts.stdoutCap,
       stderrCap: opts.stderrCap,
+      target: opts.target,
     })
     verifyResult = v.result
     verifyStatus = v.status

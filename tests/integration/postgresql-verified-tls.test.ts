@@ -296,6 +296,7 @@ describe.skipIf(SKIP_BY_ENV && !REQUIRE_SERVICES)('PostgreSQL verified TLS', () 
   test('recovery retains TLS requirements and agent mode refuses configuration mutation', async () => {
     const work = await profile('wrongHost', fixtures.caPath, true)
     const before = (await readTlsProfile(work, 'wrongHost')).stdout
+    const checkpoint = await fixtures.logCheckpoint('wrongHost')
     const result = await tlsCli(
       work,
       [
@@ -315,7 +316,17 @@ describe.skipIf(SKIP_BY_ENV && !REQUIRE_SERVICES)('PostgreSQL verified TLS', () 
     const recovered = await tlsCli(work, ['recover', '--apply', '--format', 'json'], {
       DBCLI_AGENT_MODE: '1',
     })
+    expect(recovered.code).not.toBe(0)
     expect(recovered.stdout + recovered.stderr).not.toContain('rejectUnauthorized')
+    const explicit = await tlsCli(
+      work,
+      ['--use', 'wrongHost', 'recover', '--apply', '--format', 'json'],
+      {
+        DBCLI_AGENT_MODE: '1',
+      }
+    )
+    expect(explicit.code).not.toBe(0)
+    expect(explicit.stdout + explicit.stderr).toMatch(/TLS|SSL/)
     const mutate = await tlsCli(
       work,
       [
@@ -339,6 +350,7 @@ describe.skipIf(SKIP_BY_ENV && !REQUIRE_SERVICES)('PostgreSQL verified TLS', () 
     expect(mutate.code).not.toBe(0)
     expect(mutate.stderr).toMatch(/agent mode|DBCLI_AGENT_MODE/i)
     expect((await readTlsProfile(work, 'wrongHost')).stdout).toBe(before)
+    expect(await fixtures.logsSince('wrongHost', checkpoint)).not.toContain('connection authorized')
   }, 30_000)
 
   test('environment-reference profiles retain literal trust and reach the real verified transport', async () => {

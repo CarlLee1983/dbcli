@@ -24,6 +24,7 @@ import {
 } from '@/core/config-v2'
 import { removeConnection } from '@/core/config-v2-mutations'
 import { getDefaultsForSystem } from '@/adapters/defaults'
+import { supportsSqlTls } from '@/adapters/capabilities'
 import { promptUser } from '@/utils/prompts'
 import { redactSecretsForDisplay } from '@/utils/redaction'
 import type { ConnectionConfig } from '@/types'
@@ -302,7 +303,7 @@ async function initCommandHandler(
   const hasSqlTls = options.sqlTls !== undefined || options.sqlTlsCa !== undefined
   let sqlTls: import('@/types').SqlTlsConfig | undefined
   if (hasSqlTls) {
-    if (system !== 'postgresql') throw new Error(t('errors.sql_tls_unsupported'))
+    if (!supportsSqlTls(system)) throw new Error(t('errors.sql_tls_unsupported'))
     if (
       options.sqlTls !== 'verify-full' ||
       typeof options.sqlTlsCa !== 'string' ||
@@ -329,7 +330,7 @@ async function initCommandHandler(
       sqlTls ??= existingConfig.connection.sqlTls
     }
   }
-  if (sqlTls && system !== 'postgresql') {
+  if (sqlTls && !supportsSqlTls(system)) {
     throw new Error(t('errors.sql_tls_change_engine'))
   }
 

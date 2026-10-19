@@ -372,15 +372,17 @@ const SQL_MODE_LIMITED = {
   ),
 } satisfies Pick<EngineCapabilities, 'impactAssess' | 'semantic' | 'design'>
 
+const VERIFIED_SQL_TLS = cap(
+  'supported',
+  'readonly',
+  'Uses profile-scoped verified SQL TLS; availability does not validate CA or handshake.'
+)
+
 export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabilities>> =
   Object.freeze({
     postgresql: Object.freeze({
       ...SQL_BASE,
-      connectionTls: cap(
-        'supported',
-        'readonly',
-        'Uses profile-scoped verified SQL TLS; availability does not validate CA or handshake.'
-      ),
+      connectionTls: VERIFIED_SQL_TLS,
       check: cap('limited', 'readonly', 'SQL-only and strongest on MySQL/MariaDB.'),
     }),
     // SQLite is deliberately narrow in its first Story (DBCLI-034): a row is
@@ -460,8 +462,8 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
         'Applies the same LIMIT rewrite as the other SQL engines; under query-only the handle is opened read-only, which a database with an unreplayed WAL cannot satisfy.'
       ),
     }),
-    mysql: Object.freeze(SQL_BASE),
-    mariadb: Object.freeze(SQL_BASE),
+    mysql: Object.freeze({ ...SQL_BASE, connectionTls: VERIFIED_SQL_TLS }),
+    mariadb: Object.freeze({ ...SQL_BASE, connectionTls: VERIFIED_SQL_TLS }),
     mongodb: Object.freeze({
       ...SQL_BASE,
       ...SQL_ONLY_UNSUPPORTED,
@@ -619,4 +621,13 @@ export function getEngineCapability(
 
 export function supportsCapability(system: DatabaseSystem, key: CommandCapabilityKey): boolean {
   return getEngineCapability(system, key).status === 'supported'
+}
+
+/** Also accepts unvalidated profile input, before the configuration schema is applied. */
+export function supportsSqlTls(system: unknown): boolean {
+  return (
+    typeof system === 'string' &&
+    Object.hasOwn(ENGINE_CAPABILITIES, system) &&
+    supportsCapability(system as DatabaseSystem, 'connectionTls')
+  )
 }

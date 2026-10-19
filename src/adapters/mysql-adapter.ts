@@ -1,4 +1,3 @@
-import { t } from '@/i18n/message-loader'
 /**
  * MySQL database adapter using mysql2/promise
  * Implements the DatabaseAdapter interface for MySQL and MariaDB connections
@@ -30,6 +29,8 @@ import { resolveTimeoutPolicy, statementTimeoutSql } from './timeout-policy'
 import { isTransportFailure } from '@/utils/connection-error-message'
 import { isGrantQuery } from './grant-query'
 import { redactGrant, OMITTED_GRANT } from './grant-redaction'
+import { sqlTlsCa } from './sql-tls'
+import { connectVerifiedMysql } from './mysql-tls'
 
 /**
  * Parse enum values from MySQL COLUMN_TYPE string
@@ -69,15 +70,12 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if connection fails
    */
   async connect(): Promise<void> {
-    if (this.options.sqlTls !== undefined) {
-      throw new Error(t('errors.sql_tls_unsupported'))
-    }
     this.serverVersion = undefined
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise
       const timeouts = resolveTimeoutPolicy(this.options)
-      const { default: driver } = await import('mysql2/promise')
-      this.db = await driver.createConnection({
+      const ca = await sqlTlsCa(this.options)
+      const connectionOptions = {
         host: this.options.host,
         port: this.options.port,
         user: this.options.user,
@@ -85,7 +83,13 @@ export class MySQLAdapter implements DatabaseAdapter {
         database: this.options.database,
         charset: 'utf8mb4',
         connectTimeout: timeouts.connectMs,
-      })
+      }
+      if (ca !== undefined) {
+        this.db = await connectVerifiedMysql(connectionOptions, ca, this.options.host)
+      } else {
+        const { default: driver } = await import('mysql2/promise')
+        this.db = await driver.createConnection(connectionOptions)
+      }
 
       // Ensure utf8mb4 for information_schema comments
       await this.db.execute('SET NAMES utf8mb4')

@@ -9,6 +9,7 @@ import { t } from '@/i18n/message-loader'
 
 import { z } from 'zod'
 import { isAbsolute } from 'node:path'
+import { supportsSqlTls } from '@/adapters/capabilities'
 
 export const SqlTlsConfigSchema = z
   .object({
@@ -289,7 +290,7 @@ function rejectUnsupportedSqlTls(raw: unknown, ctx: z.RefinementCtx): unknown {
     typeof raw === 'object' &&
     'sqlTls' in raw &&
     raw.sqlTls !== undefined &&
-    (!('system' in raw) || raw.system !== 'postgresql')
+    (!('system' in raw) || !supportsSqlTls(raw.system))
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

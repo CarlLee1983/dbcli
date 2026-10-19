@@ -1,9 +1,24 @@
+import { fileURLToPath } from 'node:url'
+
+// Source and bundled core/CLI layouts differ. Resolve from this executing module,
+// never cwd, envelope content or PATH, which may name a pre-TLS dbcli release.
+const CLI_ENTRY = fileURLToPath(
+  new URL(import.meta.url.endsWith('.ts') ? '../../cli.ts' : './cli.mjs', import.meta.url)
+)
+
 export interface ExecOptions {
   cwd: string
   env: NodeJS.ProcessEnv
   timeoutMs: number
   stdoutCap?: number
   stderrCap?: number
+  /** Trusted invocation context, never parsed from an envelope command. */
+  target?: RecoveryTarget
+}
+
+export interface RecoveryTarget {
+  configPath: string
+  connectionName?: string
 }
 
 export interface ExecOutcome {
@@ -22,7 +37,18 @@ export async function executeStep(argv: string[], opts: ExecOptions): Promise<Ex
   const stderrCap = opts.stderrCap ?? DEFAULT_CAP
   const startedAt = performance.now()
 
-  const proc = Bun.spawn(argv, {
+  const command =
+    argv[0] === 'dbcli'
+      ? [
+          process.execPath,
+          '--no-env-file',
+          CLI_ENTRY,
+          ...(opts.target ? ['--config', opts.target.configPath] : []),
+          ...(opts.target?.connectionName ? ['--use', opts.target.connectionName] : []),
+          ...argv.slice(1),
+        ]
+      : argv
+  const proc = Bun.spawn(command, {
     cwd: opts.cwd,
     env: opts.env,
     stdin: 'ignore',

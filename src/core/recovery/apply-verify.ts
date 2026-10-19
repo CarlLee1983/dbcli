@@ -34,6 +34,7 @@ export interface VerifyContext {
   timeoutMs?: number
   stdoutCap?: number
   stderrCap?: number
+  target?: ExecOptions['target']
 }
 
 export interface VerifyOutcome {
@@ -74,6 +75,7 @@ export async function runVerifyStep(step: GuideStep, ctx: VerifyContext): Promis
     timeoutMs: ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     stdoutCap: ctx.stdoutCap,
     stderrCap: ctx.stderrCap,
+    target: ctx.target,
   })
 
   const ok = outcome.exitCode === 0 && !outcome.timedOut

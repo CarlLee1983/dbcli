@@ -1,3 +1,4 @@
+import { t } from '@/i18n/message-loader'
 import { Command } from 'commander'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -21,9 +22,41 @@ import { renderNextJson } from '@/core/recovery/next-render-json'
 import { renderNextMarkdown } from '@/core/recovery/next-render-markdown'
 import { NEXT_SCHEMA_VERSION, type NextResult } from '@/core/recovery/next-types'
 import { validateFormat } from '@/utils/validation'
+import { resolveConfigPath } from '@/utils/config-path'
+import { resolveConnectionSelector } from '@/agent-core/connection-selector'
+import type { RecoveryTarget } from '@/core/recovery/apply-exec'
 
 const ALLOWED_FORMATS = ['json', 'markdown'] as const
 const ALLOWED_TIERS: AllowWrite[] = ['readonly-cmd', 'write-cmd']
+
+async function tlsRecoveryTarget(): Promise<RecoveryTarget> {
+  let explicitConfig = false
+  for (let command: Command | null = recoverCommand; command; command = command.parent) {
+    for (const key of ['config', 'global']) {
+      const source = command.getOptionValueSource(key)
+      if (source && source !== 'default') explicitConfig = true
+    }
+  }
+  if (!explicitConfig)
+    throw new RecoverCliError(t('errors.sql_tls_recovery_config'), EXIT_CODE.malformed)
+  const configPath = resolve(resolveConfigPath(recoverCommand))
+  const connectionName = resolveConnectionSelector({
+    root: recoverCommand.optsWithGlobals().use as string | undefined,
+    environment: process.env.DBCLI_CONNECTION,
+  })
+  const { configModule } = await import('@/core/config')
+  const config = await configModule.read(configPath, connectionName, { loadLayeredSchema: false })
+  if (config?.effectiveConnectionName && !connectionName)
+    throw new RecoverCliError(t('errors.sql_tls_recovery_profile'), EXIT_CODE.malformed)
+  if (
+    !config ||
+    !('sqlTls' in config.connection) ||
+    config.connection.sqlTls?.mode !== 'verify-full'
+  ) {
+    throw new RecoverCliError(t('errors.sql_tls_recovery_required'), EXIT_CODE.malformed)
+  }
+  return { configPath, ...(connectionName && { connectionName }) }
+}
 
 export class RecoverCliError extends Error {
   constructor(
@@ -310,13 +343,17 @@ export const recoverCommand = new Command()
       }
 
       const noVerify = options.verify === false
+      const target =
+        source.envelope.error.details?.connectionCode === 'TLS_ERROR'
+          ? await tlsRecoveryTarget()
+          : undefined
       const result = await runApply(
         {
           envelope: source.envelope,
           cwd: source.cwd,
           source: { kind: source.kind, path: source.path },
         },
-        { allowWrite, noVerify }
+        { allowWrite, noVerify, target }
       )
 
       let verificationArtifactPath: string | undefined

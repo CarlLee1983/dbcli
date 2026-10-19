@@ -13,33 +13,41 @@ const connection = {
   sqlTls,
 }
 
-test('V1 migration and existing profile edits preserve the explicit TLS requirement', () => {
-  const migrated = migrateV1ToV2(DbcliConfigSchema.parse({ connection }))
-  expect(migrated.connections.default).toHaveProperty('sqlTls', sqlTls)
-  const edited = upsertConnection(DbcliConfigV2Schema.parse(migrated), {
-    name: 'default',
-    system: 'postgresql',
-    host: 'new.example',
-    port: 5432,
-    user: 'reader',
-    database: 'fixture',
-  })
-  expect(edited.connections.default).toHaveProperty('sqlTls', sqlTls)
-})
-
-test('changing a TLS profile to an unsupported engine refuses instead of losing trust', () => {
-  const config = DbcliConfigV2Schema.parse({ version: 2, connections: { verified: connection } })
-  expect(() =>
-    upsertConnection(config, {
-      name: 'verified',
-      system: 'mysql',
-      host: 'localhost',
-      port: 3306,
+test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+  'V1 migration and %s profile edits preserve the explicit TLS requirement',
+  (system) => {
+    const migrated = migrateV1ToV2(
+      DbcliConfigSchema.parse({ connection: { ...connection, system } })
+    )
+    expect(migrated.connections.default).toHaveProperty('sqlTls', sqlTls)
+    const edited = upsertConnection(DbcliConfigV2Schema.parse(migrated), {
+      name: 'default',
+      system,
+      host: 'new.example',
+      port: 5432,
       user: 'reader',
       database: 'fixture',
     })
-  ).toThrow('SQL TLS')
-})
+    expect(edited.connections.default).toHaveProperty('sqlTls', sqlTls)
+  }
+)
+
+test.each(['postgresql', 'mysql', 'mariadb'] as const)(
+  'changing a TLS profile to supported %s preserves its trust',
+  (system) => {
+    const config = DbcliConfigV2Schema.parse({ version: 2, connections: { verified: connection } })
+    expect(
+      upsertConnection(config, {
+        name: 'verified',
+        system,
+        host: 'localhost',
+        port: 3306,
+        user: 'reader',
+        database: 'fixture',
+      })
+    ).toHaveProperty('connections.verified.sqlTls', sqlTls)
+  }
+)
 
 test.each([
   null,
@@ -74,14 +82,7 @@ test('direct MySQL/MariaDB adapter callers cannot silently ignore explicit SQL T
 
 test('all exported adapter factory routes refuse unsupported SQL TLS', async () => {
   const { AdapterFactory } = await import('@/adapters/factory')
-  for (const system of [
-    'mysql',
-    'mariadb',
-    'sqlite',
-    'redis',
-    'mongodb',
-    'elasticsearch',
-  ] as const) {
+  for (const system of ['sqlite', 'redis', 'mongodb', 'elasticsearch'] as const) {
     const options = {
       system,
       host: 'unused',

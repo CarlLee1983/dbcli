@@ -1,7 +1,8 @@
 # Release evidence handoff
 
 Store one sanitized `<version>.json` index here for each release. The index is
-the durable handoff from the authoritative PR or ForgePilot evidence record;
+the durable handoff from the authoritative PR or local candidate evidence record
+described in [the agent workflow](../agent-workflow.md#choose-one-evidence-record);
 it should identify the approved snapshot/tree, release and merge commits, tag,
 PR, exact-commit verification runs, package integrity/provenance and install
 observations. Record intent, review and publication authorization separately;

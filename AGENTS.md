@@ -19,12 +19,11 @@ Completion requires evidence for every criterion and human review of the exact
 candidate; a passing command alone is not completion.
 
 Before selecting evidence, read [the workflow paths](docs/development/agent-workflow.md#choose-one-evidence-record):
-ForgePilot is required for uncommitted snapshot verification, dependency
-scheduling, or candidate-bound local handoff. A single committed PR may use
-exact-checkout-revision CI and review evidence. A dirty workspace is ineligible
-for that PR-only path. ForgePilot is an operator tool, not a dbcli dependency;
-`.forgepilot/` remains local state. Use the existing `$forgepilot` skill and
-`forgepilot --help` when that path applies.
+a clean committed PR may use exact-checkout-revision CI and review evidence.
+For an uncommitted candidate, retain reconstructable source content and bind
+verification and human review to it in one local handoff record. The human
+selects the Story; record dependency order when needed. A WIP commit or external
+work scheduler is not required.
 
 For release preparation, follow [the release checklist](CONTRIBUTING.md#pre-release-checklist).
 For completion reports and distinct intent/review/publication decisions, follow

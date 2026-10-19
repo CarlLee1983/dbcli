@@ -191,6 +191,7 @@ test.each(
 test('reinitializing an existing named profile cannot silently remove its TLS requirement', async () => {
   const work = await tlsWorkspace()
   workspaces.push(work)
+  const caPath = join(work.dir, 'ca.pem')
   expect(
     (
       await tlsCli(work, [
@@ -199,7 +200,7 @@ test('reinitializing an existing named profile cannot silently remove its TLS re
         '--sql-tls',
         'verify-full',
         '--sql-tls-ca',
-        '/ca.pem',
+        caPath,
       ])
     ).code
   ).toBe(0)
@@ -208,7 +209,7 @@ test('reinitializing an existing named profile cannot silently remove its TLS re
   const loaded = await readTlsProfile(work, 'verified')
   expect(JSON.parse(loaded.stdout).connection.sqlTls).toEqual({
     mode: 'verify-full',
-    caPath: '/ca.pem',
+    caPath,
   })
 })
 

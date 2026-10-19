@@ -23,7 +23,13 @@ export interface DatabaseEnv {
 /**
  * SQL Connection configuration (stored in .dbcli file)
  */
+export interface SqlTlsConfig {
+  mode: 'verify-full'
+  caPath: string
+}
+
 export interface SqlConnectionConfig {
+  sqlTls?: SqlTlsConfig
   system: 'postgresql' | 'mysql' | 'mariadb'
   host: string | { $env: string }
   port: number | { $env: string }

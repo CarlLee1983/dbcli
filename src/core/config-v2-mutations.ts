@@ -1,3 +1,4 @@
+import { t } from '@/i18n/message-loader'
 import { DEFAULT_AUDIT_ROTATION } from '@/utils/validation'
 import type { DbcliConfig, DbcliConfigV2 } from '@/utils/validation'
 
@@ -72,6 +73,7 @@ export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
     port: number
     user: string
     database: string
+    sqlTls?: import('@/types').SqlTlsConfig
   }
   return {
     version: 2,
@@ -83,6 +85,7 @@ export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
         port: c.port,
         user: c.user,
         database: c.database,
+        ...(c.sqlTls && { sqlTls: c.sqlTls }),
         password: { $env: 'DB_PASSWORD' },
         permission: v1.permission ?? 'query-only',
         envFile: '.env.local',
@@ -99,13 +102,17 @@ export function migrateV1ToV2(v1: DbcliConfig): DbcliConfigV2 {
 /** 新增或就地覆寫同名連線(immutable)。非機密欄存字面值,password 存 {$env} 參照 +
  *  per-connection envFile。編輯時保留既有 permission;新建預設 'query-only'。 */
 export function upsertConnection(config: DbcliConfigV2, input: ConnectionInput): DbcliConfigV2 {
-  const existing = config.connections[input.name] as { permission?: string } | undefined
+  const existing = config.connections[input.name]
+  if (existing && 'sqlTls' in existing && existing.sqlTls && input.system !== 'postgresql') {
+    throw new Error(t('errors.sql_tls_change_engine'))
+  }
   const connection = {
     system: input.system,
     host: input.host,
     port: input.port,
     user: input.user,
     database: input.database,
+    ...(existing && 'sqlTls' in existing && existing.sqlTls && { sqlTls: existing.sqlTls }),
     password: { $env: envVarNameFor(input.name, 'password') },
     permission: existing?.permission ?? 'query-only',
     envFile: `.env.${input.name}`,

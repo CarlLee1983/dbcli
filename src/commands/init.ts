@@ -11,7 +11,7 @@
  */
 
 import { Command } from 'commander'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { mkdir } from 'node:fs/promises'
 import { t, t_vars } from '@/i18n/message-loader'
 import { parseEnvDatabase } from '@/core/env-parser'
@@ -29,7 +29,7 @@ import { redactSecretsForDisplay } from '@/utils/redaction'
 import type { ConnectionConfig } from '@/types'
 import { AdapterFactory, ConnectionError, type ConnectionOptions } from '@/adapters'
 import { DATABASE_SYSTEMS, type DatabaseSystem } from '@/adapters/types'
-import type { DbcliConfigV2 } from '@/utils/validation'
+import { SqlTlsConfigSchema, type DbcliConfigV2 } from '@/utils/validation'
 import { resolveConfigPath } from '@/utils/config-path'
 import {
   getProjectStoragePath,
@@ -143,6 +143,8 @@ export const initCommand = new Command('init')
     '--system <system>',
     'Database system (postgresql, mysql, mariadb, mongodb, redis, elasticsearch)'
   )
+  .option('--sql-tls <mode>', t('init.sql_tls_help'))
+  .option('--sql-tls-ca <path>', t('init.sql_tls_ca_help'))
   .option('--file <path>', 'SQLite database file path (the database must already exist)')
   .option('--cloud-id <id>', 'Elasticsearch Cloud ID')
   .option('--api-key <key>', 'Elasticsearch API Key')
@@ -297,6 +299,40 @@ async function initCommandHandler(
     throw new Error(t_vars('errors.invalid_system', { system }))
   }
 
+  const hasSqlTls = options.sqlTls !== undefined || options.sqlTlsCa !== undefined
+  let sqlTls: import('@/types').SqlTlsConfig | undefined
+  if (hasSqlTls) {
+    if (system !== 'postgresql') throw new Error(t('errors.sql_tls_unsupported'))
+    if (
+      options.sqlTls !== 'verify-full' ||
+      typeof options.sqlTlsCa !== 'string' ||
+      !options.sqlTlsCa.trim()
+    ) {
+      throw new Error(t('errors.sql_tls_options_required'))
+    }
+    sqlTls = SqlTlsConfigSchema.parse({ mode: options.sqlTls, caPath: resolve(options.sqlTlsCa) })
+  }
+
+  // Reinitializing a name must retain its trust requirement even when the UI has no TLS fields.
+  const existingStorage = await resolveConfigStoragePath(configPath)
+  const existingDocument = Bun.file(join(existingStorage, 'config.json'))
+  if (await existingDocument.exists()) {
+    if (detectConfigVersion(await existingDocument.json()) === 2) {
+      const prior = (await readV2Config(existingStorage)).connections[connectionName]
+      if (prior && 'sqlTls' in prior) sqlTls ??= prior.sqlTls
+    } else if (
+      connectionName === 'default' &&
+      existingConfig &&
+      'sqlTls' in existingConfig.connection
+    ) {
+      // V1 is imported under this name; its initialization probe must use the same trust.
+      sqlTls ??= existingConfig.connection.sqlTls
+    }
+  }
+  if (sqlTls && system !== 'postgresql') {
+    throw new Error(t('errors.sql_tls_change_engine'))
+  }
+
   // 4a. SQLite: a file path is the whole interview, so it never reaches the
   // host/port/user/password questions below.
   if (system === 'sqlite') {
@@ -331,6 +367,7 @@ async function initCommandHandler(
   // 4. Collect values for each connection parameter
   const connection: Partial<ConnectionConfig> = {
     system: system as 'postgresql' | 'mysql' | 'mariadb',
+    ...(sqlTls && { sqlTls }),
   }
 
   // Declare configForWrite early (will be assigned later)
@@ -364,6 +401,7 @@ async function initCommandHandler(
       user: { $env: envUser },
       password: { $env: envPassword },
       database: { $env: envDatabase },
+      ...(sqlTls && { sqlTls }),
     }
 
     // Skip subsequent connection parameter collection, go directly to permission selection
@@ -528,6 +566,7 @@ async function initCommandHandler(
       user: { $env: envUser },
       password: { $env: envPassword },
       database: { $env: envDatabase },
+      ...(sqlTls && { sqlTls }),
     }
   }
 
@@ -569,6 +608,7 @@ async function initCommandHandler(
       user: String(resolveValue(newConfig.connection.user, 'user')),
       password: String(resolveValue(newConfig.connection.password, 'password')) || '',
       database: String(resolveValue(newConfig.connection.database, 'database')),
+      ...(sqlTls && { sqlTls }),
     }
 
     const adapter = AdapterFactory.createAdapterWithoutRules(testConnection)

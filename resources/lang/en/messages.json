@@ -59,7 +59,9 @@
     "cannot_remove_last": "Cannot remove the last connection",
     "connection_already_exists": "Connection '{name}' already exists",
     "rename_invalid_format": "Usage: --rename <old-name>:<new-name>",
-    "prompt_sqlite_file": "SQLite database file path: "
+    "prompt_sqlite_file": "SQLite database file path: ",
+    "sql_tls_help": "Verified SQL TLS mode (verify-full; PostgreSQL only)",
+    "sql_tls_ca_help": "PEM CA bundle for --sql-tls verify-full"
   },
   "inspect": {
     "description": "Read-only snapshot of connection, permission, blacklist, objects, snippets, and suggested next commands.",
@@ -228,7 +230,20 @@
     "env_refs_missing_options": "When using --use-env-refs, environment variable names must be specified.\nProvide options: --env-host, --env-port, --env-user, --env-password, --env-database\nOr use interactive mode: run \"dbcli init --use-env-refs\" without --no-interactive",
     "env_var_not_defined": "Cannot test connection: environment variable {envKey} is not defined.\nSet {envKey} in .env or environment variables.\nHint: run 'export {envKey}=<value>' and retry",
     "invalid_output_format": "--format {format} is not supported here — use text or json",
-    "sqlite_file_required": "A SQLite connection needs a file path. Pass --file <path> or run init interactively."
+    "sqlite_file_required": "A SQLite connection needs a file path. Pass --file <path> or run init interactively.",
+    "sql_tls_unsupported": "Explicit SQL TLS is supported only for PostgreSQL",
+    "sql_tls_options_required": "Provide both --sql-tls verify-full and --sql-tls-ca <path>",
+    "sql_tls_change_engine": "Explicit SQL TLS is supported only for PostgreSQL; cannot discard it when editing a profile",
+    "sql_tls_legacy_import": "SQL TLS legacy single-file import is unsupported. Keep the original profile; create a verified named profile in a separate config directory before switching. Do not remove SQL TLS.",
+    "sql_tls_ca_absolute": "SQL TLS CA path must be absolute",
+    "sql_tls_network_host": "Explicit SQL TLS requires a DNS or IP host, not a Unix socket",
+    "sql_tls_ca_empty": "CA bundle contains no PEM certificates",
+    "sql_tls_ca_load": "Cannot load SQL TLS CA bundle: {detail}",
+    "sql_tls_ca_restore": "Restore a readable, valid PEM CA bundle at sqlTls.caPath; keep verify-full enabled.",
+    "sql_tls_handshake": "TLS handshake failed: {detail}",
+    "sql_tls_ca_hint": "Set sqlTls.caPath to the correct readable PEM CA bundle.",
+    "sql_tls_identity_hint": "Verify the certificate validity and DNS/IP identity for {host}.",
+    "sql_tls_no_downgrade": "Keep verify-full enabled; do not remove SQL TLS or retry without verification."
   },
   "success": {
     "inserted": "Successfully inserted {count} row(s)",

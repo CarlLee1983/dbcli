@@ -157,7 +157,7 @@ Without a TTY, with `--no-interactive`, or when `--use-env-refs` plus all five `
 
 New initialization always creates named v2 configuration, including plain `init` and explicit `--config` paths; it no longer creates an unnamed v1 configuration. Existing v1 configurations remain readable and their established named v2 import is retained. The first explicitly named connection is still the default in a new registry; adding a connection preserves an existing registry's default or no-default state. An explicitly chosen duplicate name still requires interactive overwrite confirmation or `--force`; a noninteractive duplicate without `--force`, or a declined confirmation, leaves files untouched. `--remove` and `--rename` do not ask for a new connection name.
 
-**Key options:** `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
+**Key options:** `--sql-tls verify-full`, `--sql-tls-ca <path>`, `--system`, `--permission`, `--use-env-refs`, `--skip-test`, `--no-interactive`, `--force`, `--conn-name <name>`, `--env-file <path>`, `--remove <name>`, `--rename <old:new>`
 
 **Environment-reference options:** `--env-host <var>`, `--env-port <var>`, `--env-user <var>`, `--env-password <var>`, `--env-database <var>`
 
@@ -192,6 +192,40 @@ the no-default state, or updates the default name when renaming that connection.
 Use root-level `--global` with `init`, `use`, `status`, `query`, or any other command to read or mutate the user-global v2 registry at `~/.config/dbcli/config.json`. Without it, the current project binding remains the source of truth. The global registry uses the same private file mode and integrity record as project home storage.
 
 > **AI agent note on `--use-env-refs`:** If an existing `.dbcli` config contains `{"$env": "DB_HOST"}` style references, the connection values are read from environment variables at runtime. Do NOT re-run `init` to replace these references with actual values — the env-ref format is intentional for CI/CD and multi-environment setups.
+
+#### Verified TLS for PostgreSQL
+
+Use both SQL TLS flags when creating a named PostgreSQL profile. This example prompts for the password and tests the connection before saving:
+
+```bash
+dbcli init --conn-name verified-pg --system postgresql \
+  --host db.example.com --port 5432 --user reader --name appdb \
+  --permission query-only --sql-tls verify-full --sql-tls-ca ./certs/root-ca.pem
+dbcli --use verified-pg blacklist list
+dbcli --use verified-pg schema public.events --format json
+dbcli --use verified-pg query "SELECT id FROM public.events LIMIT 10" --format json
+```
+
+Replace the host, database and table with your authorized target; confirm real columns through schema before querying. The saved connection includes this dedicated SQL object (shown as a connection fragment):
+
+```json
+{
+  "sqlTls": {
+    "mode": "verify-full",
+    "caPath": "/absolute/path/to/certs/root-ca.pem"
+  }
+}
+```
+
+`--sql-tls verify-full` and `--sql-tls-ca <path>` are required together. Empty values, other modes and unsupported engines fail explicitly. Only PostgreSQL supports this SQL TLS contract; MySQL, MariaDB and all other engines reject an explicit request. MongoDB's `tls` and Elasticsearch's TLS settings remain separate. Existing profiles without `sqlTls` keep their previous behavior; no global TLS policy is added. V1 directory and v2 profile reads, normal `init` import from a V1 directory to v2, and the public `migrateV1ToV2` helper preserve the TLS object. A legacy V1 single-file TLS profile remains readable and usable in human mode, but automatic `init` import explicitly refuses it before connecting or writing and leaves the original untouched. For that case, create a verified named profile in a separate configuration directory, verify it, then select it; preserve `sqlTls` throughout migration.
+
+`init` resolves a relative CA path against its current working directory before saving. Saved `caPath` must be a nonempty absolute literal path to a PEM CA bundle; it accepts no environment-variable reference. Existing environment references in host/user and other supported fields remain usable. Each new connection reads the CA bundle again; an unreadable, empty or invalid bundle stops before connecting. `--skip-test` skips only the initialization test, not verification on subsequent use.
+
+`verify-full` requires encryption, a trusted certificate chain, valid certificate dates and certificate identity matching the configured DNS name or IP address. Unix sockets are refused for explicit SQL TLS. Untrusted, expired or mismatched certificates and servers without TLS fail before the user query; there is no plaintext retry or verification downgrade. Correct the CA, target hostname or certificate validity before retrying. A cipher alone does not prove identity verification.
+
+Permitted reads through an already configured profile remain usable in agent mode; `init` and other configuration mutations remain refused under `DBCLI_AGENT_MODE=1`. TLS does not bypass explicit production selection, native database authorization, permission, blacklist, write-gate or audit controls.
+
+For binary rollback, stop workflows that require verified TLS or keep a supporting version. Older binaries may strip `sqlTls`; retaining the profile after downgrading does not preserve the guarantee. Removing TLS settings or retrying in plaintext cannot restore compliance. Local isolated PostgreSQL fixture results are not evidence of real RDS acceptance; MySQL/MariaDB TLS support is outside this feature.
 
 ### use
 
@@ -1730,6 +1764,8 @@ Every actionable block carries machine-readable next steps so an agent can move 
 **Permission:** n/a (acts as a TCP relay; does not use dbcli's SQL permission model)
 
 ### capabilities
+
+`connection.tls` reports PostgreSQL support from the engine capability matrix and maps to the existing connection command surfaces; it adds no TLS subcommand. Check with `dbcli --use verified-pg capabilities check --require connection.tls --format json`. `available` means tool support only: it does not prove that this profile configures TLS, the CA is readable, the handshake succeeds, or the operation is authorized. Catalog/check remain offline, read no CA bundle, perform no handshake and change no configuration. Other engines do not report this capability as available; older binaries without the ID return `unknown`. Configuration mutation still requires its own authorization.
 
 Discovery. Lists the static dbcli capability catalog — what this tool can do,
 described in a versioned shape an external Skill can parse before it starts

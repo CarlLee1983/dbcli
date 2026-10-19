@@ -1,3 +1,4 @@
+import { t, t_vars } from '@/i18n/message-loader'
 /**
  * Error mapper for database connection errors
  * Categorizes driver errors into user-friendly messages with actionable hints
@@ -147,6 +148,7 @@ const REDIS_PREFIXES: Record<string, CodedCategory> = {
  * 正是本檔案要修掉的誤判來源。
  */
 const FALLBACK_PATTERNS: [RegExp, CodedCategory][] = [
+  [/server does not support SSL connections/i, 'TLS_ERROR'],
   [/connection refused/i, 'ECONNREFUSED'],
   [/\bECONNREFUSED\b/, 'ECONNREFUSED'],
   [/connect(?:ion)? time(?:d )?out/i, 'ETIMEDOUT'],
@@ -370,6 +372,17 @@ export function mapError(
       )
 
     case 'TLS_ERROR':
+      if (options.sqlTls !== undefined) {
+        return new ConnectionError(
+          'TLS_ERROR',
+          t_vars('errors.sql_tls_handshake', { detail: errMsg }),
+          [
+            t('errors.sql_tls_ca_hint'),
+            t_vars('errors.sql_tls_identity_hint', { host: options.host }),
+            t('errors.sql_tls_no_downgrade'),
+          ]
+        )
+      }
       return new ConnectionError('TLS_ERROR', `TLS handshake failed: ${errMsg}`, [
         'Point the connection at the right CA bundle: set "caPath" in .dbcli',
         'For a self-signed certificate in a trusted network, set "rejectUnauthorized": false',

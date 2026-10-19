@@ -11,6 +11,7 @@ export type SideEffectTier =
   | 'none'
 
 export type CommandCapabilityKey =
+  | 'connectionTls'
   | 'init'
   | 'use'
   | 'list'
@@ -75,6 +76,7 @@ export interface CommandCapability {
 export type EngineCapabilities = Readonly<Record<CommandCapabilityKey, Readonly<CommandCapability>>>
 
 export const COMMAND_CAPABILITY_KEYS = Object.freeze([
+  'connectionTls',
   'init',
   'use',
   'list',
@@ -177,6 +179,11 @@ const ENGINE_INDEPENDENT = {
 >
 
 const SQL_BASE = {
+  connectionTls: cap(
+    'unsupported',
+    'none',
+    'Explicit verified SQL TLS is not supported by this engine.'
+  ),
   init: cap('supported', 'interactive', 'SQL connection initialization is supported.'),
   use: cap('supported', 'local-write', 'V2 config supports named SQL connections.'),
   list: cap('supported', 'readonly', 'Lists relational tables.'),
@@ -369,6 +376,11 @@ export const ENGINE_CAPABILITIES: Readonly<Record<DatabaseSystem, EngineCapabili
   Object.freeze({
     postgresql: Object.freeze({
       ...SQL_BASE,
+      connectionTls: cap(
+        'supported',
+        'readonly',
+        'Uses profile-scoped verified SQL TLS; availability does not validate CA or handshake.'
+      ),
       check: cap('limited', 'readonly', 'SQL-only and strongest on MySQL/MariaDB.'),
     }),
     // SQLite is deliberately narrow in its first Story (DBCLI-034): a row is

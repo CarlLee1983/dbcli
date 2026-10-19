@@ -1,3 +1,4 @@
+import { t } from '@/i18n/message-loader'
 /**
  * Zod validation schemas for .dbcli configuration and connection parameters
  *
@@ -7,6 +8,17 @@
  */
 
 import { z } from 'zod'
+import { isAbsolute } from 'node:path'
+
+export const SqlTlsConfigSchema = z
+  .object({
+    mode: z.literal('verify-full'),
+    caPath: z
+      .string()
+      .min(1)
+      .refine(isAbsolute, () => ({ message: t('errors.sql_tls_ca_absolute') })),
+  })
+  .strict()
 
 /**
  * Environment variable reference schema
@@ -169,6 +181,7 @@ export const MongoDBConnectionConfigSchema = z.object({
  * Supports environment variable references
  */
 const SqlConnectionConfigSchema = z.object({
+  sqlTls: SqlTlsConfigSchema.optional(),
   system: z.enum(['postgresql', 'mysql', 'mariadb']),
   host: StringOrEnvRef,
   port: NumberOrEnvRef,
@@ -270,13 +283,33 @@ export const ElasticsearchConnectionConfigSchema = z.object({
 /**
  * Connection configuration schema (union of SQL, SQLite, MongoDB, Redis, Elasticsearch)
  */
-export const ConnectionConfigSchema = z.union([
-  SqlConnectionConfigSchema,
-  SqliteConnectionConfigSchema,
-  MongoDBConnectionConfigSchema,
-  RedisConnectionConfigSchema,
-  ElasticsearchConnectionConfigSchema,
-])
+function rejectUnsupportedSqlTls(raw: unknown, ctx: z.RefinementCtx): unknown {
+  if (
+    raw !== null &&
+    typeof raw === 'object' &&
+    'sqlTls' in raw &&
+    raw.sqlTls !== undefined &&
+    (!('system' in raw) || raw.system !== 'postgresql')
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sqlTls'],
+      message: t('errors.sql_tls_unsupported'),
+    })
+  }
+  return raw
+}
+
+export const ConnectionConfigSchema = z.preprocess(
+  rejectUnsupportedSqlTls,
+  z.union([
+    SqlConnectionConfigSchema,
+    SqliteConnectionConfigSchema,
+    MongoDBConnectionConfigSchema,
+    RedisConnectionConfigSchema,
+    ElasticsearchConnectionConfigSchema,
+  ])
+)
 
 /**
  * Permission schema
@@ -506,6 +539,7 @@ const NamedConnectionUnion = z.union([
 // 所以 refine 拿到的物件裡不會再有 `blacklist`。
 
 export const NamedConnectionSchema = z.preprocess((raw, ctx) => {
+  rejectUnsupportedSqlTls(raw, ctx)
   if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
     if ('blacklist' in (raw as Record<string, unknown>)) {
       ctx.addIssue({

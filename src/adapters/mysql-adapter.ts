@@ -1,3 +1,4 @@
+import { t } from '@/i18n/message-loader'
 /**
  * MySQL database adapter using mysql2/promise
  * Implements the DatabaseAdapter interface for MySQL and MariaDB connections
@@ -68,6 +69,9 @@ export class MySQLAdapter implements DatabaseAdapter {
    * @throws ConnectionError if connection fails
    */
   async connect(): Promise<void> {
+    if (this.options.sqlTls !== undefined) {
+      throw new Error(t('errors.sql_tls_unsupported'))
+    }
     this.serverVersion = undefined
     await withMappedConnectionError(this.system, this.options, async () => {
       // Create connection using mysql2/promise

@@ -53,6 +53,13 @@ export async function checkOverwrite(
 /** Refuse a legacy import that would strand relative per-connection env files. */
 export async function assertV2InitImportSupported(configPath: string): Promise<void> {
   if (isGlobalConfigPath(configPath)) return
+  const legacyFile = Bun.file(configPath)
+  if ((await legacyFile.stat().catch(() => null))?.isFile()) {
+    const legacy = await legacyFile.json()
+    if (legacy.connection?.sqlTls !== undefined) {
+      throw new Error(t('errors.sql_tls_legacy_import'))
+    }
+  }
   const projectConfig = Bun.file(join(configPath, 'config.json'))
   if (!(await projectConfig.exists())) return
   const raw: unknown = JSON.parse(await projectConfig.text())

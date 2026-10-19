@@ -62,6 +62,15 @@ interface CapabilityDeclaration {
  */
 const DECLARATIONS: readonly CapabilityDeclaration[] = [
   {
+    id: 'connection.tls',
+    key: 'connectionTls',
+    command: 'query',
+    description:
+      'Use explicit verified SQL TLS from a configured profile. Availability does not validate TLS policy, CA loading or handshake, or authorize configuration changes.',
+    statementType: 'SELECT',
+    requiresConnection: true,
+  },
+  {
     id: 'connection.init',
     key: 'init',
     command: 'init',

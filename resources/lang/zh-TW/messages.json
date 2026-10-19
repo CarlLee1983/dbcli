@@ -59,7 +59,9 @@
     "cannot_remove_last": "無法移除最後一個連線",
     "connection_already_exists": "連線 '{name}' 已存在",
     "rename_invalid_format": "用法：--rename <舊名稱>:<新名稱>",
-    "prompt_sqlite_file": "SQLite 資料庫檔案路徑："
+    "prompt_sqlite_file": "SQLite 資料庫檔案路徑：",
+    "sql_tls_help": "驗證式 SQL TLS 模式（verify-full；僅 PostgreSQL）",
+    "sql_tls_ca_help": "供 --sql-tls verify-full 使用的 PEM CA bundle"
   },
   "inspect": {
     "description": "唯讀檢視：連線、權限、黑名單、物件、片段與建議下一步指令。",
@@ -228,7 +230,20 @@
     "env_refs_missing_options": "使用 --use-env-refs 時，必須指定環境變數名稱。\n請提供選項：--env-host、--env-port、--env-user、--env-password、--env-database\n或使用互動模式：執行 \"dbcli init --use-env-refs\"（不加 --no-interactive）",
     "env_var_not_defined": "無法測試連線：環境變數 {envKey} 未定義。\n請在 .env 或環境變數中設定 {envKey}。\n提示：執行 'export {envKey}=<value>' 後重試",
     "invalid_output_format": "無法使用 --format {format}，請使用 text 或 json",
-    "sqlite_file_required": "SQLite 連線需要一個檔案路徑。請用 --file <path>，或以互動模式執行 init。"
+    "sqlite_file_required": "SQLite 連線需要一個檔案路徑。請用 --file <path>，或以互動模式執行 init。",
+    "sql_tls_unsupported": "明確 SQL TLS 目前僅支援 PostgreSQL",
+    "sql_tls_options_required": "請同時提供 --sql-tls verify-full 與 --sql-tls-ca <path>",
+    "sql_tls_change_engine": "明確 SQL TLS 目前僅支援 PostgreSQL；編輯連線時不能捨棄此要求",
+    "sql_tls_legacy_import": "不支援帶有 SQL TLS 的舊版單檔自動匯入。請保留原連線，在另一個設定目錄建立並驗證具名連線後再切換；不要移除 SQL TLS。",
+    "sql_tls_ca_absolute": "SQL TLS CA 路徑必須為絕對路徑",
+    "sql_tls_network_host": "明確 SQL TLS 必須指定 DNS 或 IP 主機，不接受 Unix socket",
+    "sql_tls_ca_empty": "CA bundle 不含 PEM 憑證",
+    "sql_tls_ca_load": "無法載入 SQL TLS CA bundle：{detail}",
+    "sql_tls_ca_restore": "請恢復 sqlTls.caPath 指向的可讀有效 PEM CA bundle，並保持 verify-full。",
+    "sql_tls_handshake": "TLS 握手失敗：{detail}",
+    "sql_tls_ca_hint": "請將 sqlTls.caPath 設為正確且可讀的 PEM CA bundle。",
+    "sql_tls_identity_hint": "請確認憑證有效期及 {host} 的 DNS／IP 身分相符。",
+    "sql_tls_no_downgrade": "請保持 verify-full；不要移除 SQL TLS，也不要關閉驗證後重試。"
   },
   "success": {
     "inserted": "成功插入 {count} 列",

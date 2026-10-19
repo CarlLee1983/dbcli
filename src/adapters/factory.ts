@@ -50,11 +50,18 @@ export interface RedisAdapterConfig {
  * Implements factory pattern to route to correct adapter based on system type
  * Enables system-aware instantiation without coupling CLI commands to specific drivers
  */
+function assertSqlTlsEngine(options: ConnectionOptions): void {
+  if (options.sqlTls !== undefined && options.system !== 'postgresql') {
+    throw new Error(t('errors.sql_tls_unsupported'))
+  }
+}
+
 export class AdapterFactory {
   static createSqlAdapter(rawOptions: SqlConnectionOptions): DatabaseAdapter {
     // Adapter construction is the single place the per-invocation --timeout
     // override is applied: resolving it any earlier would let a read → mutate →
     // write command persist a one-shot flag into config.json.
+    assertSqlTlsEngine(rawOptions)
     const options = withResolvedTimeout(rawOptions)
     switch (options.system) {
       case 'postgresql':
@@ -74,6 +81,7 @@ export class AdapterFactory {
   private static createQueryableAdapterWithoutRules(
     rawOptions: QueryableConnectionOptions
   ): QueryableAdapter {
+    assertSqlTlsEngine(rawOptions)
     const options = withResolvedTimeout(rawOptions)
     switch (options.system) {
       case 'mongodb':
@@ -166,6 +174,7 @@ export class AdapterFactory {
    */
   static createRedisAdapter(config: RedisAdapterConfig): QueryableAdapter {
     const rawOptions = config.connection as ConnectionOptions
+    assertSqlTlsEngine(rawOptions)
     if (rawOptions.system !== 'redis') {
       throw new Error('createRedisAdapter requires system: redis')
     }

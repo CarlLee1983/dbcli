@@ -13,6 +13,7 @@
 import {
   type DbcliConfig,
   DbcliConfigSchema,
+  ConnectionConfigSchema,
   DbcliConfigV2Schema,
   DEFAULT_AUDIT_ROTATION,
 } from '@/utils/validation'
@@ -361,6 +362,9 @@ export const configModule = {
           // letting the caller believe it switched.
           assertNoConnectionSelectorOnV1(effectiveConnectionName)
 
+          // Validate the literal trust contract before generic env-reference expansion.
+          if (config.connection?.sqlTls !== undefined)
+            ConnectionConfigSchema.parse(config.connection)
           const resolvedConfig = resolveEnvReferences(config, process.env) as {
             connection: { password?: string }
           }
@@ -394,6 +398,7 @@ export const configModule = {
         const content = await file.text()
         const raw = JSON.parse(content)
         rawForDiagnostics = raw
+        if (raw.connection?.sqlTls !== undefined) ConnectionConfigSchema.parse(raw.connection)
         const resolved = resolveEnvReferences(raw, process.env)
         return DbcliConfigSchema.parse(resolved)
       }

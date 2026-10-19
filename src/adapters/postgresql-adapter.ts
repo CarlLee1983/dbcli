@@ -27,6 +27,7 @@ import { checkDbVersion, warnIfUnsupported } from '@/utils/db-version-check'
 import { fixDoubleEncodedUtf8 } from '@/utils/encoding'
 import { quoteIdentifier } from './identifier-quote'
 import { resolveTimeoutPolicy } from './timeout-policy'
+import { postgresqlTlsOptions } from './postgresql-tls'
 import { isTransportFailure } from '@/utils/connection-error-message'
 
 /**
@@ -58,6 +59,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       // statement_timeout 只在使用者實際要求時才送——沒要求時交給伺服器預設，
       // 而不是拿連線逾時的預設值去砍每一句查詢（見 timeout-policy.ts）。
       const timeouts = resolveTimeoutPolicy(this.options)
+      const ssl = await postgresqlTlsOptions(this.options)
       const { Pool } = await import('pg')
       this.pool = new Pool({
         host: this.options.host,
@@ -66,6 +68,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         password: this.options.password,
         database: this.options.database,
         connectionTimeoutMillis: timeouts.connectMs,
+        ...(ssl && { ssl }),
         ...(timeouts.statementMs !== undefined && { statement_timeout: timeouts.statementMs }),
       })
 

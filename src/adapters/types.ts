@@ -78,6 +78,8 @@ export type QueryableDatabaseSystem = Exclude<DatabaseSystem, SqlDatabaseSystem>
  * Connection configuration for database adapters
  */
 export interface ConnectionOptions {
+  /** Explicit verified SQL TLS; currently PostgreSQL only. */
+  sqlTls?: import('@/types').SqlTlsConfig
   /** Database system type */
   system: DatabaseSystem
   /** Database host address or hostname */

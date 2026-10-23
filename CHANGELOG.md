@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.1.0] - 2026-10-23
+
+版本為 **12.1.0**。新增 PostgreSQL、MySQL 與 MariaDB 的驗證式 TLS 設定（verified TLS profiles），
+支援以 `--sql-tls verify-full --sql-tls-ca <path>` 指定 CA 憑證路徑，並於連線時嚴格驗證信任鏈、有效期與目標主機身分（DNS/IP SAN）。
+本版本維持向下相容，未啟用 TLS 的既有連線 profile 行為不變。
+
+### Added
+
+- **PostgreSQL / MySQL / MariaDB 驗證式 TLS 連線支援**：具名連線設定增加 `sqlTls: { mode: 'verify-full', caPath: string }` 規格；
+  `init` 命令新增成對參數 `--sql-tls verify-full --sql-tls-ca <path>`。連線建立時重新讀取 CA bundle 並驗證伺服器憑證主機身分與信任鏈；
+  任何驗證失敗立即中止，不降級、不重試明文、不關閉身分驗證。
+- **離線 capabilities 發現更新**：`connection.tls` capability matrix 宣告支援 PostgreSQL、MySQL 與 MariaDB，
+  支援透過離線 inspect／check 查詢能力。
+
+### Changed
+
+- **工作流程精簡**：正式退役 ForgePilot 流程，採用 Warrant 授權導向工作流程；精簡 release 驗證門檻與證據交接規範。
+
 ## [12.0.0] - 2026-10-18
 
 版本為 **12.0.0**。SQL 單一物件 `schema` 現在將含點號的輸入解析為完整名稱，

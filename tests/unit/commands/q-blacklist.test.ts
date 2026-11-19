@@ -38,6 +38,8 @@ let logSpy: any
 let errSpy: any
 let exitSpy: any
 let originalCwd = ''
+let configSpy: ReturnType<typeof spyOn<typeof configModule, 'read'>>
+let adapterSpy: ReturnType<typeof spyOn<typeof AdapterFactory, 'createAdapter'>>
 
 function writeSnippet(name: string, body: string) {
   writeFileSync(
@@ -47,7 +49,7 @@ function writeSnippet(name: string, body: string) {
 }
 
 function setConfig(blacklist: { tables?: string[]; columns?: Record<string, string[]> }) {
-  spyOn(configModule, 'read').mockResolvedValue({
+  configSpy.mockResolvedValue({
     connection: {
       system: 'postgresql',
       host: 'h',
@@ -71,6 +73,8 @@ beforeEach(() => {
   logSpy = spyOn(console, 'log').mockImplementation(() => {})
   errSpy = spyOn(console, 'error').mockImplementation(() => {})
   exitSpy = spyOn(process, 'exit').mockImplementation(((_: number) => undefined) as any)
+  configSpy = spyOn(configModule, 'read')
+  adapterSpy = spyOn(AdapterFactory, 'createAdapter')
 })
 
 afterEach(() => {
@@ -79,6 +83,8 @@ afterEach(() => {
   logSpy.mockRestore()
   errSpy.mockRestore()
   exitSpy.mockRestore()
+  configSpy.mockRestore()
+  adapterSpy.mockRestore()
 })
 
 describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () => {
@@ -86,7 +92,7 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     writeSnippet('users-leak', 'SELECT id, email FROM users')
     setConfig({ tables: ['users'] })
     mock = new MockAdapter([{ id: 1, email: 'a@b.c' }])
-    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+    adapterSpy.mockReturnValue(mock as any)
 
     await qCommand('@users-leak', { format: 'json', noLimit: true })
 
@@ -100,7 +106,7 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     writeSnippet('users-list', 'SELECT id, email, password_hash FROM users')
     setConfig({ columns: { users: ['password_hash'] } })
     mock = new MockAdapter([{ id: 1, email: 'a@b.c', password_hash: 'SECRET' }])
-    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+    adapterSpy.mockReturnValue(mock as any)
 
     await qCommand('@users-list', { format: 'json', noLimit: true })
 
@@ -116,7 +122,7 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     writeSnippet('orders-join', 'SELECT o.id, u.email FROM orders o JOIN users u ON u.id = o.uid')
     setConfig({ tables: ['users'] })
     mock = new MockAdapter([{ id: 1, email: 'a@b.c' }])
-    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+    adapterSpy.mockReturnValue(mock as any)
 
     await qCommand('@orders-join', { format: 'json', noLimit: true })
 
@@ -133,7 +139,7 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     )
     setConfig({ columns: { users: ['password_hash'] } })
     mock = new MockAdapter([{ id: 1, password_hash: 'SECRET' }])
-    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+    adapterSpy.mockReturnValue(mock as any)
 
     await qCommand('@orders-detail', { format: 'json', noLimit: true })
 
@@ -147,7 +153,7 @@ describe('dbcli q — blacklist enforcement (regression for 1.10.0 bypass)', () 
     writeSnippet('events-count', 'SELECT COUNT(*) AS n FROM events')
     setConfig({ tables: ['users'] })
     mock = new MockAdapter([{ n: 42 }])
-    spyOn(AdapterFactory, 'createAdapter').mockReturnValue(mock as any)
+    adapterSpy.mockReturnValue(mock as any)
 
     await qCommand('@events-count', { format: 'json', noLimit: true })
 

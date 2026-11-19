@@ -15,7 +15,12 @@ import {
   listCapabilityIds,
   riskForSideEffect,
 } from '@/core/capabilities'
-import { CapabilitySchema, CapabilityCatalogSchema } from '@/core/capabilities/schema'
+import {
+  CapabilitySchema,
+  CapabilityCatalogSchema,
+  parseCapabilityCatalog,
+  parseCapabilityCheckReport,
+} from '@/core/capabilities/schema'
 import { COMMAND_CAPABILITY_KEYS, ENGINE_CAPABILITIES } from '@/adapters/capabilities'
 import { DATABASE_SYSTEMS } from '@/adapters/types'
 import { minimumPermissionFor } from '@/core/permission-guard'
@@ -51,6 +56,30 @@ describe('capability catalog', () => {
   test('the strict schema rejects an unknown field', () => {
     const [first] = CAPABILITIES
     expect(() => CapabilitySchema.parse({ ...first, extra: true })).toThrow()
+  })
+
+  test('public parsers preserve unknown-field diagnostics at root and nested paths', () => {
+    const catalog = buildCapabilityCatalog()
+    expect(() => parseCapabilityCatalog({ ...catalog, extra: true, another: true })).toThrow(
+      "<root>: Unrecognized key(s) in object: 'extra', 'another'"
+    )
+    expect(() =>
+      parseCapabilityCatalog({
+        ...catalog,
+        capabilities: [{ ...catalog.capabilities[0], extra: true }],
+      })
+    ).toThrow("capabilities.0: Unrecognized key(s) in object: 'extra'")
+    expect(() =>
+      parseCapabilityCheckReport({
+        schemaVersion: 1,
+        ok: true,
+        required: [],
+        context: null,
+        results: [],
+        warnings: [],
+        extra: true,
+      })
+    ).toThrow("<root>: Unrecognized key(s) in object: 'extra'")
   })
 
   test('the strict schema rejects an unknown schemaVersion', () => {

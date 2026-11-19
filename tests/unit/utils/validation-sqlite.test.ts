@@ -7,13 +7,13 @@ import { ZodError, type ZodIssue } from 'zod'
 import { ConnectionConfigSchema, NamedConnectionSchema } from '@/utils/validation'
 
 /**
- * `ConnectionConfigSchema` 是 union，一支分支的失敗會被包進 `unionErrors`，
+ * `ConnectionConfigSchema` 是 union，一支分支的失敗會被包進 `errors`，
  * 頂層只剩一個 path 為 [] 的 invalid_union。要斷言「哪個欄位錯了」就得展平。
  */
 function flattenIssues(error: ZodError): ZodIssue[] {
   return error.issues.flatMap((issue) =>
     issue.code === 'invalid_union'
-      ? [issue, ...issue.unionErrors.flatMap((inner) => flattenIssues(inner))]
+      ? [issue, ...issue.errors.flatMap((inner) => flattenIssues(new ZodError(inner)))]
       : [issue]
   )
 }

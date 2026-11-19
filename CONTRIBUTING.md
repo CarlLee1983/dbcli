@@ -329,8 +329,8 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 The canonical gate is `make verify`; its roster, order, failure behavior and
 attestation contract remain unchanged. See [Required CI validation](./docs/feature-matrix.md#required-ci-validation)
-for CI coverage and [agent workflow](./docs/development/agent-workflow.md#choose-one-evidence-record)
-for the authoritative evidence record.
+for CI coverage and [agent workflow](./docs/development/agent-workflow.md#release-candidate-evidence)
+for the release evidence record.
 
 ### Pre-Release Checklist
 
@@ -343,7 +343,7 @@ Choose **one** local verification path before tagging:
    and `bun run release:extras` against that same candidate. Record the build
    and extras with the existing verification in the selected evidence record;
    do not rerun the full release wrapper. For uncommitted work, retain the
-   [reconstructable candidate evidence](docs/development/agent-workflow.md#choose-one-evidence-record).
+   [reconstructable candidate evidence](docs/development/agent-workflow.md#release-candidate-evidence).
 
 Both paths require the test services and the canonical environment. Build assets
 must come from the verified source: preserve the exact source candidate through

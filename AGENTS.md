@@ -4,30 +4,14 @@ Use Bun for development, scripts, builds and tests. Before changing runtime APIs
 frontend entry points, documentation, or operating a database, read the matching
 section in [the development guide](docs/development/agent-workflow.md#task-safeguards).
 
-## Intent, verification and review
+## Development workflow
 
-Warrant bounds work to a human-approved Story with Goal, Out of Scope and
-Acceptance Criteria. Implement only the Story selected by the human. A Story is
-approved when a human committed it to the default branch or explicitly assigned
-it in this session; an uncommitted implementation request alone needs one
-explicit approval as written. Agent-authored or agent-committed intent is not
-human approval. `specs/stories/` contains legacy records, not a pending queue.
+Start work from the user's explicit task. Ask for clarification when a choice
+would materially change its scope. Verify changes with `make verify`, preserve
+its gates, and report the changes, results and any unverified items. Complete
+any review the user requested.
 
-**Canonical verification: `make verify`.** Preserve its gates and the Story's
-criteria. Stop and report when a repair requires work outside approved scope.
-Completion requires evidence for every criterion and human review of the exact
-candidate; a passing command alone is not completion.
-
-Before selecting evidence, read [the workflow paths](docs/development/agent-workflow.md#choose-one-evidence-record):
-a clean committed PR may use exact-checkout-revision CI and review evidence.
-For an uncommitted candidate, retain reconstructable source content and bind
-verification and human review to it in one local handoff record. The human
-selects the Story; record dependency order when needed. A WIP commit or external
-work scheduler is not required.
-
-For release preparation, follow [the release checklist](CONTRIBUTING.md#pre-release-checklist).
-For completion reports and distinct intent/review/publication decisions, follow
-[the evidence handoff](docs/development/agent-workflow.md#completion-and-handoff).
+For releases, follow the [pre-release checklist](CONTRIBUTING.md#pre-release-checklist).
 Commit, push, merge, tag and publication each require user authorization.
 
 <!-- graft:start -->

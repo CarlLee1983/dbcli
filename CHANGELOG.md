@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.1.1] - 2026-11-19
+
+### Security
+
+- 更新 CLI 驗證輸入使用的 Zod，修補檢查過大集合時可能耗盡記憶體的問題。
+- 更新 Happy DOM 與 ESLint 工具鏈，修補測試及開發依賴的安全公告。
+
+### Changed
+
+- 日常開發改由使用者直接指派任務，移除 Warrant Story 流程。發版仍依既有檢查清單驗證與審查。
+
 ## [12.1.0] - 2026-10-23
 
 版本為 **12.1.0**。新增 PostgreSQL、MySQL 與 MariaDB 的驗證式 TLS 設定（verified TLS profiles），

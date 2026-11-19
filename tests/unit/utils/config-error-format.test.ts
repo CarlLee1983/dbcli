@@ -36,6 +36,7 @@ describe('formatConfigValidationError', () => {
 
     expect(message).toContain('connections.m')
     expect(message).toContain('port')
+    expect(message.startsWith('  - connections.m.port: ')).toBe(true)
     // 不該把其他引擎分支的抱怨一起倒出來
     expect(message).not.toContain('postgresql')
     expect(message).not.toContain('elasticsearch')

@@ -2,6 +2,10 @@
 
 * Status: accepted
 * Date: 2026-10-19
+* Partially superseded by: [ADR-0052](ADR-0052-retire-warrant-from-the-repository-workflow.md) (Warrant、日常工作必備的候選重建與人工審查要求；ForgePilot 退役、attestation 與歷史資料保留的決策仍有效)。
+
+以下保留原始決策。日常開發依 ADR-0052；發布候選的證據與審查仍依
+發布檢查清單辦理。
 
 使用者已確認停止以 ForgePilot 選工作、排程、管理進度與接收驗證證據，
 保留 Warrant、`make verify`、attestation、人工審查、歷史紀錄與本機資料。

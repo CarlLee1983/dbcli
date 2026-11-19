@@ -1,28 +1,16 @@
 # Agent development workflow
 
-## Choose one evidence record
+For everyday changes, follow the [repository workflow](../../AGENTS.md#development-workflow).
 
-Select the path before implementation. Warrant's approved intent, scope,
-acceptance criteria, exact-candidate verification and human review apply to all
-paths; selecting a tool does not authorize external writes.
+## Release candidate evidence
 
-| Candidate or task | Required path | Authoritative completion/evidence record |
-| --- | --- | --- |
-| Single committed PR, clean checkout | Exact-revision CI and PR review may be used | PR: approved Story, actual CI checkout revision, passing canonical evidence and human review for that candidate |
-| Uncommitted candidate | Run `make verify` against the recorded candidate | Local handoff: reconstructable candidate content, canonical verification, criterion observations and human review for that candidate |
-| Multiple Stories with dependencies | Human-selected Story and recorded dependency order | Each Story's selected PR or local handoff record links its prerequisites and evidence/review |
-
-A dirty or uncommitted workspace cannot use the PR-only path. CI must identify
-its actual checkout revision: equal branch-head metadata does not prove equal
-PR merge/check-out content. A changed source candidate needs new verification
-and review; retain a PASS only while its candidate and environment remain valid.
-
-The human selects the Story directly. Record prerequisite order when work spans
-multiple Stories; approval of one Story does not select or authorize the next.
+For a release, identify the task or PR and the source used for verification,
+review and build. For a clean committed PR, record the actual CI checkout
+revision, passing canonical verification and review for that revision.
 
 For an uncommitted candidate, keep one local handoff record with:
 
-1. The approved Story and base revision, a complete diff against that base
+1. The task or PR and base revision, a complete diff against that base
    (including staged, unstaged, binary and deleted files), and an inventory of
    added files with their reconstructable contents. Hash the candidate's source
    contents, including added files; record file modes and symlink targets where
@@ -45,31 +33,6 @@ Keep the patch, added-file contents and observations with the local record so
 another reviewer can reconstruct the candidate from the base. No WIP commit or
 replacement snapshot tool is required. Local records may remain outside the
 repository; committing or publishing them needs separate authorization.
-
-ForgePilot is retired from this workflow. Existing `.forgepilot/` data remains
-ignored local history; historical instructions do not select current work.
-See [ADR-0051](../adr/ADR-0051-retire-forgepilot-from-the-repository-workflow.md).
-
-## Completion and handoff
-
-Keep observations in the selected record rather than maintaining competing
-completion ledgers. A release index links that record to subsequent publication
-observations; it does not grant a new approval. One human decision can be
-registered in several tools using the same decision identity/reference without
-asking again. Intent approval, acceptance review and publication authorization
-are distinct decisions: record each separately and apply only its stated scope.
-
-Finish with three sections:
-
-1. Each acceptance criterion → command run or inspected `file:line` → observed
-   result. Include changed files and the exact candidate identity.
-2. Skipped or blocked checks, including why they were not observed.
-3. Residual risks.
-
-If canonical verification fails or a criterion lacks a passing observation,
-report **partial**. An inference or substitute check is not an observation.
-A passing candidate still awaits human review before completion is claimed.
-Stop and report out-of-scope repairs; keep the approved requirements and gates.
 
 For releases, follow [CONTRIBUTING](../../CONTRIBUTING.md#pre-release-checklist).
 Save the durable, sanitized handoff in

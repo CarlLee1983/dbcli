@@ -1,24 +1,6 @@
-# Stories
+# Historical Stories
 
-This repository follows Warrant; the contract is the intent, verification and
-review section of `AGENTS.md`, and the reasons are in ADR-0040 and ADR-0051.
-
-A Story is a single file, `specs/stories/<slug>.md`, with a `# Title` heading
-followed by exactly three sections: **Goal**, **Out of Scope**, and
-**Acceptance Criteria**. It carries no status, owner, priority, or lifecycle
-field. Each acceptance criterion is one statement that can be checked by
-running something or looking at something.
-
-A Story is approved only when a human commits it to the default branch, or
-explicitly assigns it in the current session. A Story an agent drafted or
-committed itself is not approved, and approval is not a work queue: the human
-directly chooses which Story to do. Record dependency order when needed, using
-the [workflow's evidence paths](../../docs/development/agent-workflow.md#choose-one-evidence-record).
-
-Completion is proven by `make verify`, together with an observation for every
-acceptance criterion. Passing makes work eligible for human review; it does not
-approve or merge it.
-
-The existing `DBCLI-*` directories, `SCENARIO-MAP.md`, and `specs/handoff.md`
-are legacy records from the earlier protocol, not pending work. They stay as
-they are because tests still read them.
+This directory preserves past specifications and acceptance criteria. The
+`DBCLI-*` directories, `SCENARIO-MAP.md` and `specs/handoff.md` remain available
+to readers and tests that reference them. For new work, follow the
+[repository workflow](../../AGENTS.md#development-workflow).

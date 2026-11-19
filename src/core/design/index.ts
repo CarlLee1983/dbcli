@@ -589,9 +589,10 @@ function normalizeSpec(spec: z.infer<typeof specSchema>): DesignSpec {
   }
 }
 
-function formatZodPath(path: Array<string | number>): string {
+function formatZodPath(path: PropertyKey[]): string {
   return path.reduce<string>(
-    (result, part) => (typeof part === 'number' ? `${result}[${part}]` : `${result}.${part}`),
+    (result, part) =>
+      typeof part === 'number' ? `${result}[${part}]` : `${result}.${String(part)}`,
     '$'
   )
 }

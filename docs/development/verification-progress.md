@@ -2,8 +2,7 @@
 
 This repository operator tool reads a specified `make verify` log. It does not
 execute verification, alter any gate, or write to the log. Run canonical
-verification separately and keep its actual exit status and candidate-bound
-evidence in the [selected handoff record](agent-workflow.md#choose-one-evidence-record).
+verification separately and check its actual exit status.
 Use one log file per verification run.
 
 ```sh

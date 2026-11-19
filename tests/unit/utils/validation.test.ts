@@ -10,6 +10,7 @@ import {
   NamedConnectionSchema,
   DbcliConfigV2Schema,
   AuditRotationConfigSchema,
+  DEFAULT_AUDIT_ROTATION,
 } from '@/utils/validation'
 import { ZodError } from 'zod'
 
@@ -378,6 +379,7 @@ describe('validation', () => {
       const result = DbcliConfigSchema.parse(minimal)
       expect(result.schema).toBeDefined()
       expect(result.metadata).toBeDefined()
+      expect(result.metadata.version).toBe('1.0')
     })
 
     test('應該使用預設權限 query-only', () => {
@@ -533,6 +535,39 @@ describe('validation', () => {
       })
     })
   })
+})
+
+describe('config default isolation', () => {
+  const connection = { system: 'sqlite', file: '/tmp/default-isolation.sqlite' }
+  const versions = [
+    { name: 'V1', parse: () => DbcliConfigSchema.parse({ connection, redis: {} }) },
+    {
+      name: 'V2',
+      parse: () =>
+        DbcliConfigV2Schema.parse({ version: 2, connections: { local: connection }, redis: {} }),
+    },
+  ]
+
+  for (const { name, parse } of versions) {
+    test(`${name} omitted blocks have independent mutable defaults on every parse`, () => {
+      const first = parse()
+      const second = parse()
+      first.blacklist.tables.push('private_table')
+      first.blacklist.columns.private_table = ['secret']
+      first.audit.rotation.max_entries = 1
+      first.schema.private_table = { columns: [] }
+      first.metadata.version = 'changed'
+      first.redis!.mask.push({ keyPattern: 'private:*' })
+
+      for (const independent of [second, parse()]) {
+        expect(independent.blacklist).toEqual({ tables: [], columns: {} })
+        expect(independent.audit.rotation).toEqual(DEFAULT_AUDIT_ROTATION)
+        expect(independent.schema).toEqual({})
+        expect(independent.metadata).toEqual({ version: '1.0' })
+        expect(independent.redis!.mask).toEqual([])
+      }
+    })
+  }
 })
 
 describe('audit rotation defaults', () => {

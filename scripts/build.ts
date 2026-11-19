@@ -37,8 +37,9 @@ const artifacts = [
 //     behind an intact barrel, so `await import('@inquirer/prompts')` threw and
 //     every interactive prompt silently degraded to its plain-text fallback.
 // Keep whitespace: Bun whitespace minification miscompiles dynamic bun imports as awaitPromise.
-// Syntax minification keeps the runtime within the startup byte budget without that rewrite.
-await $`bun build ./src/cli-runtime.ts --minify-syntax --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser --external @inquirer/prompts`
+// Syntax and identifier minification keep Zod 4's runtime within the startup byte budget
+// without that rewrite. Preserve function/class names for runtime diagnostics.
+await $`bun build ./src/cli-runtime.ts --minify-syntax --minify-identifiers --keep-names --outfile dist/cli-runtime.mjs --target bun --external pg --external mysql2 --external mongodb --external open --external node-sql-parser --external @inquirer/prompts`
 
 // Keep the launcher's dynamic runtime path external. In source it resolves to
 // cli-runtime.ts; beside the built launcher Bun resolves cli-runtime.mjs.

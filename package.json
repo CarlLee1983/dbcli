@@ -1,6 +1,6 @@
 {
   "name": "@carllee1983/dbcli",
-  "version": "12.1.0",
+  "version": "12.1.1",
   "description": "Database CLI for AI agents",
   "type": "module",
   "publishConfig": {
@@ -110,13 +110,13 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
-    "zod": "^3.25.76"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@cucumber/gherkin": "^42.0.1",
     "@cucumber/messages": "^34.2.1",
     "@eslint/js": "^9.39.4",
-    "@happy-dom/global-registrator": "^20.10.6",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
     "@types/pg": "^8.20.0",
@@ -124,13 +124,13 @@
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
     "dts-bundle-generator": "^9.5.1",
-    "eslint": "^10.9.1",
-    "happy-dom": "^20.10.6",
+    "eslint": "^10.15.0",
+    "happy-dom": "^21.0.4",
     "postcss": "^8.5.26",
     "prettier": "^3.8.3",
     "tailwindcss": "3.4.19",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.4"
+    "typescript-eslint": "^8.73.0"
   },
   "overrides": {
     "@humanfs/node": "^0.16.8",

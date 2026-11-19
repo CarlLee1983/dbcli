@@ -17,7 +17,7 @@ export const SqlTlsConfigSchema = z
     caPath: z
       .string()
       .min(1)
-      .refine(isAbsolute, () => ({ message: t('errors.sql_tls_ca_absolute') })),
+      .refine(isAbsolute, { error: () => t('errors.sql_tls_ca_absolute') }),
   })
   .strict()
 
@@ -335,8 +335,7 @@ export const MetadataSchema = z
     schemaLastUpdated: z.string().datetime().optional(),
     schemaTableCount: z.number().int().nonnegative().optional(),
   })
-  .optional()
-  .default({})
+  .prefault({})
 
 /**
  * Blacklist configuration schema
@@ -364,7 +363,7 @@ const BLACKLIST_KEY_ALIASES: Record<string, string> = {
 export const BlacklistConfigSchema = z
   .object({
     tables: z.array(z.string()).default([]),
-    columns: z.record(z.array(z.string())).default({}),
+    columns: z.record(z.string(), z.array(z.string())).default({}),
   })
   // `passthrough` 讓未知鍵活到 refine 那一步——預設的剝除發生在 refine 之前，
   // 所以寫在 `superRefine` 裡的檢查永遠不會觸發（實測確認過）。看到之後再
@@ -383,7 +382,7 @@ export const BlacklistConfigSchema = z
   })
   .transform((value) => ({ tables: value.tables, columns: value.columns }))
   .optional()
-  .default({ tables: [], columns: {} })
+  .default(() => ({ tables: [], columns: {} }))
 
 /**
  * Redis value/hash-field masking rule schema.
@@ -466,11 +465,11 @@ export const AuditConfigSchema = z
     path: ['strict'],
   })
   .optional()
-  .default({
+  .default(() => ({
     enabled: true,
     strict: false,
     rotation: { ...DEFAULT_AUDIT_ROTATION },
-  })
+  }))
 
 /**
  * DbcliConfig complete schema
@@ -478,7 +477,7 @@ export const AuditConfigSchema = z
 export const DbcliConfigSchema = z.object({
   connection: ConnectionConfigSchema,
   permission: PermissionSchema,
-  schema: z.record(z.any()).optional().default({}),
+  schema: z.record(z.string(), z.any()).optional().default({}),
   metadata: MetadataSchema,
   blacklist: BlacklistConfigSchema,
   audit: AuditConfigSchema,
@@ -562,11 +561,13 @@ export const DbcliConfigV2Schema = z
   .object({
     version: z.literal(2),
     default: z.string().min(1).optional(),
-    connections: z.record(NamedConnectionSchema).refine((conns) => Object.keys(conns).length > 0, {
-      message: 'At least one connection is required',
-    }),
-    schema: z.record(z.any()).optional().default({}),
-    schemas: z.record(z.record(z.any())).optional().default({}),
+    connections: z
+      .record(z.string(), NamedConnectionSchema)
+      .refine((conns) => Object.keys(conns).length > 0, {
+        message: 'At least one connection is required',
+      }),
+    schema: z.record(z.string(), z.any()).optional().default({}),
+    schemas: z.record(z.string(), z.record(z.string(), z.any())).optional().default({}),
     metadata: MetadataSchema,
     blacklist: BlacklistConfigSchema,
     audit: AuditConfigSchema,

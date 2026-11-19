@@ -115,7 +115,14 @@ function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   if (result.success) return result.data
   throw new CapabilityContractError(
     `${what} does not match capability contract v${CAPABILITY_CONTRACT_SCHEMA_VERSION}: ${result.error.issues
-      .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+      .map((issue) => {
+        // Keep the published contract's unknown-field diagnostic stable across Zod versions.
+        const message =
+          issue.code === 'unrecognized_keys'
+            ? `Unrecognized key(s) in object: ${issue.keys.map((key) => `'${key}'`).join(', ')}`
+            : issue.message
+        return `${issue.path.join('.') || '<root>'}: ${message}`
+      })
       .join('; ')}`
   )
 }

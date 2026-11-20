@@ -44,6 +44,11 @@ through `@tailwindcss/postcss` would remove it, but `@tailwindcss/cli` v4 still
 pulls `braces` through `@parcel/watcher` and `micromatch`, so that migration is
 a separate Story and must pick the PostCSS plugin.
 
+**Current state (2026-11-20):** the list is empty. `braces` is no longer
+reported by `bun audit`, and `postcss-selector-parser` was raised to 6.1.6 via
+the `overrides` entry, which cleared GHSA-rj75-hqrm-r3gf. The mechanism stays
+for the next advisory with no patch.
+
 ## Consequences
 
 An exemption is a dated debt, not a fix: when 2026-11-30 passes the gate turns

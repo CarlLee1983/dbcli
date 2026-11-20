@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- 將 `postcss-selector-parser` 覆寫提高至 `^6.1.5`（解析為 6.1.6），修補 GHSA-rj75-hqrm-r3gf；依賴稽核例外清單清空。
+
 ## [12.1.1] - 2026-11-19
 
 ### Security

@@ -86,7 +86,7 @@ command-level option is only valid after the command that declares it.
 | `--use <connection>` | Select a named connection for this invocation; place it before the command path unless that command explicitly lists a command-level `--use`. |
 | `--timeout <ms>` | Connection timeout in milliseconds (integer, 100–600000), overriding the connection config's `timeout` field for this invocation. Applies to every engine adapter. Without either the flag or the config field, adapters fall back to their built-in 5000ms default. |
 | `--statement-timeout <ms>` | How long a single statement may run, in milliseconds (integer, 0–3600000; `0` removes the limit), overriding the connection config's `statementTimeout` field. Independent of the connection timeout — raising it does not slow down detection of an unreachable host. Falls back to `--timeout` when unset, and to the server's own setting when neither is given. |
-| `--agent-output` | Request the PLAT-005 v1 Operation Envelope. It must precede the subcommand and currently supports `capabilities` and `capabilities check`; it conflicts with explicit `--format` and command-local `--for-agent`. |
+| `--agent-output` | Request the PLAT-005 v1 Operation Envelope. It must precede the subcommand and supports `capabilities`, `capabilities check`, `query` and `q @name` (SQL engines); it conflicts with explicit `--format` and command-local `--for-agent`. |
 | `--correlation-id <id>` | Associate one invocation with a Story, incident, change request, migration, or backfill. Place it before the subcommand. IDs are 1–160 ASCII letters, numbers, dots, underscores, colons, or hyphens; never use sensitive or free-form data. |
 
 `--timeout` is applied only when the adapter is constructed for this invocation — it is
@@ -414,6 +414,7 @@ Execute a SQL statement, MongoDB filter/pipeline, allow-listed Redis command, or
 
 ```bash
 # SQL databases
+dbcli --agent-output query "SELECT * FROM users LIMIT 10"   # agents: one JSON envelope, empty stderr
 dbcli query "SELECT * FROM users LIMIT 10"
 dbcli query "SELECT id, email FROM users" --format json
 dbcli query "SELECT * FROM logs" --no-limit
@@ -863,6 +864,7 @@ Run a saved query snippet by `@name`. Snippets are parameterised SELECT/WITH sta
 Engine variants (`name.postgres.sql` / `name.mysql.sql`) at the same layer are merged; the variant matching the active connection's engine is selected at execution time.
 
 ```bash
+dbcli --agent-output q @dau --param days=30   # agents (SQL engines): one JSON envelope, empty stderr
 dbcli q @dau                                  # run with declared defaults
 dbcli q @dau --param days=30 --format json    # override a param
 dbcli q @analytics/revenue --param-file params.json
@@ -1845,12 +1847,13 @@ correlation/evidence examples, see `assets/integration-kit/README.md`.
 
 #### Agent output v1 (PLAT-005)
 
-`dbcli --agent-output capabilities` and `dbcli --agent-output capabilities check --require <ids>`
-are the supported operations. Either emits one compact UTF-8 JSON document followed by one newline
+`dbcli --agent-output capabilities`, `dbcli --agent-output capabilities check --require <ids>`,
+`dbcli --agent-output query "<sql>"` and `dbcli --agent-output q @<name>` are the supported operations. Either emits one compact UTF-8 JSON document followed by one newline
 on stdout, with stderr empty. The envelope always has, in stable order, `schemaVersion`, `ok`,
 `operation`, `status`, `context`, `data`, `warnings`, `evidence`, `recovery`, and `error`; consumers
-must use the names, not the order. `schemaVersion` is `1`, `operation` is `capabilities.list` or
-`capabilities.check`, and `status` is `succeeded` or `failed`. The full document, including newline,
+must use the names, not the order. `schemaVersion` is `1`, `operation` is `capabilities.list`,
+`capabilities.check`, `query.execute`, `saved-query.execute`, or `cli.invocation` (a failed call to
+an unsupported command), and `status` is `succeeded` or `failed`. The full document, including newline,
 is capped at 64 KiB.
 
 The flag must be before the subcommand and conflicts with explicitly supplied `--format` or
@@ -1869,9 +1872,17 @@ Code/message vocabulary is locale-independent English. Stable error codes mean:
 | `UNSUPPORTED_AGENT_OUTPUT_OPERATION` | The requested operation is outside PLAT-005 support. |
 | `INVALID_CAPABILITY_REQUIREMENTS` | `--require` is missing, empty, or malformed. |
 | `CAPABILITY_REQUIREMENTS_UNMET` | A completed check found one or more unavailable or unknown requirements. |
-| `AGENT_OUTPUT_LIMIT_EXCEEDED` | The otherwise valid serialized envelope exceeded 64 KiB. |
+| `AGENT_OUTPUT_LIMIT_EXCEEDED` | The otherwise valid serialized envelope exceeded 64 KiB. For `query`/`q` the message says to narrow with `--limit` or use `dbcli export`. |
 | `AGENT_OUTPUT_INTERNAL_ERROR` | An unexpected failure was replaced with the safe agent-output failure. |
 | `INVALID_CORRELATION_ID` | The root correlation ID is absent or does not match the allowed identifier grammar. |
+| `INVALID_QUERY_INPUT` | `query`/`q` input was wrong (empty SQL, bad `--limit`, malformed `--param`, comma-separated `--use`). Exit `2`. |
+| `NOT_FOUND`, `AMBIGUOUS`, `PARAM_MISSING`, `PARAM_INVALID` | Saved-query resolution or parameter errors. Exit `2`. Other saved-query codes exit `1`. |
+| `WRITE_GATE_REFUSED`, `PERMISSION_DENIED`, `BLACKLIST_TABLE`, `BLACKLIST_COLUMN_WRITE` | A policy refusal; nothing ran. Exit `1`, no `recovery`. |
+| `QUERY_SIZE_GUARD_REFUSED` | The size guard declined an unbounded read of a huge table. Exit `1`. |
+| `SQL_SYNTAX_ERROR`, `TABLE_NOT_FOUND`, `COLUMN_NOT_FOUND`, `STATEMENT_TIMEOUT`, `DB_PERMISSION_DENIED`, `QUERY_ONLY_BOUNDARY_FAILED`, `DATABASE_ERROR` | The database rejected or failed the statement. `message` is the mapped, bounded text. Exit `1`. |
+| `CONN_REFUSED`, `CONN_TIMEOUT`, `CONN_AUTH_FAILED`, `CONN_HOST_NOT_FOUND`, `CONN_UNKNOWN` | Connection failure; `recovery` carries the Recovery Envelope (no host or credentials in `error`). Exit `1`. |
+| `CONFIG_MISSING` | No usable configuration (`dbcli init` first). Exit `1`. |
+| `QUERY_FAILED` | Any other failure, with a bounded message. Exit `1`. |
 
 Stable warning codes mean:
 
@@ -1881,6 +1892,28 @@ Stable warning codes mean:
 | `CAPABILITY_CONTEXT_UNAVAILABLE` | No local configuration was available to evaluate. |
 | `CAPABILITY_CONTEXT_UNRESOLVABLE` | Configuration exists but cannot yield an engine and permission. |
 | `AGENT_MODE_RESTRICTION_ACTIVE` | `DBCLI_AGENT_MODE=1` refuses configuration, permission, and credential changes. |
+| `AUTO_LIMIT_APPLIED` | `query`/`q`: a row limit was applied (query-only default, or the saved-query size guard cut the result); rows may be incomplete. Pass `--limit`/`--no-limit`. |
+| `BLACKLIST_COLUMNS_REDACTED` | `query`/`q`: some columns or fields were withheld by the blacklist. |
+| `DANGEROUS_OPERATION` | `query`: an admin-mode destructive statement ran. |
+| `SLOW_QUERY` | `query`/`q`: execution time passed `--slow-ms`. |
+| `SAVED_QUERY_WARNING` | `q`: a warning from the saved-query definition. |
+| `QUERY_DIAGNOSTIC` | `query`: any other engine diagnostic. |
+
+`query.execute` and `saved-query.execute` carry this `data` (strict; cells are string, number, boolean
+or null; Date → ISO string, bigint → string, objects/binary → JSON string):
+
+```json
+{"columnNames":["id"],"rows":[{"id":1}],"rowCount":1,"rowsAffected":null,"truncated":false,"limitApplied":null}
+```
+
+`rowsAffected` is `null` for row-returning statements (SELECT/SHOW/DESCRIBE/EXPLAIN) and for non-SQL
+engines, otherwise the affected-row count with empty `rows`. `context` is `engine`, `permission`,
+`connectionName`, `agentMode` (plus `correlationId` when given) once the config is loaded, otherwise
+`null`. `evidence` holds `{kind:"audit", id}` for the audit entry the run wrote. Failures have
+`data: null`. `--recovery`, `--ui`, `--dry-run`, `--verify`, explicit `--format` and a comma-separated
+`--use` are rejected, and saved queries on MongoDB, Elasticsearch or Redis exit `2` with
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION` (use `--format json`). `--format json` remains the human/script
+format: its output is unchanged and failures there still print prose on stderr.
 
 | Flag | Purpose |
 |---|---|

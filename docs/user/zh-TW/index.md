@@ -425,9 +425,9 @@ exit、correlation 與 evidence 的邊界。
 
 #### Agent output v1
 
-`--agent-output` 是 root option，必須放在 subcommand 前。PLAT-005 支援
-`dbcli --agent-output capabilities` 與 `dbcli --agent-output capabilities check --require <ids>`；
-兩者都會在 stdout 輸出一份 compact UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：
+`--agent-output` 是 root option，必須放在 subcommand 前。支援
+`dbcli --agent-output capabilities`、`dbcli --agent-output capabilities check --require <ids>`、
+`dbcli --agent-output query "<sql>"` 與 `dbcli --agent-output q @<name>`（SQL 引擎）；每一種都會在 stdout 輸出一份 compact UTF-8 JSON 文件與一個換行，stderr 不會有任何輸出。它是暫態的：
 不是 evidence，也不會建立 timestamp。
 
 可在 subcommand 前使用可選 root option `--correlation-id <id>`，把一次 invocation 關聯到 Story、incident、
@@ -438,7 +438,7 @@ change request、migration 或 backfill。ID 限 1～160 個 ASCII 英數字、�
 
 v1 envelope 一律有十個 key：`schemaVersion`、`ok`、`operation`、`status`、`context`、`data`、
 `warnings`、`evidence`、`recovery` 與 `error`。`schemaVersion` 是 `1`；`operation` 是
-`capabilities.list` 或 `capabilities.check`；`status` 是 `succeeded` 或 `failed`；consumer 必須依 key 名稱讀取，
+`capabilities.list`、`capabilities.check`、`query.execute`（ad-hoc `query`）、`saved-query.execute`（`q @name`）或 `cli.invocation`（呼叫不支援的指令而失敗）；`status` 是 `succeeded` 或 `failed`；consumer 必須依 key 名稱讀取，
 不能依欄位順序。文件連同換行上限為 64 KiB。
 
 不可把 `--agent-output` 和明確提供的 `--format` 或 `--for-agent` 一起使用；這類衝突、放在
@@ -455,6 +455,8 @@ error 與 warning 的 code/message vocabulary 永遠是 locale-independent Engli
 Warning code 為
 `DUPLICATE_CAPABILITY_REQUIREMENT`、`CAPABILITY_CONTEXT_UNAVAILABLE`、
 `CAPABILITY_CONTEXT_UNRESOLVABLE` 與 `AGENT_MODE_RESTRICTION_ACTIVE`。
+
+`query` 與 `q` 的 `data` 為 `{columnNames, rows, rowCount, rowsAffected, truncated, limitApplied}`。儲存格只會是字串、數字、布林或 null；`rowsAffected` 對會回傳資料列的語句為 `null`，寫入則為影響筆數（`rows` 為空）；`limitApplied` 是實際套用的列數上限。`context` 只含 `engine`、`permission`、`connectionName` 與 `agentMode`；`evidence` 以 `{kind: "audit", id}` 參照 audit entry。失敗時 `data: null`：`INVALID_QUERY_INPUT`、`NOT_FOUND`、`AMBIGUOUS`、`PARAM_MISSING`、`PARAM_INVALID` exit `2`，MongoDB、Elasticsearch、Redis 上的 saved query 回 `UNSUPPORTED_AGENT_OUTPUT_OPERATION` 也是 exit `2`；`WRITE_GATE_REFUSED`、`PERMISSION_DENIED`、`BLACKLIST_TABLE`、`BLACKLIST_COLUMN_WRITE`、`QUERY_SIZE_GUARD_REFUSED`、資料庫錯誤碼（`SQL_SYNTAX_ERROR`、`TABLE_NOT_FOUND`、`COLUMN_NOT_FOUND`、`STATEMENT_TIMEOUT`、`DB_PERMISSION_DENIED`、`DATABASE_ERROR`）、`CONFIG_MISSING`、`QUERY_FAILED` 與 `AGENT_OUTPUT_LIMIT_EXCEEDED`（用 `--limit` 縮小或改用 `dbcli export`）exit `1`；連線失敗會帶 `CONN_*` code，Recovery Envelope 放在 `recovery`。Warning code 有 `AUTO_LIMIT_APPLIED`（`query` 在 query-only 模式下對應原本的 stderr 提示；`q` 僅在 size guard 截斷結果時出現）、`BLACKLIST_COLUMNS_REDACTED`、`DANGEROUS_OPERATION`、`SLOW_QUERY`、`SAVED_QUERY_WARNING` 與 `QUERY_DIAGNOSTIC`。`--recovery`、`--ui`、`--dry-run`、`--verify`、明確的 `--format` 與以逗號分隔的 `--use` 會被拒絕並 exit `2`。`--format json` 輸出不變。
 
 一個 **capability** 是 dbcli 的單一原子能力——`schema.read`、`data.delete`。它絕不是職務或方法：
 `dba.tune-production` 與 `crud.scaffold` 屬於組合 dbcli 的 Role Skill 或 Method Skill。分層是

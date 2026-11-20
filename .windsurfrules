@@ -93,8 +93,16 @@ When reporting a check's outcome use the vocabulary `verified` (evidence matched
 `not_verified` (check ran and contradicted) / `indeterminate` (ran but ambiguous) /
 `blocked` (could not run due to config, permission, schema, placeholder, or safety gate).
 
-Prefer `--format json` for agent-friendly output. Diagnostics (auto-limit notices,
-warnings) go to stderr so stdout stays parseable — when piping JSON into a parser,
+For `query` and `q @name` (SQL connections) use `dbcli --agent-output query "<sql>"` /
+`dbcli --agent-output q @name --param k=v`: stdout is always exactly one JSON envelope (success
+and failure alike) and stderr stays empty, so there is nothing to merge or guess at. Check `ok`,
+then read `data` or `error`; the exit code is `0` success, `1` refusal/database/connection failure,
+`2` invalid input or unsupported call. Do not add `--format` (it is rejected) and place the flag
+before the subcommand. See *Agent output v1* below for the fields and codes.
+
+Other commands: prefer `--format json` for agent-friendly output. It is the human/script format:
+a failure there leaves stdout empty and prints prose to stderr, and diagnostics (auto-limit
+notices, warnings) go to stderr so stdout stays parseable — when piping JSON into a parser,
 use `2>/dev/null` or leave stderr alone. **Never `2>&1`**: it merges those lines back
 into stdout and the parse fails.
 
@@ -177,12 +185,15 @@ composes dbcli — this Tool Skill only covers operating dbcli safely.
 - v1 covers the commands the engine capability matrix governs; anything outside it returns
   `unknown` rather than an unaudited engine claim.
 
-**Agent output v1 (PLAT-005):** use `dbcli --agent-output capabilities` or
-`dbcli --agent-output capabilities check --require <ids>`; the root flag must precede the
-subcommand, and no other operation is supported yet. It writes one compact UTF-8 JSON envelope plus
+**Agent output v1 (PLAT-005):** use `dbcli --agent-output capabilities`,
+`dbcli --agent-output capabilities check --require <ids>`, `dbcli --agent-output query "<sql>"`, or
+`dbcli --agent-output q @<name>`; the root flag must precede the subcommand, and no other
+operation is supported yet. It writes one compact UTF-8 JSON envelope plus
 newline to stdout, with empty stderr. Its ten keys are `schemaVersion`, `ok`, `operation`, `status`,
 `context`, `data`, `warnings`, `evidence`, `recovery`, and `error`; `schemaVersion` is `1`,
-`operation` is `capabilities.list` or `capabilities.check`, and `status` is `succeeded` or `failed`.
+`operation` is `capabilities.list`, `capabilities.check`, `query.execute` (ad-hoc `query`),
+`saved-query.execute` (`q @name`, SQL engines only), or `cli.invocation` (a failed call to anything
+unsupported), and `status` is `succeeded` or `failed`.
 Do not combine it with explicit `--format` or `--for-agent`: conflicts, invalid placement/input, and
 unsupported operations exit `2`; success exits `0`; unmet requirements and internal failures exit `1`.
 The envelope is capped at 64 KiB including newline, and consumers use field names rather than order.
@@ -201,6 +212,19 @@ Code/message vocabulary is locale-independent English: errors are
 safe failure). Warnings are `DUPLICATE_CAPABILITY_REQUIREMENT`,
 `CAPABILITY_CONTEXT_UNAVAILABLE`, `CAPABILITY_CONTEXT_UNRESOLVABLE`, and
 `AGENT_MODE_RESTRICTION_ACTIVE`.
+
+`query.execute` / `saved-query.execute` put `{columnNames, rows, rowCount, rowsAffected, truncated,
+limitApplied}` in `data`: cells are strings, numbers, booleans or null; `rowsAffected` is `null`
+for statements that return rows and a count for writes (rows then empty); `limitApplied` is the
+row cap in force. Warnings (never on stderr) are `AUTO_LIMIT_APPLIED`, `BLACKLIST_COLUMNS_REDACTED`,
+`DANGEROUS_OPERATION`, `SLOW_QUERY`, `SAVED_QUERY_WARNING`, `QUERY_DIAGNOSTIC`. Failures set
+`data: null` and an `error.code` such as `INVALID_QUERY_INPUT`, `PARAM_MISSING`, `NOT_FOUND`,
+`WRITE_GATE_REFUSED`, `PERMISSION_DENIED`, `BLACKLIST_TABLE`, a database code
+(`SQL_SYNTAX_ERROR`, `TABLE_NOT_FOUND`, `DATABASE_ERROR`, ...), `AGENT_OUTPUT_LIMIT_EXCEEDED`
+(narrow with `--limit` or use `dbcli export`), or, for connection failures, a `CONN_*` code with the
+Recovery Envelope in `recovery`. `--recovery`, `--ui`, `--dry-run`, `--verify` and a comma-separated
+`--use` are rejected; saved queries on Mongo/Elasticsearch/Redis exit `2` with
+`UNSUPPORTED_AGENT_OUTPUT_OPERATION` (use `--format json`).
 
 ## Agent Task Packs
 

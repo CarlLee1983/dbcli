@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--agent-output` 涵蓋 `query`（operation `query.execute`）與 SQL 引擎上的 Saved query `q @name`（operation `saved-query.execute`）：stdout 恆為一份 Operation envelope、stderr 為空；失敗帶穩定錯誤代碼，連線失敗附 Recovery Envelope，結果超過 64 KiB 時提示改用 `--limit` 或 `export`。`--format json` 輸出不變。
+- 不支援 `--agent-output` 的指令改回報 `cli.invocation`，不再誤標成 `capabilities.check`；與 `--format` 併用時的錯誤訊息會明說要移除 `--format`。
+
 ### Security
 
 - 將 `postcss-selector-parser` 覆寫提高至 `^6.1.5`（解析為 6.1.6），修補 GHSA-rj75-hqrm-r3gf；依賴稽核例外清單清空。

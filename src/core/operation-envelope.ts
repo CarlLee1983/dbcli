@@ -17,10 +17,26 @@ const MAX_EVIDENCE_ITEMS = 16
 
 const OPERATION_ID = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/
 const CODE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
-const EVIDENCE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/
+export const EVIDENCE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/
 
-export type OperationEnvelopeOperation = 'capabilities.check' | 'capabilities.list'
+export const OPERATION_ENVELOPE_OPERATIONS = [
+  'capabilities.check',
+  'capabilities.list',
+  'query.execute',
+  'saved-query.execute',
+  // Not a runnable operation: names a failed invocation that no supported
+  // operation owns, so the envelope never claims to be a different command.
+  'cli.invocation',
+] as const
+export type OperationEnvelopeOperation = (typeof OPERATION_ENVELOPE_OPERATIONS)[number]
+export type OperationEnvelopeQueryOperation = 'query.execute' | 'saved-query.execute'
+
+export function isQueryOperation(
+  operation: OperationEnvelopeOperation
+): operation is OperationEnvelopeQueryOperation {
+  return operation === 'query.execute' || operation === 'saved-query.execute'
+}
 export type OperationEnvelopeStatus = 'succeeded' | 'failed'
 export type OperationEnvelopeEvidenceKind = 'receipt' | 'audit' | 'verification-artifact'
 
@@ -50,6 +66,17 @@ export interface OperationEnvelopeCapabilitiesCheckData {
   readonly results: readonly OperationEnvelopeCapabilityResult[]
 }
 
+export type OperationEnvelopeQueryCell = string | number | boolean | null
+
+export interface OperationEnvelopeQueryData {
+  readonly columnNames: readonly string[]
+  readonly rows: readonly Readonly<Record<string, OperationEnvelopeQueryCell>>[]
+  readonly rowCount: number
+  readonly rowsAffected: number | null
+  readonly truncated: boolean
+  readonly limitApplied: number | null
+}
+
 export interface OperationEnvelopeWarning {
   readonly code: string
   readonly message: string
@@ -72,7 +99,11 @@ export interface OperationEnvelope {
   readonly operation: OperationEnvelopeOperation
   readonly status: OperationEnvelopeStatus
   readonly context: OperationEnvelopeContext | null
-  readonly data: OperationEnvelopeCapabilitiesCheckData | CapabilityCatalog | null
+  readonly data:
+    | OperationEnvelopeCapabilitiesCheckData
+    | CapabilityCatalog
+    | OperationEnvelopeQueryData
+    | null
   readonly warnings: readonly OperationEnvelopeWarning[]
   readonly evidence: readonly OperationEnvelopeEvidenceReference[]
   readonly recovery: RecoveryEnvelope | null
@@ -179,6 +210,30 @@ const capabilitiesCheckDataSchema = z
     }
   })
 
+const querySchemaCell = z.union([z.string(), z.number().finite(), z.boolean(), z.null()])
+
+const queryDataSchema = z
+  .object({
+    columnNames: z.array(z.string()),
+    rows: z.array(z.record(z.string(), querySchemaCell)),
+    rowCount: z.number().int().min(0),
+    rowsAffected: z.number().int().min(0).nullable(),
+    truncated: z.boolean(),
+    limitApplied: z.number().int().positive().nullable(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.rowCount !== data.rows.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'rowCount must equal rows.length' })
+    }
+    if (data.truncated && data.limitApplied === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'truncated results require limitApplied',
+      })
+    }
+  })
+
 const warningSchema = z
   .object({
     code: codeSchema,
@@ -213,14 +268,16 @@ const operationEnvelopeFieldSchema = z
     schemaVersion: z.literal(OPERATION_ENVELOPE_SCHEMA_VERSION),
     ok: z.boolean(),
     operation: z
-      .enum(['capabilities.check', 'capabilities.list'])
+      .enum(OPERATION_ENVELOPE_OPERATIONS)
       .refine(
         (value) =>
           value.length <= MAX_OPERATION_ENVELOPE_IDENTIFIER_LENGTH && OPERATION_ID.test(value)
       ),
     status: z.enum(['succeeded', 'failed']),
     context: contextSchema.nullable(),
-    data: z.union([capabilitiesCheckDataSchema, CapabilityCatalogSchema]).nullable(),
+    data: z
+      .union([capabilitiesCheckDataSchema, CapabilityCatalogSchema, queryDataSchema])
+      .nullable(),
     warnings: z.array(warningSchema).max(MAX_OPERATION_ENVELOPE_ITEMS),
     evidence: z.array(evidenceSchema).max(MAX_EVIDENCE_ITEMS),
     recovery: recoveryEnvelopeSchema.nullable(),
@@ -342,6 +399,48 @@ const operationEnvelopeFieldSchema = z
       }
     }
 
+    if (isQueryOperation(envelope.operation) || envelope.operation === 'cli.invocation') {
+      const queryOperation = envelope.operation !== 'cli.invocation'
+      if (envelope.status === 'succeeded') {
+        if (!queryOperation) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'cli.invocation envelopes cannot succeed',
+          })
+        }
+        if (envelope.error !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'successful envelopes require error null',
+          })
+        }
+        if (envelope.data === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `successful ${envelope.operation} envelopes require data`,
+          })
+        } else if (!('rowCount' in envelope.data)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${envelope.operation} requires queryDataSchema shape`,
+          })
+        }
+      } else {
+        if (envelope.error === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'failed envelopes require an error',
+          })
+        }
+        if (envelope.data !== null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `failed ${envelope.operation} envelopes require data null`,
+          })
+        }
+      }
+    }
+
     if (envelope.recovery !== null) {
       if (
         envelope.error === null ||
@@ -417,7 +516,9 @@ export function serializeOperationEnvelope(input: unknown): SerializedOperationE
     recovery: null,
     error: {
       code: 'AGENT_OUTPUT_LIMIT_EXCEEDED',
-      message: 'Agent output exceeded the 65,536-byte limit.',
+      message: isQueryOperation(envelope.operation)
+        ? 'Agent output exceeded the 65,536-byte limit. Narrow the result with --limit, or use dbcli export for large results.'
+        : 'Agent output exceeded the 65,536-byte limit.',
     },
   }
   return { envelope: fallback, output: encode(fallback), exceededLimit: true }

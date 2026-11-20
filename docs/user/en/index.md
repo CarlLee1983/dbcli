@@ -473,9 +473,9 @@ implement or approve those workflows.
 
 #### Agent output v1
 
-`--agent-output` is a root option and must appear before the subcommand. In PLAT-005,
-`dbcli --agent-output capabilities` and `dbcli --agent-output capabilities check --require <ids>`
-are supported; either emits one compact UTF-8 JSON document plus a newline on stdout and
+`--agent-output` is a root option and must appear before the subcommand. Supported:
+`dbcli --agent-output capabilities`, `dbcli --agent-output capabilities check --require <ids>`,
+`dbcli --agent-output query "<sql>"` and `dbcli --agent-output q @<name>` (SQL engines); each emits one compact UTF-8 JSON document plus a newline on stdout and
 nothing on stderr. It is ephemeral: it is not evidence and creates no timestamp.
 
 Use the optional root `--correlation-id <id>` before the subcommand to associate an invocation
@@ -487,7 +487,7 @@ and in the existing audit entry as `metadata.correlation_id`; command summaries 
 
 The v1 envelope always has these ten keys: `schemaVersion`, `ok`, `operation`, `status`,
 `context`, `data`, `warnings`, `evidence`, `recovery`, and `error`. `schemaVersion` is `1`;
-`operation` is `capabilities.list` or `capabilities.check`; `status` is `succeeded` or `failed`;
+`operation` is `capabilities.list`, `capabilities.check`, `query.execute` (ad-hoc `query`), `saved-query.execute` (`q @name`) or `cli.invocation` (a failed call to an unsupported command); `status` is `succeeded` or `failed`;
 and consumers must address keys by name, not field order. It is capped at 64 KiB including the newline.
 
 Do not combine `--agent-output` with an explicitly supplied `--format` or `--for-agent`;
@@ -504,6 +504,8 @@ Error and warning code/message vocabulary is locale-independent English. Error c
 invalid root correlation ID). Warning codes are
 `DUPLICATE_CAPABILITY_REQUIREMENT`, `CAPABILITY_CONTEXT_UNAVAILABLE`,
 `CAPABILITY_CONTEXT_UNRESOLVABLE`, and `AGENT_MODE_RESTRICTION_ACTIVE`.
+
+For `query` and `q`, `data` is `{columnNames, rows, rowCount, rowsAffected, truncated, limitApplied}`. Cells are strings, numbers, booleans or null; `rowsAffected` is `null` for row-returning statements and a count for writes (with empty `rows`); `limitApplied` is the row cap in force. `context` holds only `engine`, `permission`, `connectionName` and `agentMode`; `evidence` references the audit entry as `{kind: "audit", id}`. Failures set `data: null`: `INVALID_QUERY_INPUT`, `NOT_FOUND`, `AMBIGUOUS`, `PARAM_MISSING` and `PARAM_INVALID` exit `2`, as does `UNSUPPORTED_AGENT_OUTPUT_OPERATION` for saved queries on MongoDB, Elasticsearch or Redis; `WRITE_GATE_REFUSED`, `PERMISSION_DENIED`, `BLACKLIST_TABLE`, `BLACKLIST_COLUMN_WRITE`, `QUERY_SIZE_GUARD_REFUSED`, database codes (`SQL_SYNTAX_ERROR`, `TABLE_NOT_FOUND`, `COLUMN_NOT_FOUND`, `STATEMENT_TIMEOUT`, `DB_PERMISSION_DENIED`, `DATABASE_ERROR`), `CONFIG_MISSING`, `QUERY_FAILED` and `AGENT_OUTPUT_LIMIT_EXCEEDED` (narrow with `--limit` or use `dbcli export`) exit `1`; a connection failure carries a `CONN_*` code with the Recovery Envelope in `recovery`. Warning codes are `AUTO_LIMIT_APPLIED` (`query` in query-only mode mirrors its stderr advisory; `q` only when the size guard truncated the result), `BLACKLIST_COLUMNS_REDACTED`, `DANGEROUS_OPERATION`, `SLOW_QUERY`, `SAVED_QUERY_WARNING` and `QUERY_DIAGNOSTIC`. `--recovery`, `--ui`, `--dry-run`, `--verify`, explicit `--format` and a comma-separated `--use` are rejected with exit `2`. `--format json` output is unchanged.
 
 A **capability** is one atomic dbcli ability — `schema.read`, `data.delete`. It is never a
 job or a method: `dba.tune-production` and `crud.scaffold` belong to the Role Skill or

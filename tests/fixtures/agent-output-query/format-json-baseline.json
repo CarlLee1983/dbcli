@@ -1,0 +1,51 @@
+{
+  "_note": "Captured from the code before the agent-output change (admin PostgreSQL). executionTimeMs is normalized to 0 by the test because wall-clock time varies; every other byte is compared verbatim.",
+  "cases": {
+    "read": {
+      "args": [
+        "query",
+        "SELECT 1 AS a, 'x' AS b, NULL AS c",
+        "--format",
+        "json"
+      ],
+      "stdout": "{\n  \"rows\": [\n    {\n      \"a\": 1,\n      \"b\": \"x\",\n      \"c\": null\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ],\n  \"columnTypes\": [\n    \"integer\",\n    \"varchar\",\n    \"null\"\n  ],\n  \"executionTimeMs\": 0,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "write": {
+      "args": [
+        "query",
+        "UPDATE dbcli_agent_out_baseline SET v = 2 WHERE id = 1",
+        "--format",
+        "json"
+      ],
+      "stdout": "{\n  \"rows\": [],\n  \"rowCount\": 0,\n  \"columnNames\": [],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 0,\n  \"metadata\": {\n    \"statement\": \"UPDATE\",\n    \"affectedRows\": 1\n  }\n}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "savedQuery": {
+      "args": [
+        "q",
+        "@one",
+        "--param",
+        "v=42",
+        "--format",
+        "json"
+      ],
+      "stdout": "{\n  \"rows\": [\n    {\n      \"x\": \"42\"\n    }\n  ],\n  \"rowCount\": 1,\n  \"columnNames\": [\n    \"x\"\n  ],\n  \"columnTypes\": [],\n  \"executionTimeMs\": 0,\n  \"metadata\": {\n    \"statement\": \"SELECT\",\n    \"affectedRows\": 0,\n    \"truncated\": false,\n    \"limit_applied\": 1000\n  }\n}\n",
+      "stderr": "Executing query...\n",
+      "exitCode": 0
+    },
+    "writeGateRefusal": {
+      "args": [
+        "query",
+        "DELETE FROM dbcli_agent_out_baseline",
+        "--format",
+        "json"
+      ],
+      "stdout": "{\n  \"status\": \"refused\",\n  \"code\": \"WRITE_GATE_REFUSED\",\n  \"reason\": \"no_where\",\n  \"table\": \"dbcli_agent_out_baseline\"\n}\n",
+      "stderr": "Refused: this statement is not limited to specific rows and nobody is here to confirm it (reason=no_where). Add a WHERE clause — WHERE 1=1 if you really do mean every row — or a LIMIT, then run it again.\nCode: WRITE_GATE_REFUSED\n",
+      "exitCode": 1
+    }
+  }
+}

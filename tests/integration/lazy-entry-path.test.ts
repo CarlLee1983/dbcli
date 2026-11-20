@@ -302,24 +302,30 @@ describe('lazy entry agent-output failures', () => {
   })
 
   test.each([
-    ['ordinary command', ['--agent-output', 'query', 'SELECT 1']],
-    ['capabilities unknown subcommand', ['--agent-output', 'capabilities', 'unknown']],
-    ['shell', ['--agent-output', 'shell']],
-    ['es-shell', ['--agent-output', 'es-shell']],
-    ['proxy', ['--agent-output', 'proxy']],
-    ['help', ['--agent-output', '--help']],
-    ['version', ['--agent-output', '--version']],
+    ['ordinary command', ['--agent-output', 'list'], 'cli.invocation'],
+    [
+      'capabilities unknown subcommand',
+      ['--agent-output', 'capabilities', 'unknown'],
+      'capabilities.check',
+    ],
+    ['shell', ['--agent-output', 'shell'], 'cli.invocation'],
+    ['es-shell', ['--agent-output', 'es-shell'], 'cli.invocation'],
+    ['proxy', ['--agent-output', 'proxy'], 'cli.invocation'],
+    ['help', ['--agent-output', '--help'], 'cli.invocation'],
+    ['version', ['--agent-output', '--version'], 'cli.invocation'],
     [
       'clustered help',
       ['-qh', '--agent-output', 'capabilities', 'check', '--require', 'schema.read'],
+      'capabilities.check',
     ],
     [
       'clustered version',
       ['-qV', '--agent-output', 'capabilities', 'check', '--require', 'schema.read'],
+      'capabilities.check',
     ],
-    ['no command', ['--agent-output']],
-  ])('%s is rejected before its action', (_name, args) => {
-    expectAgentFailure(runResult(...args), 'UNSUPPORTED_AGENT_OUTPUT_OPERATION', 2)
+    ['no command', ['--agent-output'], 'cli.invocation'],
+  ])('%s is rejected before its action', (_name, args, operation) => {
+    expectAgentFailure(runResult(...args), 'UNSUPPORTED_AGENT_OUTPUT_OPERATION', 2, operation)
   })
 
   test('Commander requirement and option errors stay structured', () => {
@@ -333,7 +339,12 @@ describe('lazy entry agent-output failures', () => {
       'INVALID_AGENT_OUTPUT_OPTIONS',
       2
     )
-    expectAgentFailure(runResult('--agent-output', '--config'), 'INVALID_AGENT_OUTPUT_OPTIONS', 2)
+    expectAgentFailure(
+      runResult('--agent-output', '--config'),
+      'INVALID_AGENT_OUTPUT_OPTIONS',
+      2,
+      'cli.invocation'
+    )
     expectAgentFailure(
       runResult(
         '--agent-output',
@@ -356,7 +367,9 @@ describe('lazy entry agent-output failures', () => {
     expectAgentFailure(
       runResult('--agent-output', '--timeout', 'capabilities', 'check', '--require', 'schema.read'),
       'INVALID_AGENT_OUTPUT_OPTIONS',
-      2
+      2,
+      // `--timeout` swallowed `capabilities` as its value, so no known command remains.
+      'cli.invocation'
     )
   })
 

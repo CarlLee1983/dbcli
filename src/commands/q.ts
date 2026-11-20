@@ -32,10 +32,19 @@ import {
 } from '@/core/saved-queries'
 import { colors } from '@/utils/colors'
 import { trimAppliedLimit } from '@/core/applied-limit'
+import type { QueryResult } from '@/types/query'
 import { formatCliError, printLocalizedCliError } from '@/utils/cli-error'
 import { presentConnectionError } from '@/utils/connection-error-message'
 import { engineFamily, type EngineFamily } from '@/core/saved-queries/strategies'
 import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
+import {
+  AgentOutputUnsupportedEngineError,
+  agentOutputRequested,
+  emitQueryFailure,
+  emitQuerySuccess,
+  type QueryAgentPhase,
+} from '@/commands/query-agent-output'
+import type { OperationEnvelopeWarning } from '@/core/operation-envelope'
 
 export interface DryRunInput {
   family: EngineFamily
@@ -91,25 +100,62 @@ export async function qCommand(
   options: QCommandOptions,
   command?: import('commander').Command
 ): Promise<void> {
+  const agentSuccess = await runQCommand(name, options, command)
+  // After the adapter is disconnected: the envelope is the last thing the run does.
+  if (agentSuccess) {
+    process.exit(
+      emitQuerySuccess({
+        operation: 'saved-query.execute',
+        command,
+        config: agentSuccess.config,
+        result: agentSuccess.result,
+        auditId: agentSuccess.auditId,
+        extra: agentSuccess.warnings,
+      })
+    )
+  }
+}
+
+interface SavedQueryAgentSuccess {
+  config: DbcliConfig
+  result: QueryResult<Record<string, unknown>>
+  auditId: string | null
+  warnings: OperationEnvelopeWarning[]
+}
+
+/** Runs the saved query; under `--agent-output` returns the outcome for the caller to emit. */
+async function runQCommand(
+  name: string,
+  options: QCommandOptions,
+  command?: import('commander').Command
+): Promise<SavedQueryAgentSuccess | undefined> {
   let config: DbcliConfig | undefined
   let targetNameForAudit: string = name
+  const agentOutput = agentOutputRequested(command)
+  let phase: QueryAgentPhase = 'input'
   try {
     assertValidSlowQueryThreshold(options.slowMs)
     if (!name?.startsWith('@')) {
       throw new Error(`Snippet name must start with '@' (got '${name}')`)
     }
     const configPath = resolveConfigPath(command, options)
+    phase = 'execution'
     config = await configModule.read(configPath)
     if (!config.connection) throw new Error('Run "dbcli init" first')
 
     const connectionSystem = config.connection.system
     const engine = mapSystemToEngine(connectionSystem)
+    if (agentOutput && engineFamily(engine) !== 'sql') {
+      throw new AgentOutputUnsupportedEngineError(connectionSystem)
+    }
     const dirs = resolveSnippetDirs(process.cwd())
     const map = await loadSnippets(dirs)
     const snippet = resolveByName(map, name, engine)
 
+    phase = 'input'
     const cliParams = parseCliParams(options.param ?? [])
     const fileParams = await readParamFile(options.paramFile)
+    phase = 'execution'
 
     const prepared = prepareExecution(
       snippet,
@@ -117,8 +163,10 @@ export async function qCommand(
       cliParams,
       fileParams
     )
-    for (const w of prepared.warnings) console.error(`⚠ ${w}`)
-    if (prepared.warnings.length > 0) console.error('')
+    if (!agentOutput) {
+      for (const w of prepared.warnings) console.error(`⚠ ${w}`)
+      if (prepared.warnings.length > 0) console.error('')
+    }
 
     const family = engineFamily(engine)
     const sqlDialect = SQL_DIALECTS.find((dialect) => dialect === connectionSystem)
@@ -229,6 +277,53 @@ export async function qCommand(
           ? undefined
           : blacklistValidator.buildSecurityNotification(targetName, filtered.omittedColumns)
 
+      const queryResult = attachSlowQueryAdvisory(
+        {
+          rows: filtered.filteredRows,
+          rowCount: filtered.filteredRows.length,
+          columnNames: columnNames.filter((c) => !filtered.omittedColumns.includes(c)),
+          columnTypes: [],
+          executionTimeMs,
+          metadata: {
+            statement: 'SELECT',
+            affectedRows: 0,
+            ...(securityNotification ? { securityNotification } : {}),
+          },
+          ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
+        },
+        { slowMs: options.slowMs, recovery: options.recovery, system: connectionSystem }
+      )
+
+      if (agentOutput) {
+        const auditId = await writeAuditEntry(config, 'q', options, {
+          success: true,
+          target: targetName || name,
+          sql: prepared.driver.sql,
+          metadata: {
+            rows_affected: filtered.filteredRows.length,
+            execution_ms: executionTimeMs,
+          },
+        })
+        return {
+          config,
+          result: queryResult,
+          auditId,
+          warnings: [
+            ...prepared.warnings.map(
+              (message): OperationEnvelopeWarning => ({ code: 'SAVED_QUERY_WARNING', message })
+            ),
+            ...(limitedResult?.metadata.truncated
+              ? [
+                  {
+                    code: 'AUTO_LIMIT_APPLIED',
+                    message: `The size guard capped the result at ${limitedResult.metadata.limitApplied} rows. Pass --no-limit to remove the cap.`,
+                  },
+                ]
+              : []),
+          ],
+        }
+      }
+
       if (options.ui || options.format === 'html') {
         const html = await generateHtmlReport({
           meta: snippet.query.meta,
@@ -265,25 +360,7 @@ export async function qCommand(
       }
 
       const formatter = new QueryResultFormatter()
-      const out = formatter.format(
-        attachSlowQueryAdvisory(
-          {
-            rows: filtered.filteredRows,
-            rowCount: filtered.filteredRows.length,
-            columnNames: columnNames.filter((c) => !filtered.omittedColumns.includes(c)),
-            columnTypes: [],
-            executionTimeMs,
-            metadata: {
-              statement: 'SELECT',
-              affectedRows: 0,
-              ...(securityNotification ? { securityNotification } : {}),
-            },
-            ...(limitedResult ? { appliedLimit: limitedResult.metadata } : {}),
-          },
-          { slowMs: options.slowMs, recovery: options.recovery, system: connectionSystem }
-        ),
-        { format: (options.format as any) ?? 'table' }
-      )
+      const out = formatter.format(queryResult, { format: (options.format as any) ?? 'table' })
       console.log(out)
       await writeAuditEntry(config, 'q', options, {
         success: true,
@@ -342,7 +419,13 @@ export async function qCommand(
       await adapter.disconnect()
     }
   } catch (error) {
-    await handleQError(error, targetNameForAudit, options, config)
+    await handleQError(
+      error,
+      targetNameForAudit,
+      options,
+      config,
+      agentOutput ? { command, phase } : undefined
+    )
   }
 }
 
@@ -370,7 +453,8 @@ async function handleQError(
   error: unknown,
   snippetName: string,
   options: QCommandOptions,
-  config: DbcliConfig | undefined
+  config: DbcliConfig | undefined,
+  agent?: { command: import('commander').Command | undefined; phase: QueryAgentPhase }
 ): Promise<void> {
   const redisBlacklistRejection =
     config?.connection?.system === 'redis' &&
@@ -403,6 +487,20 @@ async function handleQError(
       reportedError,
       { operation: 'q', snippet: snippetName },
       { envelopeId, auditRef: auditId ?? undefined }
+    )
+  }
+
+  if (agent) {
+    process.exit(
+      await emitQueryFailure({
+        operation: 'saved-query.execute',
+        command: agent.command,
+        error,
+        phase: agent.phase,
+        config,
+        snippet: snippetName,
+        auditId,
+      })
     )
   }
 

@@ -13,6 +13,7 @@ export type AgentOutputFailureCode =
   | 'INVALID_CORRELATION_ID'
   | 'UNSUPPORTED_AGENT_OUTPUT_OPERATION'
   | 'INVALID_CAPABILITY_REQUIREMENTS'
+  | 'INVALID_QUERY_INPUT'
   | 'AGENT_OUTPUT_INTERNAL_ERROR'
 
 const FAILURE_MESSAGES: Readonly<Record<AgentOutputFailureCode, string>> = {
@@ -20,6 +21,7 @@ const FAILURE_MESSAGES: Readonly<Record<AgentOutputFailureCode, string>> = {
   INVALID_CORRELATION_ID: 'Invalid correlation ID.',
   UNSUPPORTED_AGENT_OUTPUT_OPERATION: 'Agent output is not supported for this operation.',
   INVALID_CAPABILITY_REQUIREMENTS: 'Capability requirements are invalid.',
+  INVALID_QUERY_INPUT: 'Query input is invalid.',
   AGENT_OUTPUT_INTERNAL_ERROR: 'Agent output failed safely.',
 }
 
@@ -29,6 +31,8 @@ export interface AgentOutputPreflightFailure {
     | 'INVALID_CORRELATION_ID'
     | 'UNSUPPORTED_AGENT_OUTPUT_OPERATION'
   readonly exitCode: 2
+  /** Replaces the generic message when the caller can act on a more specific one. */
+  readonly message?: string
 }
 
 export type AgentOutputPreflight =
@@ -116,14 +120,32 @@ function scanRootOptions(args: readonly string[], rootOptions: readonly Option[]
   return { commandIndex, consumedIndexes, invalid, invalidCorrelationId }
 }
 
-function hasOutputConflict(args: readonly string[]): boolean {
-  return args.some(
-    (token) =>
-      token === '--format' ||
-      token.startsWith('--format=') ||
-      token === '--for-agent' ||
-      token.startsWith('--for-agent=')
-  )
+function outputConflictFlag(args: readonly string[]): '--format' | '--for-agent' | undefined {
+  for (const token of args) {
+    if (token === '--format' || token.startsWith('--format=')) return '--format'
+    if (token === '--for-agent' || token.startsWith('--for-agent=')) return '--for-agent'
+  }
+  return undefined
+}
+
+const QUERY_OPERATION_BY_COMMAND = {
+  query: 'query.execute',
+  q: 'saved-query.execute',
+} as const satisfies Record<string, OperationEnvelopeOperation>
+
+/**
+ * Flags that ask for a second output contract (a recovery envelope, a browser
+ * dashboard, a dry-run preview, a verification pass) and so cannot share
+ * stdout with the one envelope `--agent-output` promises.
+ */
+const QUERY_INCOMPATIBLE_FLAGS = new Set(['--recovery', '--ui', '--dry-run', '--verify'])
+
+function hasQueryIncompatibleFlag(args: readonly string[]): boolean {
+  for (const token of args) {
+    if (token === '--') return false
+    if (QUERY_INCOMPATIBLE_FLAGS.has(token.split('=', 1)[0]!)) return true
+  }
+  return false
 }
 
 /** Classify the exact opt-in before Commander can print prose or run an action. */
@@ -135,19 +157,25 @@ export function inspectAgentOutputInvocation(
   if (agentIndexes.length === 0) return { active: false }
 
   const scan = scanRootOptions(args, rootOptions)
+  const commandName = scan.commandIndex === -1 ? undefined : args[scan.commandIndex]
   const isCapabilitiesCheck =
-    scan.commandIndex !== -1 &&
-    args[scan.commandIndex] === 'capabilities' &&
-    args[scan.commandIndex + 1] === 'check'
+    commandName === 'capabilities' && args[scan.commandIndex + 1] === 'check'
   const isCapabilitiesList =
-    scan.commandIndex !== -1 &&
-    args[scan.commandIndex] === 'capabilities' &&
+    commandName === 'capabilities' &&
     (args.length === scan.commandIndex + 1 ||
       args[scan.commandIndex + 1] === '--' ||
       args[scan.commandIndex + 1]?.startsWith('--'))
-  const operation: OperationEnvelopeOperation = isCapabilitiesList
-    ? 'capabilities.list'
-    : 'capabilities.check'
+  const queryOperation =
+    commandName !== undefined && Object.hasOwn(QUERY_OPERATION_BY_COMMAND, commandName)
+      ? QUERY_OPERATION_BY_COMMAND[commandName as keyof typeof QUERY_OPERATION_BY_COMMAND]
+      : undefined
+  const operation: OperationEnvelopeOperation =
+    queryOperation ??
+    (isCapabilitiesList
+      ? 'capabilities.list'
+      : commandName === 'capabilities'
+        ? 'capabilities.check'
+        : 'cli.invocation')
 
   const misplaced = agentIndexes.some(
     (index) =>
@@ -163,7 +191,24 @@ export function inspectAgentOutputInvocation(
       failure: { code: 'INVALID_CORRELATION_ID', exitCode: 2 },
     }
   }
-  if (misplaced || misplacedCorrelationId || hasOutputConflict(args) || scan.invalid) {
+  const conflictFlag = outputConflictFlag(args)
+  if (conflictFlag !== undefined) {
+    return {
+      active: true,
+      operation,
+      failure: {
+        code: 'INVALID_AGENT_OUTPUT_OPTIONS',
+        exitCode: 2,
+        message: `--agent-output cannot be combined with ${conflictFlag}; remove ${conflictFlag}.`,
+      },
+    }
+  }
+  if (
+    misplaced ||
+    misplacedCorrelationId ||
+    scan.invalid ||
+    (queryOperation !== undefined && hasQueryIncompatibleFlag(args.slice(scan.commandIndex + 1)))
+  ) {
     return {
       active: true,
       operation,
@@ -172,7 +217,7 @@ export function inspectAgentOutputInvocation(
   }
 
   const meta = args.some(isMetaToken)
-  const supported = isCapabilitiesCheck || isCapabilitiesList
+  const supported = isCapabilitiesCheck || isCapabilitiesList || queryOperation !== undefined
   if (meta || !supported) {
     return {
       active: true,
@@ -186,7 +231,8 @@ export function inspectAgentOutputInvocation(
 
 export function createAgentOutputFailure(
   code: AgentOutputFailureCode,
-  operation: OperationEnvelopeOperation = 'capabilities.check'
+  operation: OperationEnvelopeOperation = 'capabilities.check',
+  message: string = FAILURE_MESSAGES[code]
 ): OperationEnvelope {
   return {
     schemaVersion: OPERATION_ENVELOPE_SCHEMA_VERSION,
@@ -198,21 +244,61 @@ export function createAgentOutputFailure(
     warnings: [],
     evidence: [],
     recovery: null,
-    error: { code, message: FAILURE_MESSAGES[code] },
+    error: { code, message },
   }
+}
+
+let writeEnvelope: (output: string) => void = (output) => {
+  process.stdout.write(output)
+}
+
+/**
+ * Make the envelope the only thing the process can put on stdout or stderr.
+ *
+ * Stream purity is enforced here, at the CLI boundary, rather than trusted to
+ * every command: config loading, the audit sink, a driver or a library can all
+ * print, and one stray line turns the envelope into unparseable output. The
+ * envelope keeps the stdout writer captured before the mute, so whatever
+ * synchronous redirected-stdout writer the runtime installed still delivers it
+ * completely.
+ */
+export function silenceProcessOutputExceptEnvelope(): void {
+  const stdoutWrite = process.stdout.write.bind(process.stdout)
+  writeEnvelope = (output) => {
+    stdoutWrite(output)
+  }
+
+  const swallow = ((
+    _chunk: unknown,
+    encodingOrCallback?: unknown,
+    callback?: (error?: Error | null) => void
+  ): boolean => {
+    const onComplete = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
+    ;(onComplete as ((error?: Error | null) => void) | undefined)?.()
+    return true
+  }) as typeof process.stdout.write
+  process.stdout.write = swallow
+  process.stderr.write = swallow
+
+  const nothing = (): void => undefined
+  console.log = nothing
+  console.info = nothing
+  console.debug = nothing
+  console.warn = nothing
+  console.error = nothing
 }
 
 /** Validate, serialize, and write exactly one complete envelope. */
 export function emitAgentOutputEnvelope(envelope: OperationEnvelope, exitCode: number): number {
   try {
     const serialized = serializeOperationEnvelope(envelope)
-    process.stdout.write(serialized.output)
+    writeEnvelope(serialized.output)
     return serialized.exceededLimit ? 1 : exitCode
   } catch {
     const serialized = serializeOperationEnvelope(
       createAgentOutputFailure('AGENT_OUTPUT_INTERNAL_ERROR', envelope.operation)
     )
-    process.stdout.write(serialized.output)
+    writeEnvelope(serialized.output)
     return 1
   }
 }
@@ -220,7 +306,8 @@ export function emitAgentOutputEnvelope(envelope: OperationEnvelope, exitCode: n
 export function emitAgentOutputFailure(
   code: AgentOutputFailureCode,
   exitCode: 1 | 2,
-  operation: OperationEnvelopeOperation = 'capabilities.check'
+  operation: OperationEnvelopeOperation = 'capabilities.check',
+  message?: string
 ): number {
-  return emitAgentOutputEnvelope(createAgentOutputFailure(code, operation), exitCode)
+  return emitAgentOutputEnvelope(createAgentOutputFailure(code, operation, message), exitCode)
 }

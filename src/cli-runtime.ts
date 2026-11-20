@@ -23,7 +23,12 @@ import { readSkillCheckCache, writeSkillCheckCache } from './utils/skill-check-c
 import { buildProgramFor } from './program-lazy'
 import { createRootProgram } from './program-root'
 import { presentCliError } from './utils/cli-error'
-import { emitAgentOutputFailure, inspectAgentOutputInvocation } from './utils/agent-output'
+import { isQueryOperation } from './core/operation-envelope'
+import {
+  emitAgentOutputFailure,
+  inspectAgentOutputInvocation,
+  silenceProcessOutputExceptEnvelope,
+} from './utils/agent-output'
 import { join } from 'path'
 import { writeSync } from 'node:fs'
 import { format } from 'node:util'
@@ -80,12 +85,14 @@ const agentOutputPreflight = inspectAgentOutputInvocation(
   process.argv.slice(2),
   createRootProgram().options
 )
+if (agentOutputPreflight.active) silenceProcessOutputExceptEnvelope()
 if (agentOutputPreflight.active && agentOutputPreflight.failure) {
   process.exit(
     emitAgentOutputFailure(
       agentOutputPreflight.failure.code,
       agentOutputPreflight.failure.exitCode,
-      agentOutputPreflight.operation
+      agentOutputPreflight.operation,
+      agentOutputPreflight.failure.message
     )
   )
 }
@@ -360,14 +367,27 @@ try {
       ) &&
       error.message.includes('--require')
     const commanderInputError = error instanceof CommanderError
+    // A malformed value for a query argument or option is the caller's input,
+    // not a misuse of the output mode itself.
+    const invalidQueryInput =
+      commanderInputError &&
+      isQueryOperation(agentOutputPreflight.operation) &&
+      [
+        'commander.invalidArgument',
+        'commander.missingArgument',
+        'commander.optionMissingArgument',
+        'commander.missingMandatoryOptionValue',
+      ].includes(error.code)
     process.exitCode = emitAgentOutputFailure(
       invalidRequirements
         ? 'INVALID_CAPABILITY_REQUIREMENTS'
         : invalidCorrelationId
           ? 'INVALID_CORRELATION_ID'
-          : commanderInputError
-            ? 'INVALID_AGENT_OUTPUT_OPTIONS'
-            : 'AGENT_OUTPUT_INTERNAL_ERROR',
+          : invalidQueryInput
+            ? 'INVALID_QUERY_INPUT'
+            : commanderInputError
+              ? 'INVALID_AGENT_OUTPUT_OPTIONS'
+              : 'AGENT_OUTPUT_INTERNAL_ERROR',
       commanderInputError ? 2 : 1,
       agentOutputPreflight.operation
     )

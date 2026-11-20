@@ -60,6 +60,12 @@ import {
 import { enforceElasticsearchPermission } from '@/core/permission/elasticsearch'
 import { assertValidSlowQueryThreshold, attachSlowQueryAdvisory } from '@/core/slow-query-advisory'
 import { requireSqlConnection } from '@/commands/require-sql-connection'
+import {
+  agentOutputRequested,
+  emitQueryFailure,
+  emitQuerySuccess,
+  type QueryAgentPhase,
+} from '@/commands/query-agent-output'
 
 const ALLOWED_FORMATS = ['table', 'json', 'csv'] as const
 
@@ -87,6 +93,8 @@ interface QueryExecutionContext {
   configPath: string
   connectionName?: string
   effectivePermission?: Permission
+  /** `--agent-output`: nobody can be asked to confirm, so the write gate must not try. */
+  unattended?: boolean
 }
 
 /** What one connection's execution hands back. Exported so a caller substituting
@@ -95,6 +103,8 @@ export interface QueryExecutionOutput {
   result: QueryResult<Record<string, unknown>>
   diagnostics: string[]
   notices: string[]
+  /** Id of the success audit entry, when one was written. */
+  auditId?: string
 }
 
 export interface QueryCommandRuntime {
@@ -187,6 +197,8 @@ export async function executeQueryCommand(
   let configPath = options.config ?? '.dbcli'
   let connectionName: string | undefined
   let multiConnectionRequest = false
+  const agentOutput = agentOutputRequested(command)
+  let phase: QueryAgentPhase = 'input'
   try {
     // 1. Argument validation
     resolvedSql = await resolveQueryInput({ positional: sql, queryFile: options.queryFile })
@@ -212,6 +224,9 @@ export async function executeQueryCommand(
         : parseConnectionNames(options.connectionSelector)
     multiConnectionRequest = connectionNames.length > 1
 
+    if (agentOutput && multiConnectionRequest) {
+      throw new Error('--agent-output supports one connection; pass a single name to --use.')
+    }
     if (multiConnectionRequest) {
       await runtime.runMultiConnection(
         resolvedSql,
@@ -224,14 +239,33 @@ export async function executeQueryCommand(
       return
     }
 
+    phase = 'execution'
     connectionName = connectionNames[0]
     config = await runtime.loadConfig(configPath, connectionName)
-    const context = { config, configPath, connectionName }
+    const context: QueryExecutionContext = {
+      config,
+      configPath,
+      connectionName,
+      ...(agentOutput && { unattended: true }),
+    }
     // Before the preflight, because the preflight reads table schemas and the
     // point of a refusal is that a statement nobody confirmed reaches nothing.
     if (!(await runtime.enforceGate(resolvedSql, options, context))) return
     await runtime.preflight(resolvedSql, options, context, fieldSelection, false)
     const execution = await runtime.executeConnection(resolvedSql, options, context, fieldSelection)
+    if (agentOutput) {
+      process.exit(
+        emitQuerySuccess({
+          operation: 'query.execute',
+          command,
+          config,
+          result: execution.result,
+          diagnostics: execution.diagnostics,
+          notices: execution.notices,
+          auditId: execution.auditId,
+        })
+      )
+    }
     await runtime.presentResult(resolvedSql, options, execution, tableCellLimit)
   } catch (error) {
     // A refusal is not a failed statement. Its audit row was written by the gate
@@ -240,6 +274,18 @@ export async function executeQueryCommand(
     // `--format json` needs the reason as data rather than as localized prose.
     const { WriteGateRefusal } = await import('./write-gate-prompt')
     if (error instanceof WriteGateRefusal) {
+      if (agentOutput) {
+        process.exit(
+          await emitQueryFailure({
+            operation: 'query.execute',
+            command,
+            error,
+            phase,
+            config,
+            auditId: (error as { __auditId?: string }).__auditId,
+          })
+        )
+      }
       if (options.format === 'json') {
         console.log(
           JSON.stringify(
@@ -294,6 +340,19 @@ export async function executeQueryCommand(
       )
     }
 
+    if (agentOutput) {
+      process.exit(
+        await emitQueryFailure({
+          operation: 'query.execute',
+          command,
+          error,
+          phase,
+          config,
+          // Written here, or by executeConnectionQuery before it re-threw.
+          auditId: auditId ?? (error as { __auditId?: string })?.__auditId,
+        })
+      )
+    }
     throw error
   }
 }
@@ -430,7 +489,7 @@ async function enforceQueryWriteGate(
       verdict,
       statement: query,
       operation: verdict.operation ?? 'WRITE',
-      human: humanOutputContext(options),
+      human: context.unattended ? { isTTY: false } : humanOutputContext(options),
       ...(options.yes !== undefined && { yes: options.yes }),
     })
     // Tier two is recorded either way — that log is the only evidence the gate's
@@ -441,7 +500,10 @@ async function enforceQueryWriteGate(
     else if (!proceed) await record('declined')
     return proceed
   } catch (error) {
-    if (error instanceof WriteGateRefusal) await record('refused')
+    if (error instanceof WriteGateRefusal) {
+      const auditId = await record('refused')
+      if (auditId !== null) (error as { __auditId?: string }).__auditId = auditId
+    }
     throw error
   }
 }
@@ -500,12 +562,12 @@ async function preflightSqlSizeGuard(
   const tables = extractTableReferences(query, { ...(dialect ? { dialect } : {}) })
 
   const { resolveTableSchema } = await import('./query-table-schema')
-  const { shouldBlockQuery } = await import('./query-size-guard')
+  const { shouldBlockQuery, QuerySizeGuardRefusal } = await import('./query-size-guard')
   for (const table of tables) {
     const tableSchema = await resolveTableSchema(config, configPath, connectionName, table)
     if (!tableSchema) continue
     const guard = shouldBlockQuery(query, tableSchema as { estimatedRowCount: number })
-    if (guard.blocked) throw new Error(`\u26A0 ${guard.reason}`)
+    if (guard.blocked) throw new QuerySizeGuardRefusal(guard.reason!)
   }
 }
 
@@ -559,12 +621,12 @@ async function preflightMongoQuery(
   const { resolveTableSchema } = await import('./query-table-schema')
   const tableSchema = await resolveTableSchema(config, configPath, connectionName, collection)
   if (!tableSchema) return
-  const { shouldBlockQuery } = await import('./query-size-guard')
+  const { shouldBlockQuery, QuerySizeGuardRefusal } = await import('./query-size-guard')
   const isFiltered = query.length > 2
   const hasLimit = options.limit !== undefined
   const dummySql = `SELECT * FROM ${collection}${isFiltered ? ' WHERE' : ''}${hasLimit ? ' LIMIT' : ''}`
   const guard = shouldBlockQuery(dummySql, tableSchema as { estimatedRowCount: number })
-  if (guard.blocked) throw new Error(`\u26A0 ${guard.reason}`)
+  if (guard.blocked) throw new QuerySizeGuardRefusal(guard.reason!)
 }
 
 function preflightElasticsearchQuery(
@@ -623,7 +685,7 @@ async function executeConnectionQuery(
       }),
     }
 
-    await writeAuditEntry(config, 'query', auditOptions, {
+    const auditId = await writeAuditEntry(config, 'query', auditOptions, {
       success: true,
       sql: query,
       target: queryAuditTarget(system, query, options),
@@ -636,7 +698,7 @@ async function executeConnectionQuery(
         execution_ms: execution.result.executionTimeMs ?? Math.round(performance.now() - start),
       },
     })
-    return execution
+    return auditId === null ? execution : { ...execution, auditId }
   } catch (error) {
     // Recovery mode needs the outer command boundary to create the envelope id
     // before it writes the linked audit entry.
@@ -650,7 +712,7 @@ async function executeConnectionQuery(
               execution_ms: Math.round(performance.now() - start),
             }
           : { execution_ms: Math.round(performance.now() - start) }
-      await writeAuditEntry(config, 'query', auditOptions, {
+      const failureAuditId = await writeAuditEntry(config, 'query', auditOptions, {
         success: false,
         sql: query,
         target: queryAuditTarget(system, query, options),
@@ -660,7 +722,8 @@ async function executeConnectionQuery(
         error,
         metadata,
       })
-      ;(error as { __auditWritten?: boolean }).__auditWritten = true
+      ;(error as { __auditWritten?: boolean; __auditId?: string }).__auditWritten = true
+      if (failureAuditId !== null) (error as { __auditId?: string }).__auditId = failureAuditId
     }
     throw error
   }

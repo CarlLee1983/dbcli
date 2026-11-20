@@ -135,6 +135,12 @@ only whether the invocation succeeded or failed; command-specific findings and
 outcomes remain in `data`.
 _Avoid_: Evidence envelope, agent receipt
 
+**Saved query**:
+A named, reusable query kept in the project and invoked by its `@name`, with
+declared, typed parameters supplied at run time. Running one is a distinct
+operation from running ad-hoc query text, even when both reach the same database.
+_Avoid_: Snippet, `q` (the command's spelling, not the concept)
+
 **Capability**:
 One atomic dbcli ability with a stable dotted id — `schema.read`,
 `data.delete`. It names what the *tool* can do. A job or a method

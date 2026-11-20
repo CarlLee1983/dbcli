@@ -37,25 +37,31 @@ export async function recordGateDecision(request: {
   /** Which gate produced this decision. Tier one is recorded only when declined. */
   tier: 'one' | 'two'
   sql?: string
-}): Promise<void> {
+}): Promise<string | null> {
   // 這是效果**發生前**的紀錄——該函式的 docstring 講的就是這件事——所以
   // `audit.strict` 在這裡強制得起來：寫不出這一列就不要往下執行。
-  await writeAuditEntryBeforeEffect(request.config, request.command, request.options, {
-    success: request.outcome === 'allowed',
-    // The decision is about a statement that writes, whatever the command's own
-    // capability tier says. Read off the command, one DROP decision was filed
-    // as `readonly` from `query`, `db-write` from `delete` and `interactive`
-    // from `shell`, so filtering the log for destructive operations by tier —
-    // the obvious first filter — found a third of them (#83).
-    sideEffectTier: 'db-write',
-    ...(request.sql && { sql: request.sql }),
-    ...(request.verdict.table && { target: request.verdict.table }),
-    metadata: {
-      write_gate_tier: request.tier,
-      write_gate_outcome: request.outcome,
-      write_gate_reason: request.verdict.reason ?? 'no_where',
-    },
-  })
+  const result = await writeAuditEntryBeforeEffect(
+    request.config,
+    request.command,
+    request.options,
+    {
+      success: request.outcome === 'allowed',
+      // The decision is about a statement that writes, whatever the command's own
+      // capability tier says. Read off the command, one DROP decision was filed
+      // as `readonly` from `query`, `db-write` from `delete` and `interactive`
+      // from `shell`, so filtering the log for destructive operations by tier —
+      // the obvious first filter — found a third of them (#83).
+      sideEffectTier: 'db-write',
+      ...(request.sql && { sql: request.sql }),
+      ...(request.verdict.table && { target: request.verdict.table }),
+      metadata: {
+        write_gate_tier: request.tier,
+        write_gate_outcome: request.outcome,
+        write_gate_reason: request.verdict.reason ?? 'no_where',
+      },
+    }
+  )
+  return 'success' in result ? result.id : null
 }
 
 /**

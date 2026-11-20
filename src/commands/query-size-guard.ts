@@ -43,3 +43,16 @@ export function shouldBlockQuery(
     reason: `Table has ~${tableSizeInfo.estimatedRowCount.toLocaleString()} rows (huge). Add WHERE or LIMIT clause, or use --no-limit to override.`,
   }
 }
+
+/**
+ * The size guard declined to send the statement. A class of its own so that a
+ * caller reading the failure as data can tell it from a driver or I/O error
+ * without matching on the message.
+ */
+export class QuerySizeGuardRefusal extends Error {
+  constructor(reason: string) {
+    super(`⚠ ${reason}`)
+    this.name = 'QuerySizeGuardRefusal'
+    Object.setPrototypeOf(this, QuerySizeGuardRefusal.prototype)
+  }
+}

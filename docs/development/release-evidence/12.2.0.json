@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "12.2.0",
+  "package": "@carllee1983/dbcli",
+  "evidenceKind": "release-candidate-handoff",
+  "baseCommit": "0b0a1da5d3e04d6bc999174ec9002157a4edab87",
+  "versionPreparationCommit": "80dabc06a374ea9d5df09e6ce53f4071196968ba",
+  "pullRequest": "https://github.com/CarlLee1983/dbcli/pull/271",
+  "checks": "https://github.com/CarlLee1983/dbcli/pull/271/checks",
+  "intendedTag": "v12.2.0",
+  "publicationAuthorization": "The repository owner authorized publication of 12.2.0.",
+  "observationsAtPreparation": {
+    "candidateChanges": "Six version manifests declare 12.2.0. CHANGELOG.md includes the 12.2.0 release notes.",
+    "humanReview": "Pending",
+    "publication": "Pending"
+  }
+}

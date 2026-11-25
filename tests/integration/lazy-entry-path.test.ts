@@ -99,15 +99,19 @@ describe('lazy entry path', () => {
 
   test('root help lists every top-level command', () => {
     const help = run('--help')
+    const normalizedHelp = help.replace(/\s+/g, ' ')
 
     for (const command of ['query', 'schema', 'list', 'export', 'impact', 'completion']) {
       expect(help).toContain(command)
     }
-    expect(help).toContain('--agent-output')
-    expect(help).toContain('Operation Envelope v1')
-    expect(help).toContain('capabilities')
-    expect(help).toContain('capabilities check only')
-    expect(help).toContain('--correlation-id')
+    expect(normalizedHelp).toContain('--agent-output')
+    expect(normalizedHelp).toContain('Operation Envelope v1')
+    expect(normalizedHelp).toContain('capabilities')
+    expect(normalizedHelp).toContain('capabilities check')
+    expect(normalizedHelp).toContain('query')
+    expect(normalizedHelp).toContain('q @<name>')
+    expect(normalizedHelp).toContain('SQL snippets only')
+    expect(normalizedHelp).toContain('--correlation-id')
   })
 
   // The three rejected payloads are DBCLI-PLAT-006's security fixture rows 3, 4

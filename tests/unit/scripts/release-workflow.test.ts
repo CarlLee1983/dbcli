@@ -96,7 +96,7 @@ describe('release.yml', () => {
     const checkout = verify.steps?.find((step) => step.uses?.startsWith('actions/checkout@'))
     expect(checkout).toBeDefined()
     expect(checkout?.with?.ref).toBeUndefined()
-    const canonical = verify.steps?.filter((step) => step.run === 'make verify') ?? []
+    const canonical = verify.steps?.filter((step) => step.run === 'bun run ci:check') ?? []
     expect(canonical).toHaveLength(1)
     expect(canonical[0]?.if).toBeUndefined()
     expect(canonical[0]?.['continue-on-error']).toBeUndefined()

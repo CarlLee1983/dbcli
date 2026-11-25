@@ -13,5 +13,24 @@
     "candidateChanges": "Six version manifests declare 12.2.0. CHANGELOG.md includes the 12.2.0 release notes.",
     "humanReview": "Pending",
     "publication": "Pending"
+  },
+  "releaseCloseout": {
+    "reviewedCommit": "06b0baad9be39eac745521e9e5040329f1fc5c67",
+    "humanReview": "Owner reviewed the candidate and approved merge after checks passed.",
+    "localVerification": "bun run release:check passed on the clean reviewed commit.",
+    "pullRequestCI": "https://github.com/CarlLee1983/dbcli/actions/runs/45561864174",
+    "tag": "v12.2.0",
+    "mergeCommit": "805f16082587e1cd754065f41ea84f23b2cc0d80",
+    "releaseWorkflow": "https://github.com/CarlLee1983/dbcli/actions/runs/45564047820",
+    "workflowConclusion": "success",
+    "githubRelease": "https://github.com/CarlLee1983/dbcli/releases/tag/v12.2.0",
+    "githubReleasePublishedAt": "2026-11-25T07:25:03Z",
+    "npm": {
+      "latestAtVerification": "12.2.0",
+      "gitHead": "805f16082587e1cd754065f41ea84f23b2cc0d80",
+      "integrity": "sha512-3e9mQRXP1Z98uCMIIe6x6L5bXaQQmXlgj03AobtV4EtiLeIW6cl2MP08zj/wjoGE9BdO3xBdwhNmE0W7zT6gfw==",
+      "attestations": "https://registry.npmjs.org/-/npm/v1/attestations/@carllee1983%2fdbcli@12.2.0",
+      "installSmoke": "Installed the exact version from the public npm registry in an empty temporary project. dbcli --version printed 12.2.0 and dbcli --help succeeded. npm audit signatures verified 131 registry signatures and 59 attestations."
+    }
   }
 }

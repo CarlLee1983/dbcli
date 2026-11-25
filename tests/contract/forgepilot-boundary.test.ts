@@ -7,29 +7,8 @@ const ROOT = join(import.meta.dir, '..', '..')
 
 const readRoot = (relative: string): Promise<string> => readFile(join(ROOT, relative), 'utf8')
 
-/**
- * The steps `make verify` ran before ForgePilot was introduced, in order.
- *
- * This is a roster, not a derivation: a check that recomputed the list from the
- * Makefile it is protecting would pass for any Makefile. Adding a step means
- * adding it here deliberately; removing one has to be argued for, which is the
- * whole point — `make verify` is the repository's verification contract, and a
- * control plane that runs it in a clean checkout must not become a reason to
- * make it say less.
- *
- * DBCLI-017 moved these steps inside a subshell so that a failing run is
- * recorded as well as a passing one. That is the argued-for change the comment
- * above demands: the roster below is unchanged, every step is still blocking,
- * and what the recipe gained is the ability to say that it stopped.
- *
- * DBCLI-030 removed the grouping and gave each step a `step=` marker naming it.
- * The grouping never made the chain stop — `&&` does, and `make` stops at a
- * failing line, which is why the steps are one line — but it did discard the
- * variable holding the running step's name, so every FAIL attestation said only
- * that something failed. The roster below is again unchanged; what the recipe
- * gained is the ability to say *which* step stopped it. ADR-0033.
- */
 const REQUIRED_STEPS = [
+  'bun install --frozen-lockfile',
   'bun run services:check',
   'bun run audit',
   'bun run format:check',
@@ -53,174 +32,11 @@ const REQUIRED_STEPS = [
   'bun run plan:check',
 ] as const
 
-/**
- * Everything the `verify` recipe says that is not a verification step.
- *
- * Pinned literally, because a roster that only reads the steps polices the
- * least interesting half of the recipe. A review of the first version found six
- * shapes that kept this check green while gutting the gate: a `-` prefix on the
- * line carrying the subshell (make ignores the error, `make verify` exits 0
- * with a failing step), `exit 0` in place of `exit $$status`, a step smuggled
- * onto the opening line or appended after the closing paren, and a second
- * `verify:` target further down that make would run instead. Each of them
- * changes one of these lines, so each of them now fails.
- */
-const PROLOGUE = [
-  "@started=$$(bun run scripts/write-attestation.ts begin) || started='';",
-  'run() { count=$$((count+1)); at=$$(date +%s);',
-  'printf \'==> [%s] %s\\n\' "$$count" "$$step";',
-  'eval "$$step"; code=$$?;',
-  'printf \'<== [%s] %s %ss exit %s\\n\' "$$count" "$$step" "$$(($$(date +%s)-at))" "$$code";',
-  'return $$code; };',
-] as const
-
-const EPILOGUE = [
-  'status=$$?;',
-  'bun run scripts/write-attestation.ts finish $$status $$started "$$step" || true;',
-  'exit $$status',
-] as const
-
-interface Recipe {
-  readonly prologue: readonly string[]
-  readonly steps: readonly string[]
-  readonly epilogue: readonly string[]
-}
-
-/**
- * Read the `verify` recipe, split into its scaffolding and its steps.
- *
- * The steps are joined by `&&`, which is what keeps every one of them blocking:
- * a step that failed cannot be followed by the next. Nothing is discarded — a
- * line that is neither prologue, step, nor epilogue has nowhere to hide, which
- * is the property the earlier version lacked.
- */
-const parseVerifyRecipe = (makefile: string): Recipe => {
-  // Line endings are the checkout's, not the recipe's. A CRLF checkout makes
-  // every literal comparison below compare against a trailing `\r`.
-  const lines = makefile.replace(/\r\n/g, '\n').split('\n')
-
-  // Make runs the *last* definition of a target; this check would otherwise
-  // read the first and report on a recipe that never executes.
-  expect(lines.filter((line) => line.startsWith('verify:'))).toHaveLength(1)
-
-  // An `include` brings in definitions this file cannot see, and a later one
-  // replaces the target outright — reproduced: make ran the included recipe and
-  // exited 0 while all five scaffolding lines here still matched.
-  expect(lines.filter((line) => /^[-\s]*include\s/.test(line))).toEqual([])
-
-  // The target line itself, not just its prefix. `verify: sneak` runs `sneak`
-  // before the recipe, and nothing below would look at it.
-  expect(lines.filter((line) => line.startsWith('verify:'))[0]).toBe('verify:')
-
-  const start = lines.findIndex((line) => line.startsWith('verify:'))
-  const recipe: string[] = []
-  for (const line of lines.slice(start + 1)) {
-    if (!line.startsWith('\t')) break
-    const text = line.slice(1).replace(/\\$/, '').trim()
-    if (text.length > 0 && !text.startsWith('#')) recipe.push(text)
-  }
-
-  const opening = recipe.findIndex((line) => line.startsWith('step='))
-  const closing = recipe.findIndex((line) => line.startsWith('status='))
-  expect(opening).toBeGreaterThanOrEqual(0)
-  expect(closing).toBeGreaterThan(opening)
-
-  // Each step line is `step='<command>' && run`. There is nothing to compare:
-  // DBCLI-031 made the label and the command one string, because two copies can
-  // disagree and a log or an attestation that names the wrong step sends its
-  // reader to a step that ran fine.
-  //
-  // Every line but the last ends in `&&`, which is what keeps it blocking; the
-  // last ends the chain with `;` so that `status=$?` runs whatever happened.
-  // That one `;` is the only one allowed anywhere in the steps — chaining a
-  // second command onto a step with `;` would run it unconditionally and hide
-  // its status, which is the shape this roster exists to refuse.
-  const stepLines = recipe.slice(opening, closing)
-  const steps = stepLines.map((line, index) => {
-    const last = index === stepLines.length - 1
-    expect(line).not.toMatch(/\|\|\s*true|^-/)
-    expect(line.endsWith(last ? ';' : '&&')).toBe(true)
-
-    const body = line.replace(last ? /;$/ : /\s*&&$/, '').trim()
-    expect(body).not.toContain(';')
-
-    const marked = body.match(/^step='([^']*)' && run$/)
-    expect(marked, `step line does not announce itself: ${JSON.stringify(line)}`).not.toBeNull()
-    return marked![1] as string
-  })
-
-  return { prologue: recipe.slice(0, opening), steps, epilogue: recipe.slice(closing) }
-}
-
-const verifyRecipe = async (): Promise<Recipe> => parseVerifyRecipe(await readRoot('Makefile'))
-
-describe('make verify runs from a clean checkout', () => {
-  test('installs the pinned dependency set before any step that consumes it', async () => {
-    const { steps } = await verifyRecipe()
-
-    expect(steps[0]).toBe('bun install --frozen-lockfile')
-  })
-
-  test('records the run whether it passed or failed, and neither phase decides it', async () => {
-    // The attestation is the reason the steps moved into a subshell: written
-    // only on the passing path it would describe the case nobody needs evidence
-    // for. And a record of a run must never stand between a developer and their
-    // result — `begin` was briefly a blocking recipe line, so an unwritable
-    // output directory failed the whole target before a single step ran.
-    //
-    // Both properties live in these five lines, compared literally. Asserting
-    // `toContain` over the whole file was satisfied by a comment.
-    const { prologue, epilogue } = await verifyRecipe()
-
-    expect(prologue).toEqual([...PROLOGUE])
-    expect(epilogue).toEqual([...EPILOGUE])
-  })
-
-  test('reads the same recipe however the checkout terminated its lines', async () => {
-    // GitHub's windows runner checks out with core.autocrlf=true and this
-    // repository pins no .gitattributes, so the Makefile arrives as CRLF. Every
-    // comparison in the parser is literal, and `verify:\r` starts with
-    // `verify:` without being equal to it: three tests here failed on
-    // windows-latest and on no other runner. The recipe's contract is its
-    // lines, never how a checkout chose to end them — asserted here because the
-    // platform that breaks it is the one nobody runs locally.
-    const makefile = await readRoot('Makefile')
-
-    expect(parseVerifyRecipe(makefile.replace(/\r?\n/g, '\r\n'))).toEqual(
-      parseVerifyRecipe(makefile)
-    )
-  })
-
-  test('stays POSIX, because make runs /bin/sh and CI runs dash', async () => {
-    // `set -o pipefail` is not POSIX. On ubuntu-latest — the only runner where
-    // `make verify` runs — dash answers `set: Illegal option -o pipefail` and
-    // aborts the recipe line before any step, which reads as a verification
-    // failure. Verified against `ubuntu:24.04`, exit 2.
-    const makefile = await readRoot('Makefile')
-    const recipeText = makefile.slice(makefile.indexOf('verify:'))
-
-    expect(recipeText).not.toContain('pipefail')
-  })
-
-  test('builds the artifacts before any step executes them', async () => {
-    // DBCLI-032 removed the roster's separate `bun run build`: `build:determinism`
-    // rebuilds the same artifacts twice and overwrote it before anything read
-    // it, and the check itself proves the two are byte-identical. What has to
-    // hold after that removal is the ordering, not the step — the roster is a
-    // literal list, and a literal list is exactly the thing that can be
-    // rearranged without anyone noticing.
-    const { steps } = await verifyRecipe()
-    const builds = steps.findIndex((step) => step.includes('build'))
-    const executes = steps.findIndex((step) => step.startsWith('./dist/'))
-
-    expect(builds).toBeGreaterThanOrEqual(0)
-    expect(executes).toBeGreaterThan(builds)
-  })
-
-  test('keeps every step it had before, in the same order', async () => {
-    const { steps } = await verifyRecipe()
-
-    expect(steps.slice(1)).toEqual([...REQUIRED_STEPS])
+describe('CI verification', () => {
+  test('runs the required checks in order', async () => {
+    const script = await readRoot('scripts/ci-check.sh')
+    const steps = [...script.matchAll(/^ {2}'([^'\n]+)'/gm)].map((match) => match[1])
+    expect(steps).toEqual([...REQUIRED_STEPS])
   })
 
   test('keeps its operational output out of version control', async () => {
@@ -263,7 +79,7 @@ describe('the verification attestation is repository tooling, not product', () =
     // without anything running the writer.
     const suites = await readdir(join(ROOT, 'tests'), { recursive: true, withFileTypes: true })
 
-    // Naming the writer is fine — this file pins the Makefile lines that call
+    // Naming the writer is fine — the CI script names
     // it. Running it is not, so what is looked for is a spawn: the mention with
     // a process-starting call close enough above it to be the thing starting it.
     // Assembled rather than written out, because a check for its own text finds

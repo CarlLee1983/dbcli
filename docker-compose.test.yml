@@ -4,7 +4,7 @@
 
 services:
   mysql:
-    image: mysql:8.4
+    image: mysql:8.4@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00
     ports:
       - '3307:3306'
     environment:
@@ -25,7 +25,7 @@ services:
   # tests/integration/p{1,2,3}-*.test.ts exercise. They had no service to run
   # against and skipped everywhere, including locally.
   mariadb:
-    image: mariadb:11
+    image: mariadb:11@sha256:e1d5495f445654134f226f55a41ce0da227116f6f27f283101f405c794d841fc
     ports:
       - '3308:3306'
     environment:
@@ -42,7 +42,7 @@ services:
       - /var/lib/mysql
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:f2f98726820d0342055351c6e9d36e705f5bfffb3dd53ff556325114b08afb6d
     ports:
       - '5433:5432'
     environment:
@@ -58,7 +58,7 @@ services:
       - /var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     ports:
       - '6379:6379'
     healthcheck:
@@ -73,7 +73,7 @@ services:
   # integration tests already default to mongodb://localhost:27017, and giving
   # the service a different port would leave them silently skipping.
   mongodb:
-    image: mongo:7
+    image: mongo:7@sha256:41e8195b2791692695e1dc9bd21cd51d0a3af05fff8ace9304a5c1acf94f1ae1
     ports:
       - '27017:27017'
     healthcheck:
@@ -85,7 +85,7 @@ services:
       - /data/db
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f
     ports:
       - '9201:9200'
     environment:

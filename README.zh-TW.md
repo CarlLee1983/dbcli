@@ -32,7 +32,7 @@ dbcli init
 - `en` — English（預設）
 - `zh-TW` — 繁體中文（台灣）
 
-所有訊息、說明文字、錯誤訊息與指令輸出會依語言設定自動切換。
+設定 `DBCLI_LANG=zh-TW` 可顯示已翻譯的訊息。部分 CLI 說明與指令輸出仍使用英文。
 
 
 ## 快速開始
@@ -1565,6 +1565,11 @@ chmod +x dist/cli.mjs
 - **MySQL：** 8.0+
 - **MariaDB：** 10.5+
 - **MongoDB：** 4.4+（`mongodb://` 與 `mongodb+srv://` 查詢與列集合；見前文 **MongoDB Atlas / SRV 連線**）
+- **SQLite**
+- **Redis**
+- **Elasticsearch**
+
+各引擎可用的功能不同，詳見[資料庫引擎支援矩陣](docs/user/zh-TW/index.md#資料庫引擎支援矩陣)。
 
 ### 執行環境
 

@@ -1,5 +1,5 @@
 /**
- * Write the Verification Attestation for a `make verify` run.
+ * Write the Verification Attestation for a `bun run ci:check` run.
  *
  * Two phases, because the two facts are true at different times. `begin`
  * resolves the revision and the worktree's cleanliness before the first step
@@ -11,7 +11,7 @@
  * fixtures rather than from a repository whose HEAD moves every delivery.
  *
  * Nothing here decides whether the verification passed. It records the status
- * it was handed and gets out of the way: the Makefile re-exits with that same
+ * it was handed and gets out of the way: the CI script exits with that same
  * status, so a failure to write an attestation can never turn a FAIL into a
  * PASS.
  */
@@ -99,7 +99,7 @@ async function finish(
   const attestation = buildAttestation({
     revision,
     dirtyWorktree: worktree === 'dirty',
-    command: 'make verify',
+    command: 'bun run ci:check',
     exitCode,
     startedAt,
     finishedAt: instant(),
@@ -124,7 +124,7 @@ try {
   if (phase === 'begin') {
     await begin()
   } else if (phase === 'finish') {
-    // `$$run` is unquoted in the recipe so that begin's three words arrive as
+    // `$started` is unquoted in the recipe so that begin's three words arrive as
     // three arguments. The count is checked here rather than quoted there: an
     // extra word was accepted in silence, and a word prepended — one line of
     // unexpected stdout, a future banner — shifted everything and produced an

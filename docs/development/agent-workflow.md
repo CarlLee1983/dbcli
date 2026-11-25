@@ -15,7 +15,7 @@ For an uncommitted candidate, keep one local handoff record with:
    added files with their reconstructable contents. Hash the candidate's source
    contents, including added files; record file modes and symlink targets where
    they affect reconstruction. A hash alone cannot reconstruct a candidate.
-2. The `make verify` command, working directory, relevant environment, actual
+2. The `bun run ci:check` command, working directory, relevant environment, actual
    exit status, complete log, attestation when produced, and observations for
    every acceptance criterion. Exclude credentials and private environment
    values from the handoff. The attestation's revision and `dirty_worktree`

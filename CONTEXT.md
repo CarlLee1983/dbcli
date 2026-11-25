@@ -68,7 +68,7 @@ what dbcli observed or verified under a particular governed context; it never
 contains database rows, unredacted SQL, credentials, or an agent's conclusion.
 
 **Verification attestation**:
-A bounded, machine-readable record of one `make verify` run against one
+A bounded, machine-readable record of one `bun run ci:check` run against one
 repository revision, written by that run and never committed. Its subject is a
 commit, not a database, and its reader is a reviewer or a CI job —
 so it is not an evidence receipt and not a verification artifact, and it lives

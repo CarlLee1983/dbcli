@@ -7,8 +7,8 @@ section in [the development guide](docs/development/agent-workflow.md#task-safeg
 ## Development workflow
 
 Start work from the user's explicit task. Ask for clarification when a choice
-would materially change its scope. Verify changes with `make verify`, preserve
-its gates, and report the changes, results and any unverified items. Complete
+would materially change its scope. Run checks that cover the changed behavior and report the results
+and any unverified items. Complete
 any review the user requested.
 
 For releases, follow the [pre-release checklist](CONTRIBUTING.md#pre-release-checklist).

@@ -81,7 +81,10 @@ export async function startMysqlTlsFixtures<N extends MysqlTlsEndpointName = Mys
   selectedNames?: readonly N[]
 ): Promise<MysqlTlsFixtures<N>> {
   const names = (selectedNames ?? NAMES) as readonly N[]
-  const image = system === 'mysql' ? 'mysql:8.4' : 'mariadb:11'
+  const image =
+    system === 'mysql'
+      ? 'mysql:8.4@sha256:8c233bad33d520a7aae1c1e619c3a9775f4a1ba2d463d692fada04ec7f40be00'
+      : 'mariadb:11@sha256:e1d5495f445654134f226f55a41ce0da227116f6f27f283101f405c794d841fc'
   const client = system === 'mysql' ? 'mysql' : 'mariadb'
   const directory = await mkdtemp(join(tmpdir(), `dbcli-${system}-tls-`))
   const containers: string[] = []
@@ -156,84 +159,90 @@ export async function startMysqlTlsFixtures<N extends MysqlTlsEndpointName = Mys
         '',
       ].join('\n')
     )
-    for (const name of names) {
-      const container = `dbcli-${system}-tls-${suffix}-${name.toLowerCase()}`
-      containers.push(container)
-      await command([
-        'docker',
-        'run',
-        '-d',
-        '--rm',
-        '--name',
-        container,
-        '-p',
-        '127.0.0.1::3306',
-        '-e',
-        `MYSQL_ROOT_PASSWORD=${rootPassword}`,
-        '-v',
-        `${join(directory, name)}:/fixture:ro`,
-        '-v',
-        `${join(directory, 'bootstrap.sql')}:/docker-entrypoint-initdb.d/fixture.sql:ro`,
-        '--entrypoint',
-        'sh',
-        image,
-        '-c',
-        'mkdir /tmp/tls && cp /fixture/* /tmp/tls/ 2>/dev/null; chown -R mysql:mysql /tmp/tls && chmod 600 /tmp/tls/* 2>/dev/null; exec docker-entrypoint.sh "$@"',
-        'sh',
-        system === 'mysql' ? 'mysqld' : 'mariadbd',
-        ...(name === 'plaintext'
-          ? [system === 'mysql' ? '--tls-version=' : '--skip-ssl']
-          : ['--ssl-cert=/tmp/tls/server.crt', '--ssl-key=/tmp/tls/server.key']),
-        '--general-log=ON',
-        '--general-log-file=/var/lib/mysql/fixture-general.log',
-        '--log-output=FILE',
-      ])
-      const published = await command(['docker', 'port', container, '3306/tcp'])
-      const port = Number(published.split(':').at(-1))
-      if (!Number.isInteger(port) || port <= 0) throw new Error(`Invalid ${name} published port`)
-      endpoints[name] = {
-        name,
-        container,
-        host: '127.0.0.1',
-        port,
-        user: 'dbcli_tls',
-        password,
-        database: 'dbcli_tls',
-      }
-    }
-    for (const name of names) {
-      const deadline = Date.now() + 90_000
-      let ready = false
-      let failure: unknown
-      while (Date.now() < deadline) {
-        try {
-          // Entrypoint initialization uses a temporary socket server. Require the final
-          // TCP listener without using the certificate/profile that the test will reject.
-          await admin(name, 'SELECT label FROM dbcli_tls.tls_fixture WHERE id=1')
-          const state = await command([
-            'docker',
-            'exec',
-            endpoints[name].container,
-            'sh',
-            '-c',
-            'cat /proc/net/tcp /proc/net/tcp6',
-          ])
-          if (!state.split('\n').some((line) => /:0CEA\s+\S+\s+0A\s/.test(line))) {
-            throw new Error('Final TCP listener is not ready')
-          }
-          if (['valid', 'ipOnly', 'dnsOnly'].includes(name)) {
-            await admin(name, "ALTER USER 'dbcli_tls'@'%' REQUIRE SSL")
-          }
-          ready = true
-          break
-        } catch (error) {
-          failure = error
-          await Bun.sleep(250)
+    await Promise.all(
+      names.map(async (name) => {
+        const container = `dbcli-${system}-tls-${suffix}-${name.toLowerCase()}`
+        containers.push(container)
+        await command([
+          'docker',
+          'run',
+          '-d',
+          '--rm',
+          '--name',
+          container,
+          '-p',
+          '127.0.0.1::3306',
+          '--tmpfs',
+          '/var/lib/mysql',
+          '-e',
+          `MYSQL_ROOT_PASSWORD=${rootPassword}`,
+          '-v',
+          `${join(directory, name)}:/fixture:ro`,
+          '-v',
+          `${join(directory, 'bootstrap.sql')}:/docker-entrypoint-initdb.d/fixture.sql:ro`,
+          '--entrypoint',
+          'sh',
+          image,
+          '-c',
+          'mkdir /tmp/tls && cp /fixture/* /tmp/tls/ 2>/dev/null; chown -R mysql:mysql /tmp/tls && chmod 600 /tmp/tls/* 2>/dev/null; exec docker-entrypoint.sh "$@"',
+          'sh',
+          system === 'mysql' ? 'mysqld' : 'mariadbd',
+          ...(name === 'plaintext'
+            ? [system === 'mysql' ? '--tls-version=' : '--skip-ssl']
+            : ['--ssl-cert=/tmp/tls/server.crt', '--ssl-key=/tmp/tls/server.key']),
+          '--general-log=ON',
+          '--general-log-file=/var/lib/mysql/fixture-general.log',
+          '--log-output=FILE',
+        ])
+        const published = await command(['docker', 'port', container, '3306/tcp'])
+        const port = Number(published.split(':').at(-1))
+        if (!Number.isInteger(port) || port <= 0) throw new Error(`Invalid ${name} published port`)
+        endpoints[name] = {
+          name,
+          container,
+          host: '127.0.0.1',
+          port,
+          user: 'dbcli_tls',
+          password,
+          database: 'dbcli_tls',
         }
-      }
-      if (!ready)
-        throw new Error(`Disposable ${system} ${name} failed readiness: ${String(failure)}`)
-    }
+      })
+    )
+    await Promise.all(
+      names.map(async (name) => {
+        const deadline = Date.now() + 90_000
+        let ready = false
+        let failure: unknown
+        while (Date.now() < deadline) {
+          try {
+            // Entrypoint initialization uses a temporary socket server. Require the final
+            // TCP listener without using the certificate/profile that the test will reject.
+            await admin(name, 'SELECT label FROM dbcli_tls.tls_fixture WHERE id=1')
+            const state = await command([
+              'docker',
+              'exec',
+              endpoints[name].container,
+              'sh',
+              '-c',
+              'cat /proc/net/tcp /proc/net/tcp6',
+            ])
+            if (!state.split('\n').some((line) => /:0CEA\s+\S+\s+0A\s/.test(line))) {
+              throw new Error('Final TCP listener is not ready')
+            }
+            if (['valid', 'ipOnly', 'dnsOnly'].includes(name)) {
+              await admin(name, "ALTER USER 'dbcli_tls'@'%' REQUIRE SSL")
+            }
+            ready = true
+            break
+          } catch (error) {
+            failure = error
+            await Bun.sleep(250)
+          }
+        }
+        if (!ready)
+          throw new Error(`Disposable ${system} ${name} failed readiness: ${String(failure)}`)
+      })
+    )
     const observe = async (name: N) => {
       const output = await command(
         [

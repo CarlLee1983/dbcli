@@ -61,7 +61,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-`.github/workflows/release.yml` then runs `check-tag` (tag equals `v` + `package.json` version, commit is an ancestor of `origin/main`), `verify` (`docker-compose.test.yml` databases, `bun run services:check`, `make verify`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` through npm trusted publishing with provenance, no stored token), and `github-release` (GitHub Release whose notes are the `## [X.Y.Z]` section of `CHANGELOG.md`, extracted by `scripts/changelog-section.ts`).
+`.github/workflows/release.yml` then runs `check-tag` (tag equals `v` + `package.json` version, commit is an ancestor of `origin/main`), `verify` (`docker-compose.test.yml` databases, `bun run services:check`, `bun run ci:check`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` through npm trusted publishing with provenance, no stored token), and `github-release` (GitHub Release whose notes are the `## [X.Y.Z]` section of `CHANGELOG.md`, extracted by `scripts/changelog-section.ts`).
 
 **One-time owner setup:**
 

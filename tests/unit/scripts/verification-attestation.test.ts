@@ -1,5 +1,5 @@
 /**
- * A Verification Attestation states what one `make verify` run decided.
+ * A Verification Attestation states what one `bun run ci:check` run decided.
  *
  * Everything here runs on fixtures. The writer's own value — that a FAIL leaves
  * a record bound to the revision it failed at — is not something a unit test can
@@ -25,7 +25,7 @@ const FAILED_STEP = 'bun run services:check'
 const INPUT: AttestationInput = {
   revision: REVISION,
   dirtyWorktree: false,
-  command: 'make verify',
+  command: 'bun run ci:check',
   exitCode: 0,
   startedAt: '2026-09-08T04:00:00.000Z',
   finishedAt: '2026-09-08T04:15:30.500Z',
@@ -38,7 +38,7 @@ describe('buildAttestation', () => {
 
     expect(attestation.schema_version).toBe(ATTESTATION_SCHEMA_VERSION)
     expect(attestation.revision).toBe(REVISION)
-    expect(attestation.command).toBe('make verify')
+    expect(attestation.command).toBe('bun run ci:check')
     expect(attestation.result).toBe('PASS')
     expect(attestation.exit_code).toBe(0)
     expect(attestation.duration_ms).toBe(930500)

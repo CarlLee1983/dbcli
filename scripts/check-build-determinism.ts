@@ -14,7 +14,7 @@
 // Not part of `bun test` — it builds twice, which takes far too long for the
 // default suite. Run it in CI, or by hand before a release.
 //
-// Since DBCLI-032 this is also the `make verify` roster's only build. The
+// Since DBCLI-032 this is also the `bun run ci:check` roster's only build. The
 // separate `bun run build` step before it produced artifacts that these two
 // builds overwrote before anything read them, and this check proves the two are
 // byte-identical to what it produced — so the roster was building three times to

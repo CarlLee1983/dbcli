@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-11-25
+
 ### Added
 
 - `--agent-output` 涵蓋 `query`（operation `query.execute`）與 SQL 引擎上的 Saved query `q @name`（operation `saved-query.execute`）：stdout 恆為一份 Operation envelope、stderr 為空；失敗帶穩定錯誤代碼，連線失敗附 Recovery Envelope，結果超過 64 KiB 時提示改用 `--limit` 或 `export`。`--format json` 輸出不變。

@@ -1,5 +1,5 @@
 /**
- * The Verification Attestation: what one `make verify` run decided, in a file.
+ * The Verification Attestation: what one `bun run ci:check` run decided, in a file.
  *
  * Verification evidence used to exist in exactly one place — ForgePilot's
  * `.forgepilot/state.json`, on the machine that ran it, gitignored because a
@@ -12,7 +12,7 @@
  * ## What it will not say
  *
  * The schema is closed, and deliberately smaller than the obvious design. There
- * is no Work Item ID and no Story reference: `make verify` does not know either,
+ * is no Work Item ID and no Story reference: `bun run ci:check` does not know either,
  * so both would arrive from the caller, and a producer that cannot check a field
  * records whatever it was handed. ForgePilot binds evidence to work by revision
  * already and can bind this the same way. ADR-0026 carries the reopening
@@ -138,7 +138,7 @@ const COMMAND = /^[a-z][a-z0-9 :-]{0,63}$/
  * an inline `NAME=value` prefix.
  *
  * Bounded like every other text field here, and for the same reason: the value
- * is produced by this repository's own Makefile, so the pattern is not defence
+ * is produced by this repository's own CI script, so the pattern is not defence
  * against an attacker but against a shell variable that held something other
  * than a step name. A `;` cannot appear, which is what a smuggled second
  * command would need.

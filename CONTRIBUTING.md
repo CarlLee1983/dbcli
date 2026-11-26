@@ -327,7 +327,7 @@ Test user workflows end-to-end using Playwright (if applicable).
 
 ## Release Process
 
-The canonical gate is `make verify`; its roster, order, failure behavior and
+The canonical gate is `bun run ci:check`; its roster, order, failure behavior and
 attestation contract remain unchanged. See [Required CI validation](./docs/feature-matrix.md#required-ci-validation)
 for CI coverage and [agent workflow](./docs/development/agent-workflow.md#release-candidate-evidence)
 for the release evidence record.
@@ -336,9 +336,9 @@ for the release evidence record.
 
 Choose **one** local verification path before tagging:
 
-1. **Standalone:** run `bun run release:check`. It runs `make verify` once;
+1. **Standalone:** run `bun run release:check`. It runs `bun run ci:check` once;
    only a passing canonical gate proceeds to `bun run release:extras`.
-2. **Reuse an existing canonical PASS:** if `make verify` already passed for
+2. **Reuse an existing canonical PASS:** if `bun run ci:check` already passed for
    the exact candidate and its environment remains valid, run `bun run build`
    and `bun run release:extras` against that same candidate. Record the build
    and extras with the existing verification in the selected evidence record;
@@ -359,12 +359,15 @@ heading. It does not replace or repeat general canonical gates.
 - [ ] Exact-candidate human review and separate publication authorization are recorded.
 - [ ] Save the sanitized handoff in [`docs/development/release-evidence/<version>.json`](./docs/development/release-evidence/README.md).
 
-Full CI runs for PRs and pushes to `main`. A feature-branch push without a PR
-has no CI; open the PR to obtain CI evidence. Release tags retain all six
-OS/Bun test matrix jobs. The tag's integration, format, build-determinism,
-docs-parity and audit CI jobs are omitted because Release runs those canonical
-checks on the same tagged commit. Release still verifies before publishing and
-waits for the protected `npm-publish` environment approval.
+Pull requests run `static-checks`, `build-determinism`, `docs-parity`, `audit`,
+`integration` (`bun run ci:check`), and the 4-job OS/Bun test matrix
+(`ubuntu-latest` 1.4.0 & latest, `macos-latest` latest, `windows-latest`
+latest); superseded PR runs cancel automatically. Pushes to `main` run full CI
+including all six OS/Bun matrix jobs. A feature-branch push without a PR has no
+CI; open the PR to obtain CI evidence. `v*.*.*` tag pushes are verified by
+Release (`.github/workflows/release.yml`), which checks tag/main ancestry and
+runs `bun run ci:check` before waiting for the protected `npm-publish`
+environment approval.
 
 ### GitHub Pages
 
@@ -405,7 +408,7 @@ Publishing is done by GitHub Actions (`.github/workflows/release.yml`) through n
    git push origin vX.Y.Z
    ```
 
-3. The workflow then runs, in order: `check-tag` (tag equals `v` + `package.json` version, and the commit is an ancestor of `origin/main`), `verify` (test databases, `bun run services:check`, `make verify`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` with provenance), and `github-release` (creates the GitHub Release using the `## [X.Y.Z]` section of `CHANGELOG.md` as notes).
+3. The workflow then runs, in order: `check-tag` (tag equals `v` + `package.json` version, and the commit is an ancestor of `origin/main`), `verify` (test databases, `bun run services:check`, `bun run ci:check`, attestation artifact), `publish` (waits for approval in the `npm-publish` environment, then `npm publish` with provenance), and `github-release` (creates the GitHub Release using the `## [X.Y.Z]` section of `CHANGELOG.md` as notes).
 4. Approve the run in the GitHub Actions UI when `publish` is waiting.
 
 A failed `check-tag` or `verify` publishes nothing; fix the cause, delete the tag remotely and locally (`git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`), and tag again.

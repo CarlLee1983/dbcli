@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
   pull_request:
+
+# Cancel superseded PR runs immediately while letting main pushes finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default. No job here writes to the repository, publishes a
 # package, or comments on a PR, so nothing needs more than read. A job that ever
@@ -13,26 +17,26 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      # One slow runner must not cancel the others: a macOS failure used to
-      # leave both Windows jobs "cancelled" with no result of their own.
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        bun-version: ['1.4.0', 'latest']
+  # Platform-independent static checks run once on Linux rather than across every
+  # OS/Bun matrix entry, cutting duplicate work on macOS and Windows runners.
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: ${{ matrix.bun-version }}
+          bun-version: latest
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-
-      # Keep these as separate steps: PowerShell can otherwise let a later
-      # successful native command mask an earlier non-zero exit code on Windows.
-      - name: Build
-        run: bun run build
+      - name: Prettier
+        run: bun run format:check
 
       - name: Agent core purity
         run: bun run agent-core:check
@@ -50,6 +54,39 @@ jobs:
       - name: Typecheck tests
         run: bun run typecheck:tests
 
+      - name: Lint
+        run: bun run lint
+
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.bun-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # One slow runner must not cancel the others: a macOS failure used to
+      # leave both Windows jobs "cancelled" with no result of their own.
+      fail-fast: false
+      matrix:
+        # PRs cover Ubuntu (min supported 1.4.0 + latest) and macOS/Windows (latest);
+        # pushes to main run the full 3x2 OS/Bun matrix.
+        include: ${{ fromJson(github.event_name == 'push' && '[{"os":"ubuntu-latest","bun-version":"1.4.0"},{"os":"ubuntu-latest","bun-version":"latest"},{"os":"macos-latest","bun-version":"1.4.0"},{"os":"macos-latest","bun-version":"latest"},{"os":"windows-latest","bun-version":"1.4.0"},{"os":"windows-latest","bun-version":"latest"}]' || '[{"os":"ubuntu-latest","bun-version":"1.4.0"},{"os":"ubuntu-latest","bun-version":"latest"},{"os":"macos-latest","bun-version":"latest"},{"os":"windows-latest","bun-version":"latest"}]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ matrix.bun-version }}
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      # Keep these as separate steps: PowerShell can otherwise let a later
+      # successful native command mask an earlier non-zero exit code on Windows.
+      - name: Build
+        run: bun run build
+
       # Via `bun run` so the timeout lives in one place (package.json). Bun's 5s
       # default is too tight for windows-latest, where spawning a process costs
       # seconds; `[test] timeout` in bunfig.toml is documented but not honoured by
@@ -59,7 +96,6 @@ jobs:
         env:
           SKIP_INTEGRATION_TESTS: 'true'
 
-      - run: bun run lint
       - run: bun run dev -- --help
       - run: bun run dev -- --version
 
@@ -89,44 +125,28 @@ jobs:
       - name: Run performance benchmarks
         run: bun run test:perf
 
-  format:
-    # Release runs the canonical gate on this exact tag; keep the matrix above.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    # Formatting is platform-independent, so this runs once rather than per matrix
-    # entry. It exists because `release:check` was the only thing enforcing prettier:
-    # four unformatted files reached main through green CI and were caught minutes
-    # before a release. Scope is now the whole repo minus `.prettierignore`, which
-    # is where the reasoning lives: build outputs, test fixtures, managed copies and
-    # documentation are excluded on purpose — Markdown tables are contract-tested by
-    # `tests/unit/skill-assets/*`, and prettier re-pads every table it touches.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - name: Prettier
-        run: bun run format:check
-
   build-determinism:
-    # Release runs the canonical gate on this exact tag; keep the matrix above.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # A bundler free to decide differently on the next run ships a different
     # product than the one that was tested (#56). Builds twice, compares hashes.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Build is reproducible
         run: bun run build:determinism
 
   integration:
-    # Release runs the canonical gate on this exact tag; keep the matrix above.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # The matrix job runs with SKIP_INTEGRATION_TESTS=true, so until this
     # existed `tests/integration` was compiled and skipped in CI — 600-odd
     # assertions against MySQL, PostgreSQL, Redis, MongoDB and Elasticsearch
@@ -143,8 +163,14 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-
       - name: Start test databases
         run: docker compose -f docker-compose.test.yml up -d --wait
 
@@ -156,11 +182,11 @@ jobs:
       # This is the repository-owned verification gate. The focused jobs above and
       # below remain in place for platform-specific and fast failure signals.
       - name: Canonical verification
-        run: make verify
+        run: bun run ci:check
 
       # `if: always()` because a FAIL is the result worth keeping: the run that
       # passed is the one nobody needs a record of. The attestation is written
-      # by `make verify` itself on both outcomes and names the exact revision,
+      # by `bun run ci:check` itself on both outcomes and names the exact revision,
       # so downloading it answers "was this commit verified" without trusting
       # the job summary or anyone's recollection. DBCLI-017.
       #
@@ -176,6 +202,7 @@ jobs:
         with:
           name: verification-attestation
           path: .verification/attestation.json
+          retention-days: 14
           if-no-files-found: warn
 
       - name: Service logs (on failure)
@@ -187,16 +214,22 @@ jobs:
         run: docker compose -f docker-compose.test.yml down -v
 
   docs-parity:
-    # Release runs the canonical gate on this exact tag; keep the matrix above.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # Drift guards: fail the build when the CLI, SKILL.md, reference.md, managed
     # platform copies, or user docs fall out of sync. Runs once (not per matrix).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Documentation & skill drift guards
         run: |
@@ -208,18 +241,24 @@ jobs:
           bun run plan:check
 
   audit:
-    # Release runs the canonical gate on this exact tag; keep the matrix above.
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     # Dependency advisories were only ever seen by whoever ran `release:check`
     # by hand, which is one person shortly before a release. Blocking, and on
     # every push: an advisory that lands mid-cycle should turn the branch red
     # while the change that pulled it in is still on screen, not weeks later.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
+      - name: Cache Bun packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Dependency audit
         # Via `bun run audit` rather than `bun audit` directly: the wrapper

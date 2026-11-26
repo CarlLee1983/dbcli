@@ -6,7 +6,7 @@
 // what it does is then a property of the file rather than a promise about it.
 //
 // Why the failure message is this file's business at all: DBCLI-032 removed the
-// separate `bun run build` step from the `make verify` roster, because
+// separate `bun run build` step from the `bun run ci:check` roster, because
 // `build:determinism` rebuilds the same artifacts twice and overwrites its
 // output before anything reads it. That step was also, incidentally, the one
 // that made a broken build readable — this check ran its builds with their

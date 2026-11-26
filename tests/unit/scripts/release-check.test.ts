@@ -19,9 +19,9 @@ async function fixture(script: string) {
   // suites. Functions preserve real Bash errexit and ordering semantics.
   await Bun.write(
     join(root, 'commands.sh'),
-    `make() { printf 'make %s\\n' "$*" >> "$RELEASE_TRACE"; return "$MAKE_EXIT"; }
-bun() {
+    `bun() {
   printf 'bun %s\\n' "$*" >> "$RELEASE_TRACE"
+  if [ "$*" = 'run ci:check' ]; then return "$CHECK_EXIT"; fi
   if [ "$1" = '-p' ]; then printf '12.0.0\\n'; return 0; fi
   return "$BUN_EXIT"
 }
@@ -32,14 +32,14 @@ bun() {
   return {
     root,
     trace,
-    run(makeExit = 0, bunExit = 0) {
+    run(checkExit = 0, bunExit = 0) {
       return spawnSync('bash', [join(root, 'scripts', script).replaceAll('\\', '/')], {
         encoding: 'utf8',
         env: {
           ...process.env,
           BASH_ENV: join(root, 'commands.sh').replaceAll('\\', '/'),
           RELEASE_TRACE: trace.replaceAll('\\', '/'),
-          MAKE_EXIT: String(makeExit),
+          CHECK_EXIT: String(checkExit),
           BUN_EXIT: String(bunExit),
         },
       })
@@ -48,14 +48,14 @@ bun() {
 }
 
 test.each([
-  [0, 0, 0, 'make verify\nbun run release:extras\n'],
-  [7, 0, 7, 'make verify\n'],
-  [0, 9, 9, 'make verify\nbun run release:extras\n'],
+  [0, 0, 0, 'bun run ci:check\nbun run release:extras\n'],
+  [7, 0, 7, 'bun run ci:check\n'],
+  [0, 9, 9, 'bun run ci:check\nbun run release:extras\n'],
 ] as const)(
   'canonical=%i, extras=%i exits %i without repeating gates',
-  async (make, extras, code, trace) => {
+  async (check, extras, code, trace) => {
     const f = await fixture('release-check.sh')
-    const result = f.run(make, extras)
+    const result = f.run(check, extras)
     expect(result.error).toBeUndefined()
     expect(result.status).toBe(code)
     expect(await Bun.file(f.trace).text()).toBe(trace)

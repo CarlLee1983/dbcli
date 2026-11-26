@@ -160,10 +160,49 @@ describe('Blacklist Performance Benchmarks', () => {
     return hits
   }
 
-  const scalingRatio = (lookupFor: (size: number) => (name: string) => boolean): number => {
-    const small = medianElapsed(probeAllOf(100, lookupFor(100)))
-    const large = medianElapsed(probeAllOf(1000, lookupFor(1000)))
-    return large / small
+  const scalingRatio = (
+    lookupFor: (size: number) => (name: string) => boolean,
+    sampleCount = 11,
+    warmupCount = 2
+  ): number => {
+    // Interleave small and large probes (and alternate their order each round)
+    // so transient CPU frequency shifts or OS scheduling jitter affect both
+    // halves equally instead of skewing a whole back-to-back block.
+    const smallProbe = probeAllOf(100, lookupFor(100))
+    const largeProbe = probeAllOf(1000, lookupFor(1000))
+    const smallSamples: number[] = []
+    const largeSamples: number[] = []
+    let sink = 0
+
+    const timeOne = (probe: () => number): number => {
+      const start = performance.now()
+      sink += probe()
+      return performance.now() - start
+    }
+
+    for (let i = 0; i < warmupCount + sampleCount; i++) {
+      let smallMs: number
+      let largeMs: number
+      if (i % 2 === 0) {
+        smallMs = timeOne(smallProbe)
+        largeMs = timeOne(largeProbe)
+      } else {
+        largeMs = timeOne(largeProbe)
+        smallMs = timeOne(smallProbe)
+      }
+      if (i >= warmupCount) {
+        smallSamples.push(smallMs)
+        largeSamples.push(largeMs)
+      }
+    }
+
+    if (smallSamples.length === 0 || sink === 0) {
+      throw new Error('scalingRatio measured no samples')
+    }
+    smallSamples.sort((a, b) => a - b)
+    largeSamples.sort((a, b) => a - b)
+    const mid = Math.floor(sampleCount / 2)
+    return largeSamples[mid]! / smallSamples[mid]!
   }
 
   it('Table lookup cost does not scale with blacklist size', () => {

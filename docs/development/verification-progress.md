@@ -1,6 +1,6 @@
 # Observe canonical verification progress
 
-This repository operator tool reads a specified `make verify` log. It does not
+This repository operator tool reads a specified `bun run ci:check` log. It does not
 execute verification, alter any gate, or write to the log. Run canonical
 verification separately and check its actual exit status.
 Use one log file per verification run.
@@ -27,7 +27,7 @@ Summary: IN_PROGRESS step [8]; attestation UNKNOWN
 
 `START` and `END` use the existing `==> [n] ...` and
 `<== [n] ... Ns exit C` markers. `END` preserves the gate's elapsed seconds and
-exit code. Step numbers correspond to the canonical Makefile's order. Command
+exit code. Step numbers correspond to the CI script’s order. Command
 labels, file paths, test lines, database output, and arbitrary log contents are
 never echoed, including secrets embedded in a marker's command label.
 

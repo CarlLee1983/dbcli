@@ -60,7 +60,7 @@ These tiers mirror `SideEffectTier` in `src/adapters/capabilities.ts` and are us
 
 ## Required CI validation
 
-The canonical gate is `make verify`; its existing 22-step roster, order,
+The canonical gate is `bun run ci:check`; its existing 22-step roster, order,
 failure behavior and attestation contract remain unchanged. Choose either
 `bun run release:check` (canonical gate once, then release extras) or reuse an
 existing canonical PASS for the identical source candidate and valid environment,
@@ -77,17 +77,17 @@ and blocking performance budgets.
 
 | Event | CI coverage |
 | --- | --- |
-| Pull request | Full CI, including the six OS/Bun matrix jobs |
-| Push to `main` | Full CI |
-| `v*.*.*` tag push | All six matrix jobs; Release runs exact-tag canonical verification before publish |
+| Pull request | `static-checks`, `build-determinism`, `docs-parity`, `audit`, `integration` (`bun run ci:check`), and the 4-job OS/Bun matrix (`ubuntu-latest` 1.4.0 & latest, `macos-latest` latest, `windows-latest` latest); superseded runs cancel automatically |
+| Push to `main` | Full CI, including all six OS/Bun matrix jobs |
+| `v*.*.*` tag push | Verified by Release (`release.yml`), which checks tag/`main` ancestry and runs exact-tag canonical verification (`bun run ci:check`) before publish |
 | Feature-branch push without a PR | No CI; open a PR for CI evidence |
 
-On tags, CI omits integration, format, build-determinism, docs-parity and audit
-jobs only because Release supplies those checks through `make verify` on the
-same tagged commit. The matrix retains `SKIP_INTEGRATION_TESTS=true`; required
-database coverage comes from canonical verification with compose services,
-`services:check` and `REQUIRE_INTEGRATION_SERVICES=true`. An optional local skip
-is not evidence of completed database coverage.
+Release omits a duplicate CI tag workflow because `release.yml` runs exact-tag
+canonical verification (`bun run ci:check`) on a commit already merged to `main`.
+The matrix retains `SKIP_INTEGRATION_TESTS=true`; required database coverage
+comes from canonical verification with compose services, `services:check` and
+`REQUIRE_INTEGRATION_SERVICES=true`. An optional local skip is not evidence of
+completed database coverage.
 
 ## SQLite limitations summary
 

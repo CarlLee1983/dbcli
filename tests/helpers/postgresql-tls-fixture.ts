@@ -77,72 +77,81 @@ export async function startPostgresTlsFixtures(): Promise<PostgresTlsFixtures> {
   try {
     await createTlsCertificates(directory, NAMES)
     await mkdir(join(directory, 'plaintext'))
-    for (const name of NAMES) {
-      const hba = [
-        'local all all trust',
-        ...(name === 'valid'
-          ? ['hostnossl all all all reject', 'hostssl all all all scram-sha-256']
-          : ['host all all all scram-sha-256']),
-        '',
-      ].join('\n')
-      await Bun.write(join(directory, name, 'pg_hba.conf'), hba)
-      const container = `dbcli-pg-tls-${suffix}-${name.toLowerCase()}`
-      // Track before starting so cleanup also covers a partially failed docker run.
-      containers.push(container)
-      await command([
-        'docker',
-        'run',
-        '-d',
-        '--rm',
-        '--name',
-        container,
-        '-p',
-        '127.0.0.1::5432',
-        '-e',
-        'POSTGRES_USER=dbcli_tls',
-        '-e',
-        `POSTGRES_PASSWORD=${password}`,
-        '-e',
-        'POSTGRES_DB=dbcli_tls',
-        '-v',
-        `${join(directory, name)}:/fixture:ro`,
-        '--entrypoint',
-        'sh',
-        'postgres:16-alpine',
-        '-c',
-        'mkdir /tmp/tls && cp /fixture/* /tmp/tls/ && chown -R postgres:postgres /tmp/tls && chmod 600 /tmp/tls/* && exec docker-entrypoint.sh "$@"',
-        'sh',
-        'postgres',
-        '-c',
-        `ssl=${name === 'plaintext' ? 'off' : 'on'}`,
-        ...(name === 'plaintext'
-          ? []
-          : ['-c', 'ssl_cert_file=/tmp/tls/server.crt', '-c', 'ssl_key_file=/tmp/tls/server.key']),
-        '-c',
-        'hba_file=/tmp/tls/pg_hba.conf',
-        '-c',
-        'log_connections=on',
-        '-c',
-        'log_disconnections=on',
-        '-c',
-        'log_statement=all',
-        '-c',
-        'log_line_prefix=%m [%p] ',
-      ])
-      const published = await command(['docker', 'port', container, '5432/tcp'])
-      const port = Number(published.split(':').at(-1))
-      if (!Number.isInteger(port) || port <= 0)
-        throw new Error(`Invalid published port for ${name}`)
-      endpoints[name] = {
-        name,
-        container,
-        host: '127.0.0.1',
-        port,
-        user: 'dbcli_tls',
-        password,
-        database: 'dbcli_tls',
-      }
-    }
+    await Promise.all(
+      NAMES.map(async (name) => {
+        const hba = [
+          'local all all trust',
+          ...(name === 'valid'
+            ? ['hostnossl all all all reject', 'hostssl all all all scram-sha-256']
+            : ['host all all all scram-sha-256']),
+          '',
+        ].join('\n')
+        await Bun.write(join(directory, name, 'pg_hba.conf'), hba)
+        const container = `dbcli-pg-tls-${suffix}-${name.toLowerCase()}`
+        // Track before starting so cleanup also covers a partially failed docker run.
+        containers.push(container)
+        await command([
+          'docker',
+          'run',
+          '-d',
+          '--rm',
+          '--name',
+          container,
+          '-p',
+          '127.0.0.1::5432',
+          '--tmpfs',
+          '/var/lib/postgresql/data',
+          '-e',
+          'POSTGRES_USER=dbcli_tls',
+          '-e',
+          `POSTGRES_PASSWORD=${password}`,
+          '-e',
+          'POSTGRES_DB=dbcli_tls',
+          '-v',
+          `${join(directory, name)}:/fixture:ro`,
+          '--entrypoint',
+          'sh',
+          'postgres:16-alpine@sha256:f2f98726820d0342055351c6e9d36e705f5bfffb3dd53ff556325114b08afb6d',
+          '-c',
+          'mkdir /tmp/tls && cp /fixture/* /tmp/tls/ && chown -R postgres:postgres /tmp/tls && chmod 600 /tmp/tls/* && exec docker-entrypoint.sh "$@"',
+          'sh',
+          'postgres',
+          '-c',
+          `ssl=${name === 'plaintext' ? 'off' : 'on'}`,
+          ...(name === 'plaintext'
+            ? []
+            : [
+                '-c',
+                'ssl_cert_file=/tmp/tls/server.crt',
+                '-c',
+                'ssl_key_file=/tmp/tls/server.key',
+              ]),
+          '-c',
+          'hba_file=/tmp/tls/pg_hba.conf',
+          '-c',
+          'log_connections=on',
+          '-c',
+          'log_disconnections=on',
+          '-c',
+          'log_statement=all',
+          '-c',
+          'log_line_prefix=%m [%p] ',
+        ])
+        const published = await command(['docker', 'port', container, '5432/tcp'])
+        const port = Number(published.split(':').at(-1))
+        if (!Number.isInteger(port) || port <= 0)
+          throw new Error(`Invalid published port for ${name}`)
+        endpoints[name] = {
+          name,
+          container,
+          host: '127.0.0.1',
+          port,
+          user: 'dbcli_tls',
+          password,
+          database: 'dbcli_tls',
+        }
+      })
+    )
     const observe = async (name: PostgresTlsEndpointName) => {
       const endpoint = endpoints[name]
       // A fresh process avoids suite-global driver mocks and ambient PG/TLS settings.
@@ -174,39 +183,41 @@ export async function startPostgresTlsFixtures(): Promise<PostgresTlsFixtures> {
         throw new Error(`Unexpected encryption state for ${name}`)
       return result
     }
-    for (const name of NAMES) {
-      const deadline = Date.now() + 60_000
-      let healthy = false
-      let lastFailure: unknown
-      while (Date.now() < deadline) {
-        try {
-          await observe(name)
-          healthy = true
-          break
-        } catch (error) {
-          lastFailure = error
-          await Bun.sleep(250)
+    await Promise.all(
+      NAMES.map(async (name) => {
+        const deadline = Date.now() + 60_000
+        let healthy = false
+        let lastFailure: unknown
+        while (Date.now() < deadline) {
+          try {
+            await observe(name)
+            healthy = true
+            break
+          } catch (error) {
+            lastFailure = error
+            await Bun.sleep(250)
+          }
         }
-      }
-      if (!healthy)
-        throw new Error(
-          `TLS fixture ${name} never became healthy: ${String(lastFailure)}\n${await command(['docker', 'logs', endpoints[name].container])}`
-        )
-      await command([
-        'docker',
-        'exec',
-        endpoints[name].container,
-        'psql',
-        '-U',
-        'dbcli_tls',
-        '-d',
-        'dbcli_tls',
-        '-v',
-        'ON_ERROR_STOP=1',
-        '-c',
-        "CREATE TABLE public.tls_fixture (id integer PRIMARY KEY, label text NOT NULL); INSERT INTO public.tls_fixture VALUES (1, 'verified TLS fixture');",
-      ])
-    }
+        if (!healthy)
+          throw new Error(
+            `TLS fixture ${name} never became healthy: ${String(lastFailure)}\n${await command(['docker', 'logs', endpoints[name].container])}`
+          )
+        await command([
+          'docker',
+          'exec',
+          endpoints[name].container,
+          'psql',
+          '-U',
+          'dbcli_tls',
+          '-d',
+          'dbcli_tls',
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-c',
+          "CREATE TABLE public.tls_fixture (id integer PRIMARY KEY, label text NOT NULL); INSERT INTO public.tls_fixture VALUES (1, 'verified TLS fixture');",
+        ])
+      })
+    )
     // Docker splits server output across stdout/stderr; collect both without trimming
     // so checkpoints retain exact append-only byte offsets within this short-lived suite.
     // TCP health succeeds only after initialization stdout is finished; PostgreSQL's

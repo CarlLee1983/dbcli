@@ -6,9 +6,17 @@ test('root agent-output help has distinct English and Traditional Chinese messag
   const english = (en.cli as { agent_output_option: string }).agent_output_option
   const translated = (zhTW.cli as { agent_output_option: string }).agent_output_option
 
-  expect(english).toContain('Operation Envelope v1')
-  expect(english).toContain('capabilities check only')
-  expect(translated).toContain('Operation Envelope v1')
-  expect(translated).toContain('capabilities check')
+  for (const message of [english, translated]) {
+    for (const term of [
+      'Operation Envelope v1',
+      'capabilities',
+      'capabilities check',
+      'query',
+      'q @',
+      'SQL',
+    ]) {
+      expect(message).toContain(term)
+    }
+  }
   expect(translated).not.toBe(english)
 })

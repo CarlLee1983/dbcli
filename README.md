@@ -32,7 +32,7 @@ dbcli init
 - `en` — English (default)
 - `zh-TW` — Traditional Chinese (Taiwan)
 
-All messages, help text, error messages, and command output respond to the language setting automatically.
+Set `DBCLI_LANG=zh-TW` for translated messages. Some CLI help and command output remain in English.
 
 
 ## Quick Start
@@ -1694,6 +1694,11 @@ chmod +x dist/cli.mjs
 - **MySQL:** 8.0+
 - **MariaDB:** 10.5+
 - **MongoDB:** 4.4+ (query and collection listing via `mongodb://` and `mongodb+srv://`; see **MongoDB Atlas / SRV Connections** earlier in this document)
+- **SQLite**
+- **Redis**
+- **Elasticsearch**
+
+Feature availability varies by engine. See the [database engine support matrix](docs/user/en/index.md#database-engine-support-matrix).
 
 ### Runtime
 
@@ -1756,7 +1761,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for full setup, testing, and release pr
 
 ## Governance
 
-Start with an explicit task and run `make verify` to check the changes.
+Start with an explicit task and run the checks that cover the changed behavior.
 Report the outcome and any checks still open. See the
 [agent workflow](AGENTS.md#development-workflow) for everyday changes and the
 [pre-release checklist](CONTRIBUTING.md#pre-release-checklist) for releases.

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.2.1] - 2026-11-26
+
+### Fixed
+
+- 修正中英文 CLI 說明，列出 `--agent-output` 已支援的 `query` 與 SQL Saved query（`q @<name>`）。
+
 ## [12.2.0] - 2026-11-25
 
 ### Added

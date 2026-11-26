@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "version": "12.2.1",
+  "package": "@carllee1983/dbcli",
+  "evidenceKind": "release-candidate-handoff",
+  "baseCommit": "2b06981311d611805397f0c2808add1974bc69f2",
+  "sourcePullRequest": "https://github.com/CarlLee1983/dbcli/pull/272",
+  "baseCI": "https://github.com/CarlLee1983/dbcli/actions/runs/45738270545",
+  "intendedTag": "v12.2.1",
+  "observationsAtPreparation": {
+    "candidateChanges": "Six version manifests declare 12.2.1. The changelog records the corrected CLI help for --agent-output.",
+    "humanReview": "Pending",
+    "publication": "Pending"
+  }
+}
